@@ -180,113 +180,112 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
         }
       }
     }
-  }
 
-  // Allocate Voice and Trigger
-  float freq = (track.engineType == 5)
-                   ? 440.0f
-                   : 440.0f * powf(2.0f, (note - 69) / 12.0f);
-  track.currentFrequency = freq;
-  track.subtractiveEngine.setFrequency(freq, mSampleRate);
-  track.fmEngine.setFrequency(freq, mSampleRate);
-  track.wavetableEngine.setFrequency(freq, mSampleRate);
-  track.analogDrumEngine.setSampleRate(mSampleRate);
+    // Allocate Voice and Trigger
+    float freq = (track.engineType == 5)
+                     ? 440.0f
+                     : 440.0f * powf(2.0f, (note - 69) / 12.0f);
+    track.currentFrequency = freq;
+    track.subtractiveEngine.setFrequency(freq, mSampleRate);
+    track.fmEngine.setFrequency(freq, mSampleRate);
+    track.wavetableEngine.setFrequency(freq, mSampleRate);
+    track.analogDrumEngine.setSampleRate(mSampleRate);
 
-  track.isActive = true;
-  track.mSilenceFrames = 0;
+    track.isActive = true;
+    track.mSilenceFrames = 0;
 
-  for (int i = 0; i < AudioEngine::Track::MAX_POLYPHONY; ++i) {
-    if (!track.mActiveNotes[i].active) {
-      track.mActiveNotes[i].active = true;
-      track.mActiveNotes[i].note = note;
-      if (isSequencerTrigger) {
-        float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
-        float trackSamplesPerStep =
-            samplesPerStep / std::max(0.01f, track.mClockMultiplier);
-        track.mActiveNotes[i].durationRemaining = trackSamplesPerStep * gate;
-      } else {
-        track.mActiveNotes[i].durationRemaining = 9999998.0f;
+    for (int i = 0; i < AudioEngine::Track::MAX_POLYPHONY; ++i) {
+      if (!track.mActiveNotes[i].active) {
+        track.mActiveNotes[i].active = true;
+        track.mActiveNotes[i].note = note;
+        if (isSequencerTrigger) {
+          float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
+          float trackSamplesPerStep =
+              samplesPerStep / std::max(0.01f, track.mClockMultiplier);
+          track.mActiveNotes[i].durationRemaining = trackSamplesPerStep * gate;
+        } else {
+          track.mActiveNotes[i].durationRemaining = 9999998.0f;
+        }
+        break;
       }
+    }
+
+    switch (track.engineType) {
+    case 0:
+      track.subtractiveEngine.triggerNote(note, velocity);
+      break;
+    case 1:
+      track.fmEngine.triggerNote(note, velocity);
+      break;
+    case 2:
+      track.samplerEngine.triggerNote(note, velocity);
+      break;
+    case 3:
+      track.granularEngine.triggerNote(note, velocity);
+      break;
+    case 4:
+      track.wavetableEngine.triggerNote(note, velocity);
+      break;
+    case 5:
+      track.fmDrumEngine.triggerNote(note, velocity);
+      break;
+    case 6:
+      track.analogDrumEngine.triggerNote(note, velocity);
       break;
     }
-  }
 
-  switch (track.engineType) {
-  case 0:
-    track.subtractiveEngine.triggerNote(note, velocity);
-    break;
-  case 1:
-    track.fmEngine.triggerNote(note, velocity);
-    break;
-  case 2:
-    track.samplerEngine.triggerNote(note, velocity);
-    break;
-  case 3:
-    track.granularEngine.triggerNote(note, velocity);
-    break;
-  case 4:
-    track.wavetableEngine.triggerNote(note, velocity);
-    break;
-  case 5:
-    track.fmDrumEngine.triggerNote(note, velocity);
-    break;
-  case 6:
-    track.analogDrumEngine.triggerNote(note, velocity);
-    break;
-  }
+    if (mIsRecording && mIsPlaying && !isSequencerTrigger) {
+      double phase = (double)mSampleCount / (mSamplesPerStep + 0.001);
+      int stepOffset = (phase > 0.5) ? 1 : 0;
+      float subStep = static_cast<float>(phase);
+      // If we are late in the step, we record to the NEXT step but with subStep
+      // near 0? Or just record to nearest.
 
-  if (mIsRecording && mIsPlaying && !isSequencerTrigger) {
-    double phase = (double)mSampleCount / (mSamplesPerStep + 0.001);
-    int stepOffset = (phase > 0.5) ? 1 : 0;
-    float subStep = static_cast<float>(phase);
-    // If we are late in the step, we record to the NEXT step but with subStep
-    // near 0? Or just record to nearest.
+      int currentStepIdx =
+          (track.sequencer.getCurrentStepIndex() + stepOffset) % 128;
 
-    int currentStepIdx =
-        (track.sequencer.getCurrentStepIndex() + stepOffset) % 128;
+      if (track.engineType == 5 || track.engineType == 6) {
+        int drumIdx = -1;
+        if (note >= 60)
+          drumIdx = note - 60;
+        else if (note >= 0 && note < 16)
+          drumIdx = note;
 
-    if (track.engineType == 5 || track.engineType == 6) {
-      int drumIdx = -1;
-      if (note >= 60)
-        drumIdx = note - 60;
-      else if (note >= 0 && note < 16)
-        drumIdx = note;
+        if (drumIdx >= 0 && drumIdx < 16) {
+          Step &s =
+              track.drumSequencers[drumIdx].getStepsMutable()[currentStepIdx];
+          s.addNote(note, static_cast<float>(velocity) / 127.0f, subStep);
 
-      if (drumIdx >= 0 && drumIdx < 16) {
-        Step &s =
-            track.drumSequencers[drumIdx].getStepsMutable()[currentStepIdx];
+          track.mRecordingNotes.push_back({note, currentStepIdx, drumIdx,
+                                           (uint64_t)mGlobalStepIndex,
+                                           (double)subStep});
+        }
+      } else if (track.engineType == 2 &&
+                 track.samplerEngine.getPlayMode() == 2) {
+        // Sampler Chops Recording
+        int drumIdx = -1;
+        if (note >= 60)
+          drumIdx = note - 60; // Map note 60 -> Slice 0
+
+        if (drumIdx >= 0 && drumIdx < 16) {
+          Step &s =
+              track.drumSequencers[drumIdx].getStepsMutable()[currentStepIdx];
+          s.addNote(note, static_cast<float>(velocity) / 127.0f, subStep);
+
+          track.mRecordingNotes.push_back({note, currentStepIdx, drumIdx,
+                                           (uint64_t)mGlobalStepIndex,
+                                           (double)subStep});
+        }
+      } else {
+        Step &s = track.sequencer.getStepsMutable()[currentStepIdx];
         s.addNote(note, static_cast<float>(velocity) / 127.0f, subStep);
 
-        track.mRecordingNotes.push_back({note, currentStepIdx, drumIdx,
+        track.mRecordingNotes.push_back({note, currentStepIdx, -1,
                                          (uint64_t)mGlobalStepIndex,
                                          (double)subStep});
       }
-    } else if (track.engineType == 2 &&
-               track.samplerEngine.getPlayMode() == 2) {
-      // Sampler Chops Recording
-      int drumIdx = -1;
-      if (note >= 60)
-        drumIdx = note - 60; // Map note 60 -> Slice 0
-
-      if (drumIdx >= 0 && drumIdx < 16) {
-        Step &s =
-            track.drumSequencers[drumIdx].getStepsMutable()[currentStepIdx];
-        s.addNote(note, static_cast<float>(velocity) / 127.0f, subStep);
-
-        track.mRecordingNotes.push_back({note, currentStepIdx, drumIdx,
-                                         (uint64_t)mGlobalStepIndex,
-                                         (double)subStep});
-      }
-    } else {
-      Step &s = track.sequencer.getStepsMutable()[currentStepIdx];
-      s.addNote(note, static_cast<float>(velocity) / 127.0f, subStep);
-
-      track.mRecordingNotes.push_back({note, currentStepIdx, -1,
-                                       (uint64_t)mGlobalStepIndex,
-                                       (double)subStep});
     }
   }
-}
 }
 
 // Internal Param Logic

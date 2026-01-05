@@ -56,9 +56,10 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
     val sanitizedTracks = state.tracks.map { track ->
         var newTrack = track
         
-        // 1. Force Track Volume (Nuclear policy: > 0.8f if silent)
-        if (newTrack.volume < 0.2f) {
-            newTrack = newTrack.copy(volume = 0.8f)
+        // 1. Force Track Volume (Nuclear policy: set to safe 0.45f if silent or dangerously high)
+        // User requested 45% default to check headroom.
+        if (newTrack.volume < 0.2f || newTrack.volume > 0.75f) {
+            newTrack = newTrack.copy(volume = 0.45f)
         }
         
         val newParams = newTrack.parameters.toMutableMap()
@@ -87,15 +88,7 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
            if ((newParams[160] ?: 0.0f) < 0.1f) newParams[160] = 0.8f // Op 1 Level
         }
         
-        // 6. CLEAR SEQUENCER JUNK (Nuclear policy on load)
-        val cleanSteps = newTrack.steps.map { step ->
-            step.copy(active = false, notes = emptyList())
-        }
-        val cleanDrumSteps = newTrack.drumSteps.map { drumInst ->
-            drumInst.map { step -> step.copy(active = false, notes = emptyList()) }
-        }
-        
-        newTrack.copy(parameters = newParams, steps = cleanSteps, drumSteps = cleanDrumSteps)
+        newTrack.copy(parameters = newParams)
     }
     
     // 7. Force Global Master Filters Open
@@ -119,19 +112,26 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
     // Sync Tracks
     state.tracks.forEachIndexed { trackIdx, t ->
         nativeLib.setEngineType(trackIdx, t.engineType.ordinal)
-        nativeLib.setTrackVolume(trackIdx, t.volume)
-        t.parameters.forEach { (pid, v) -> nativeLib.setParameter(trackIdx, pid, v) }
+        // Safety: Clamp volume to prevent NaNs/Inf
+        val safeVol = if (t.volume.isNaN() || t.volume.isInfinite()) 0.45f else t.volume.coerceIn(0f, 2f)
+        nativeLib.setTrackVolume(trackIdx, safeVol)
+        
+        t.parameters.forEach { (pid, v) -> 
+            val safeVal = if (v.isNaN() || v.isInfinite()) 0.0f else v.coerceIn(0f, 1f)
+            nativeLib.setParameter(trackIdx, pid, safeVal) 
+        }
         
         // Sync Arp
         nativeLib.setArpConfig(
             trackIdx, 
             t.arpConfig.mode.ordinal, 
             t.arpConfig.octaves, 
-            t.arpConfig.inversion, 
+            t.arpConfig.inversion,
             t.arpConfig.isLatched,
             t.arpConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
             t.arpConfig.randomSequence.toIntArray()
         )
+        nativeLib.setArpRate(trackIdx, t.arpConfig.arpRate, t.arpConfig.arpDivisionMode)
 
         // Sync Steps
         if (t.engineType == EngineType.FM_DRUM || t.engineType == EngineType.ANALOG_DRUM || t.engineType == EngineType.SAMPLER) {
@@ -216,7 +216,7 @@ fun getNoteLabel(midiNote: Int): String {
 fun getEngineColor(type: EngineType): Color = when (type) {
     EngineType.SUBTRACTIVE -> Color.Cyan
     EngineType.FM -> Color(0xFF00FF00)
-    EngineType.SAMPLER -> Color.Yellow
+    EngineType.SAMPLER -> Color(0xFFFFD700) // Gold
     EngineType.GRANULAR -> Color.Magenta
     EngineType.WAVETABLE -> Color.Blue
     EngineType.FM_DRUM -> Color.Red
@@ -257,7 +257,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        return GrooveboxState(tracks = tracks)
+        return GrooveboxState(tracks = tracks, tempo = 80.0f)
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -277,14 +277,8 @@ class MainActivity : ComponentActivity() {
             grooveboxState = savedProject
         }
         
-        // Load persistent assignments (can override project if needed, but usually project includes them)
-        val (savedStrips, savedKnobs) = PersistenceManager.loadAssignments(this)
-        if (savedStrips.isNotEmpty()) {
-            grooveboxState = grooveboxState.copy(engineTypeStripAssignments = savedStrips)
-        }
-        if (savedKnobs.isNotEmpty()) {
-            grooveboxState = grooveboxState.copy(engineTypeKnobAssignments = savedKnobs)
-        }
+        // REMOVED: Redundant loadAssignment logic that was overwriting last_session.gbx data.
+        // Assignments are now part of GrooveboxState and saved in the project/session file.
 
         // Initialize Native
         nativeLib.init()
@@ -496,7 +490,8 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
         }
 
         if (changed) {
-            PersistenceManager.saveAssignments(context, newState.engineTypeStripAssignments, newState.engineTypeKnobAssignments)
+            // PersistenceManager.saveAssignments() removed to prevent conflict. 
+            // Assignments are saved with the Project/Session.
             latestOnStateChange(newState)
         }
     }
@@ -985,11 +980,32 @@ fun VerticalNavigationTabs(selectedTab: Int, isRecording: Boolean, onTabSelected
 
 @Composable
 fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+    val context = LocalContext.current
     var mappingStripIndex by remember { mutableStateOf(-1) }
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+        
+        Button(
+            onClick = {
+                // PANIC / RESET AUDIO ENGINE
+                nativeLib.stop()
+                // NUCLEAR OPTION: Destroy and recreate engine to clear bad internal state (NaNs)
+                nativeLib.init() 
+                nativeLib.setAppDataDir(context.filesDir.absolutePath)
+                // nativeLib.loadAppState() - Removed: better to sync directly from Kotlin state
+                
+                // Force re-sync of Kotlin state BEFORE starting audio
+                syncNativeState(state, nativeLib)
+                nativeLib.start()
+                Toast.makeText(context, "Audio Engine Reset", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha=0.7f))
+        ) {
+            Text("RESET AUDIO ENGINE (PANIC)", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+
         // Project Management Cluster
         Text("Project", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
-        val context = LocalContext.current
         val scope = rememberCoroutineScope()
         
         var showSaveDialog by remember { mutableStateOf(false) }
@@ -1053,15 +1069,18 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                                                 val loaded = PersistenceManager.loadProject(context, name)
                                                 withContext(Dispatchers.Main) {
                                                     if (loaded != null) {
-                                                        // Explicitly clear native sequencers to prevent junk overlap
-                                                        for (i in 0 until 8) {
-                                                            nativeLib.clearSequencer(i)
-                                                        }
+                                                        // NUCLEAR OPTION: Fully reconstruct engine when loading project
+                                                        nativeLib.stop()
+                                                        nativeLib.init()
+                                                        nativeLib.setAppDataDir(context.filesDir.absolutePath)
                                                         
-                                                        // Universal Sanitization
+                                                        // Universal Sanitization (Preserves sequences now)
                                                         val sanitized = sanitizeGrooveboxState(loaded)
                                                         onStateChange(sanitized)
+                                                        
+                                                        // SYNC BEFORE START
                                                         syncNativeState(sanitized, nativeLib)
+                                                        nativeLib.start()
                                                         
                                                         Toast.makeText(context, "Loaded & Sanitized: $name", Toast.LENGTH_SHORT).show()
                                                         showLoadDialog = false
@@ -2780,7 +2799,8 @@ fun Knob(
                                 if (state.lfoLearnActive) {
                                     val lfoIdx = state.lfoLearnLfoIndex
                                     if (lfoIdx != -1) {
-                                        nativeLib.setRouting(latestState.selectedTrackIndex, -1, 12 + lfoIdx, 5, 1.0f, parameterId)
+                                        // LFO1=2, LFO2=3... LFO5=6
+                                        nativeLib.setRouting(latestState.selectedTrackIndex, -1, 2 + lfoIdx, 5, 1.0f, parameterId)
                                         val newLfos = state.lfos.toMutableList()
                                         newLfos[lfoIdx] = newLfos[lfoIdx].copy(targetType = 1, targetId = parameterId, targetLabel = label)
                                         latestOnStateChange(latestState.copy(lfos = newLfos, lfoLearnActive = false))
@@ -2789,7 +2809,8 @@ fun Knob(
                                     val macroIdx = state.macroLearnMacroIndex
                                     val tIdx = state.macroLearnTargetIndex
                                     if (macroIdx != -1 && tIdx != -1) {
-                                         nativeLib.setRouting(latestState.selectedTrackIndex, -1, 20 + macroIdx, 5, 1.0f, parameterId)
+                                         // Macro1=9, Macro2=10...
+                                         nativeLib.setRouting(latestState.selectedTrackIndex, -1, 9 + macroIdx, 5, 1.0f, parameterId)
                                          val newMacros = state.macros.toMutableList()
                                          val currentTargets = newMacros[macroIdx].targets.toMutableList()
                                          if (tIdx < currentTargets.size) {
@@ -3235,66 +3256,47 @@ fun SequencingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
                              )
                          }
 
+                         var isClearPressed by remember { mutableStateOf(false) }
                          Box(
                              modifier = Modifier
                                  .height(32.dp)
                                  .width(70.dp)
                                  .clip(RoundedCornerShape(4.dp))
-                                 .background(Color.Red.copy(alpha = 0.3f))
-                                 .pointerInput(Unit) {
-                                     detectTapGestures(
-                                         onTap = {
-                                             nativeLib.clearSequencer(selectedTrackIndex)
-                                             val newTracks = latestState.tracks.mapIndexed { idx, t ->
-                                                 if (idx == selectedTrackIndex) {
-                                                     t.copy(
-                                                         steps = List(128) { StepState() },
-                                                         drumSteps = List(8) { List(128) { StepState() } }
-                                                     )
-                                                 } else t
-                                             }
-                                             latestOnStateChange(latestState.copy(tracks = newTracks))
-                                         },
-                                         onLongPress = {
-                                             // Handled by pointer input below for progress
-                                         }
-                                     )
-                                 }
-                                 .pointerInput(Unit) {
+                                 .background(if (isClearPressed) Color.Red else Color.Red.copy(alpha = 0.3f))
+                                 .pointerInput(selectedTrackIndex) {
                                      awaitPointerEventScope {
                                          while (true) {
                                              val down = awaitFirstDown()
                                              val startTime = System.currentTimeMillis()
-                                             var cancelled = false
-                                             while (System.currentTimeMillis() - startTime < 2000) {
-                                                 val event = awaitPointerEvent()
-                                                 if (event.changes.any { !it.pressed }) {
-                                                     cancelled = true
+                                             while (true) {
+                                                 val event = withTimeoutOrNull(40) { awaitPointerEvent() }
+                                                 val elapsed = System.currentTimeMillis() - startTime
+                                                 if (elapsed >= 1000) {
+                                                     showClearAllConfirm = true
                                                      break
                                                  }
-                                                 clearAllProgress = (System.currentTimeMillis() - startTime) / 2000f
+                                                 if (event != null && event.changes.any { !it.pressed }) {
+                                                     nativeLib.clearSequencer(selectedTrackIndex)
+                                                     val newTracks = latestState.tracks.mapIndexed { idx, t ->
+                                                         if (idx == selectedTrackIndex) {
+                                                             t.copy(steps = List(128) { StepState() }, drumSteps = List(8) { List(128) { StepState() } })
+                                                         } else t
+                                                     }
+                                                     latestOnStateChange(latestState.copy(tracks = newTracks))
+                                                     break
+                                                 }
                                              }
-                                             if (!cancelled) {
-                                                 showClearAllConfirm = true
+                                             isClearPressed = false
+                                             while (true) {
+                                                 val event = withTimeoutOrNull(100) { awaitPointerEvent() }
+                                                 if (event == null || event.changes.all { !it.pressed }) break
                                              }
-                                             clearAllProgress = 0f
                                          }
                                      }
                                  },
                              contentAlignment = Alignment.Center
                          ) {
-                             if (clearAllProgress > 0f) {
-                                 Box(
-                                     Modifier.fillMaxSize()
-                                         .background(Color.Red.copy(alpha = clearAllProgress))
-                                 )
-                                 LinearProgressIndicator(
-                                     progress = clearAllProgress,
-                                     modifier = Modifier.fillMaxWidth().height(2.dp).align(Alignment.BottomCenter),
-                                     color = Color.Red
-                                 )
-                             }
-                             Text("CLEAR", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                             Text("CLEAR", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White)
                          }
                     }
                 }
@@ -3397,17 +3399,26 @@ fun SequencingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
                                                     val newActive = !currentStep.active
                                                     
                                                     if (isMultiTrack) {
+                                                        // AUTO-NOTE LOGIC: If activating and no notes, add default note
                                                         val instIdx = currentTrack.selectedFmDrumInstrument
+                                                        val drumNote = 60 + instIdx
+                                                        val finalNotes = if (newActive && currentStep.notes.isEmpty()) listOf(drumNote) else currentStep.notes
                                                         val newDrumSteps = currentTrack.drumSteps.mapIndexed { di, dsteps ->
-                                                            if (di == instIdx) dsteps.mapIndexed { si, s -> if (si == stepIndex) s.copy(active = newActive) else s }
+                                                            if (di == instIdx) dsteps.mapIndexed { si, s -> if (si == stepIndex) s.copy(active = newActive, notes = finalNotes) else s }
                                                             else dsteps
                                                         }
                                                         latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
-                                                        nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, newActive, intArrayOf(60 + instIdx), currentStep.velocity, currentStep.ratchet, currentStep.punch, currentStep.probability, currentStep.gate)
+                                                        nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, newActive, finalNotes.toIntArray(), currentStep.velocity, currentStep.ratchet, currentStep.punch, currentStep.probability, currentStep.gate)
                                                     } else {
-                                                        val newSteps = currentTrack.steps.mapIndexed { si, s -> if (si == stepIndex) s.copy(active = newActive) else s }
+                                                        // AUTO-NOTE LOGIC: If activating and no notes, add Root Note (C4 / 60)
+                                                        val rootNote = 60
+                                                        val finalNotes = if (newActive && currentStep.notes.isEmpty()) listOf(rootNote) else currentStep.notes
+                                                        
+                                                        val newSteps = currentTrack.steps.mapIndexed { si, s -> if (si == stepIndex) s.copy(active = newActive, notes = finalNotes) else s }
                                                         latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(steps = newSteps) else t }))
-                                                        nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, newActive, currentStep.notes.toIntArray(), currentStep.velocity, currentStep.ratchet, currentStep.punch, currentStep.probability, currentStep.gate)
+                                                        
+                                                        val isActiveWithNotes = newActive && finalNotes.isNotEmpty()
+                                                        nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, isActiveWithNotes, finalNotes.toIntArray(), currentStep.velocity, currentStep.ratchet, currentStep.punch, currentStep.probability, currentStep.gate)
                                                     }
                                                 },
                                                 onLongPress = { showStepPopup = true }
@@ -3879,6 +3890,14 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
             }
         }
     }
+
+    ArpSettingsSheet(
+        isOpen = showArpMenu,
+        onDismiss = { showArpMenu = false },
+        state = latestState,
+        onStateChange = latestOnStateChange,
+        nativeLib = nativeLib
+    )
 }
 
 
@@ -3944,7 +3963,7 @@ fun TouchStripsPanel(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
                                         if (state.lfoLearnActive) {
                                             val lfoIdx = state.lfoLearnLfoIndex
                                             if (lfoIdx != -1) {
-                                                nativeLib.setRouting(latestState.selectedTrackIndex, -1, 12 + lfoIdx, 5, 1.0f, routing.targetId)
+                                                nativeLib.setRouting(latestState.selectedTrackIndex, -1, 2 + lfoIdx, 5, 1.0f, routing.targetId)
                                                 val newLfos = state.lfos.toMutableList()
                                                 newLfos[lfoIdx] = newLfos[lfoIdx].copy(targetType = 1, targetId = routing.targetId, targetLabel = routing.parameterName)
                                                 latestOnStateChange(latestState.copy(lfos = newLfos, lfoLearnActive = false))
@@ -3956,7 +3975,7 @@ fun TouchStripsPanel(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
                                                  val newMacros = state.macros.toMutableList()
                                                  val currentTargets = newMacros[macroIdx].targets.toMutableList()
                                                  if (tIdx < currentTargets.size) {
-                                                      nativeLib.setRouting(latestState.selectedTrackIndex, -1, 20 + macroIdx, 5, 1.0f, routing.targetId)
+                                                      nativeLib.setRouting(latestState.selectedTrackIndex, -1, 9 + macroIdx, 5, 1.0f, routing.targetId)
                                                       currentTargets[tIdx] = currentTargets[tIdx].copy(targetId = routing.targetId, targetLabel = routing.parameterName, enabled = true)
                                                       newMacros[macroIdx] = newMacros[macroIdx].copy(targets = currentTargets)
                                                       latestOnStateChange(latestState.copy(macros = newMacros, macroLearnActive = false))
@@ -4276,6 +4295,7 @@ fun EngineSideSheet(
                     }
                 }
             }
+
         }
     }
 }
@@ -4295,7 +4315,7 @@ fun PadOptionPopup(onDismiss: () -> Unit, stepState: StepState, onApply: (Int, B
                 // Ratchet & Punch
                 Text("Ratchet", style = MaterialTheme.typography.labelMedium)
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    (1..8).forEach { r ->
+                    (1..4).forEach { r ->
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
@@ -4471,7 +4491,7 @@ fun ArpSettingsSheet(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.6f)
+                    .fillMaxHeight(0.85f)
                     .clickable(enabled = false) {},
                 color = Color(0xFF1E1E1E),
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -4513,6 +4533,60 @@ fun ArpSettingsSheet(
                     Spacer(modifier = Modifier.height(24.dp))
                     
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        // Rate & Division
+                        Column(modifier = Modifier.weight(1.2f)) {
+                            Text("RATE & DIVISION", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                // Rate Knob
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    val rates = listOf("1/32", "1/16", "1/8", "1/4", "1/2")
+                                    val numericRates = listOf(0.5f, 1.0f, 2.0f, 4.0f, 8.0f)
+                                    val currentIndex = numericRates.indexOfFirst { it >= config.arpRate }.coerceAtLeast(0)
+                                    val initialV = currentIndex.toFloat() / (numericRates.size - 1)
+
+                                    Knob(
+                                        label = "RATE",
+                                        initialValue = initialV,
+                                        parameterId = -99, // Custom
+                                        state = state,
+                                        onStateChange = { newState ->
+                                            val v = newState.tracks[state.selectedTrackIndex].parameters[-99] ?: initialV
+                                            val idx = ((v * 0.99f) * numericRates.size).toInt().coerceIn(0, numericRates.size - 1)
+                                            val newRate = numericRates[idx]
+                                            val newConfig = config.copy(arpRate = newRate)
+                                            val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                            onStateChange(state.copy(tracks = newTracks))
+                                            nativeLib.setArpRate(state.selectedTrackIndex, newRate, config.arpDivisionMode)
+                                        },
+                                        nativeLib = nativeLib,
+                                        knobSize = 60.dp,
+                                        valueFormatter = { v -> rates[((v * 0.99f) * rates.size).toInt().coerceIn(0, rates.size - 1)] }
+                                    )
+                                }
+
+                                // Division Mode (Reg, Dot, Tri)
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf("REG", "DOT", "TRI").forEachIndexed { index, label ->
+                                        val isSelected = config.arpDivisionMode == index
+                                        Button(
+                                            onClick = {
+                                                val newConfig = config.copy(arpDivisionMode = index)
+                                                val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                                onStateChange(state.copy(tracks = newTracks))
+                                                nativeLib.setArpRate(state.selectedTrackIndex, config.arpRate, index)
+                                            },
+                                            modifier = Modifier.height(32.dp).width(60.dp),
+                                            contentPadding = PaddingValues(0.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Cyan else Color.DarkGray),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(label, style = MaterialTheme.typography.labelSmall, color = if (isSelected) Color.Black else Color.White)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Octaves
                         Column(modifier = Modifier.weight(1f)) {
                             Text("OCTAVES (+/- 3)", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
@@ -4560,19 +4634,7 @@ fun ArpSettingsSheet(
                     
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("LATCH", style = MaterialTheme.typography.labelLarge, color = Color.White)
-                        Switch(
-                            checked = config.isLatched,
-                            onCheckedChange = { latched ->
-                                val newConfig = config.copy(isLatched = latched)
-                                val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
-                                onStateChange(state.copy(tracks = newTracks))
-                                nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, config.octaves, config.inversion, latched, config.rhythms.map { it.toBooleanArray() }.toTypedArray(), config.randomSequence.toIntArray())
-                            },
-                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Yellow)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     Spacer(modifier = Modifier.height(24.dp))
                     

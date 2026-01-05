@@ -1,2 +1,4 @@
 ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a'
-ninja: no work to do.
+[1/3] Building CXX object CMakeFiles/native-lib.dir/native-lib.cpp.o
+[2/3] Building CXX object CMakeFiles/native-lib.dir/AudioEngine.cpp.o
+[3/3] Linking CXX shared library "/Users/danielmiller/Documents/Code Projects/ancient-halley/app/build/intermediates/cxx/Debug/c57145c4/obj/arm64-v8a/libnative-lib.so"

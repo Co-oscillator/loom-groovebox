@@ -18,7 +18,8 @@ data class ArpConfig(
         List(8) { false }
     ), // 3 lanes x 8 steps
     val randomSequence: List<Int> = emptyList(), // The 8-step random seed
-    val isTriplet: Boolean = false
+    val arpRate: Float = 1.0f,
+    val arpDivisionMode: Int = 0 // 0=Reg, 1=Dotted, 2=Triplet
 ) : java.io.Serializable
 
 data class TrackState(

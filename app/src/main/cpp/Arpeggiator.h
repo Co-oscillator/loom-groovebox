@@ -31,8 +31,14 @@ public:
     mStep = 0;
   }
   ArpMode getMode() const { return mMode; }
-  void setOctaves(int octaves) { mOctaves = octaves; }
-  void setInversion(int inversion) { mInversion = inversion; }
+  void setOctaves(int octaves) {
+    mOctaves = octaves;
+    updateSequence();
+  }
+  void setInversion(int inversion) {
+    mInversion = inversion;
+    updateSequence();
+  }
   void setRhythm(const std::vector<std::vector<bool>> &rhythms) {
     mRhythms = rhythms;
   }

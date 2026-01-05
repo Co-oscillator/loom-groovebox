@@ -16,9 +16,15 @@ public:
     // Pre-calculate coefficients could be done here for optimization,
     // but calculating per-sample is okay for now or valid in nextValue with
     // pow/exp approximations. For simple exp decay: val *= coeff.
-    mDecayCoeff = exp(-1.0f / (mDecay * mSampleRate * 0.2f + 1.0f));
-    mReleaseCoeff = exp(-1.0f / (mRelease * mSampleRate * 0.2f + 1.0f));
-    mAttackRate = 1.0f / (mAttack * mSampleRate + 1.0f);
+    // Cubic curve for fine control at low values
+    float aCurve = mAttack * mAttack * mAttack;
+    float dCurve = mDecay * mDecay * mDecay;
+    float rCurve = mRelease * mRelease * mRelease;
+
+    // Max times: Attack 2s, Decay 3s, Release 3s
+    mDecayCoeff = exp(-1.0f / (dCurve * mSampleRate * 3.0f + 1.0f));
+    mReleaseCoeff = exp(-1.0f / (rCurve * mSampleRate * 3.0f + 1.0f));
+    mAttackRate = 1.0f / (aCurve * mSampleRate * 2.0f + 1.0f);
   }
 
   void trigger() { mStage = AdsrStage::Attack; }
@@ -46,24 +52,14 @@ public:
       }
       break;
     case AdsrStage::Decay:
-      mValue *= mDecayCoeff;
-      if (mValue <= mSustain) {
-        mValue = mSustain;
-        mStage = AdsrStage::Sustain;
-      }
-      // Fallback linear check to prevent getting stuck if coeff is too slow
-      // close to target? For simple exp, we approach 0. But we want to approach
-      // Sustain. Better Exp Decay to Sustain: current = target + (current -
+      // Exponential Decay towards Sustain level: current = target + (current -
       // target) * coeff
       mValue = mSustain + (mValue - mSustain) * mDecayCoeff;
-      // Fix: If we are very close to Sustain (or overshoot/undershoot due to
-      // Zeno), snap to it. Also handles Sustain=0 case where we might approach
-      // 0 forever.
+
       if (std::abs(mValue - mSustain) < 0.0001f || mValue <= mSustain) {
         mValue = mSustain;
         mStage = AdsrStage::Sustain;
       }
-
       break;
     case AdsrStage::Sustain:
       mValue = mSustain;

@@ -116,6 +116,7 @@ public:
   void loadFmPreset(int trackIndex, int presetId);
   void setClockMultiplier(int trackIndex, float multiplier);
   void setArpTriplet(int trackIndex, bool isTriplet);
+  void setArpRate(int trackIndex, float rate, int divisionMode);
   float getCpuLoad();
 
   // Audio Export
@@ -177,6 +178,7 @@ private:
     AnalogDrumEngine analogDrumEngine;
 
     float parameters[1024] = {0.0f};
+    float appliedParameters[1024] = {0.0f}; // Values after P-locks and Mods
 
     struct RecordingNote {
       int note;
@@ -206,11 +208,17 @@ private:
       int note;
       float velocity;
       double samplesRemaining;
+      float gate = 0.5f;
+      int ratchetCount = 1;
+      bool punch = false;
     };
     std::vector<PendingNote> mPendingNotes;
     float mClockMultiplier = 1.0f;
+    float mArpRate = 1.0f;    // 1.0 = 1/16th, 0.5 = 1/8th, etc.
+    int mArpDivisionMode = 0; // 0=Reg, 1=Dotted, 2=Triplet
     bool mArpTriplet = false;
     double mStepCountdown = 0.0;
+    double mArpCountdown = 0.0;
     int mInternalStepIndex = 0;
 
     struct ActiveNote {
@@ -221,7 +229,7 @@ private:
     static const int MAX_POLYPHONY = 16;
     ActiveNote mActiveNotes[MAX_POLYPHONY];
 
-    bool mPunchActive = false; // For syncing Mixer effects w/ Drum Sequencers
+    int mPunchCounter = 0; // Frames remaining for punch compression
 
     int mLastTriggeredNote = -1;
     double mNoteDurationRemaining = 0.0;
@@ -249,7 +257,8 @@ private:
   double mSampleRate = 44100.0;
   std::recursive_mutex mLock;
   void triggerNoteLocked(int trackIndex, int note, int velocity,
-                         bool isSequencerTrigger = false, float gate = 0.95f);
+                         bool isSequencerTrigger = false, float gate = 0.95f,
+                         bool punch = false);
   void releaseNoteLocked(int trackIndex, int note,
                          bool isSequencerTrigger = false);
   void setupTracks();

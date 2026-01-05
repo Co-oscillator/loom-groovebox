@@ -66,8 +66,8 @@ class NativeLib {
 
     // Audio Export
     external fun exportAudio(numRepeats: Int, path: String)
+    external fun setArpRate(trackIndex: Int, rate: Float, divisionMode: Int)
     external fun setClockMultiplier(trackIndex: Int, multiplier: Float)
-    external fun setArpTriplet(trackIndex: Int, isTriplet: Boolean)
     
     // UI Sync
     external fun getAllTrackParameters(trackIndex: Int): FloatArray

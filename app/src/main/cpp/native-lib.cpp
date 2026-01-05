@@ -5,9 +5,13 @@ static AudioEngine *engine = nullptr;
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_groovebox_NativeLib_init(JNIEnv *env, jobject thiz) {
-  if (engine == nullptr) {
-    engine = new AudioEngine();
+  if (engine != nullptr) {
+    AudioEngine *oldEngine = engine;
+    engine = nullptr; // Null out global pointer BEFORE deleting to avoid race
+                      // conditions
+    delete oldEngine;
   }
+  engine = new AudioEngine();
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -60,7 +64,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
     float safeVelocity = std::max(0.0f, std::min(1.0f, velocity));
     float safeGate = std::max(0.0f, std::min(1.0f, gate));
     float safeProb = std::max(0.0f, std::min(1.0f, probability));
-    int safeRatchet = std::max(1, std::min(4, ratchet));
+    int safeRatchet = std::max(1, std::min(16, ratchet));
 
     // Clamp notes to MIDI range 0-127
     for (int &n : noteVec) {
@@ -106,6 +110,13 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_releaseNote(
     JNIEnv *env, jobject thiz, jint track_index, jint note) {
   if (engine)
     engine->releaseNote(track_index, note);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setArpRate(
+    JNIEnv *env, jobject thiz, jint track_index, jfloat rate,
+    jint division_mode) {
+  if (engine)
+    engine->setArpRate(track_index, rate, division_mode);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setParameter(

@@ -1,0 +1,4 @@
+/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a" \
+  native-lib

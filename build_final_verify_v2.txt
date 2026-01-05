@@ -1,0 +1,211 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:mergeDebugResources
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:configureCMakeDebug[arm64-v8a]
+> Task :app:processDebugResources
+
+> Task :app:buildCMakeDebug[arm64-v8a] FAILED
+C/C++: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a'
+C/C++: /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/native-lib.cpp.o -MF CMakeFiles/native-lib.dir/native-lib.cpp.o.d -o CMakeFiles/native-lib.dir/native-lib.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/native-lib.cpp'
+C/C++: In file included from /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/native-lib.cpp:1:
+C/C++: In file included from /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.h:23:
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:386:15: error: use of undeclared identifier 'Slice'
+C/C++:   386 |   std::vector<Slice> mSlices;
+C/C++:       |               ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:123:7: error: use of undeclared identifier 'updateLoopPoints'
+C/C++:   123 |       updateLoopPoints();
+C/C++:       |       ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:127:7: error: use of undeclared identifier 'updateLoopPoints'
+C/C++:   127 |       updateLoopPoints();
+C/C++:       |       ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:133:7: error: use of undeclared identifier 'mReverse'; did you mean 'mRelease'?
+C/C++:   133 |       mReverse = value > 0.5f;
+C/C++:       |       ^~~~~~~~
+C/C++:       |       mRelease
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:382:58: note: 'mRelease' declared here
+C/C++:   382 |   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+C/C++:       |                                                          ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:182:11: error: use of undeclared identifier 'mReverse'
+C/C++:   182 |       if (mReverse) {
+C/C++:       |           ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:208:20: error: use of undeclared identifier 'mReverse'; did you mean 'mRelease'?
+C/C++:   208 |       int index1 = mReverse ? index0 - 1 : index0 + 1;
+C/C++:       |                    ^~~~~~~~
+C/C++:       |                    mRelease
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:382:58: note: 'mRelease' declared here
+C/C++:   382 |   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+C/C++:       |                                                          ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:224:51: error: use of undeclared identifier 'mReverse'
+C/C++:   224 |       float traverseRate = (mSpeed / mStretch) * (mReverse ? -1.0f : 1.0f);
+C/C++:       |                                                   ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:232:11: error: use of undeclared identifier 'mReverse'
+C/C++:   232 |       if (mReverse) {
+C/C++:       |           ^
+C/C++: 8 errors generated.
+C/C++: /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp'
+C/C++: In file included from /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1:
+C/C++: In file included from /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.h:23:
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:386:15: error: use of undeclared identifier 'Slice'
+C/C++:   386 |   std::vector<Slice> mSlices;
+C/C++:       |               ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:123:7: error: use of undeclared identifier 'updateLoopPoints'
+C/C++:   123 |       updateLoopPoints();
+C/C++:       |       ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:127:7: error: use of undeclared identifier 'updateLoopPoints'
+C/C++:   127 |       updateLoopPoints();
+C/C++:       |       ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:133:7: error: use of undeclared identifier 'mReverse'; did you mean 'mRelease'?
+C/C++:   133 |       mReverse = value > 0.5f;
+C/C++:       |       ^~~~~~~~
+C/C++:       |       mRelease
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:382:58: note: 'mRelease' declared here
+C/C++:   382 |   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+C/C++:       |                                                          ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:182:11: error: use of undeclared identifier 'mReverse'
+C/C++:   182 |       if (mReverse) {
+C/C++:       |           ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:208:20: error: use of undeclared identifier 'mReverse'; did you mean 'mRelease'?
+C/C++:   208 |       int index1 = mReverse ? index0 - 1 : index0 + 1;
+C/C++:       |                    ^~~~~~~~
+C/C++:       |                    mRelease
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:382:58: note: 'mRelease' declared here
+C/C++:   382 |   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+C/C++:       |                                                          ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:224:51: error: use of undeclared identifier 'mReverse'
+C/C++:   224 |       float traverseRate = (mSpeed / mStretch) * (mReverse ? -1.0f : 1.0f);
+C/C++:       |                                                   ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:232:11: error: use of undeclared identifier 'mReverse'
+C/C++:   232 |       if (mReverse) {
+C/C++:       |           ^
+C/C++: 8 errors generated.
+
+[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:buildCMakeDebug[arm64-v8a]'.
+> com.android.ide.common.process.ProcessException: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a'
+  [1/3] Building CXX object CMakeFiles/native-lib.dir/native-lib.cpp.o
+  FAILED: CMakeFiles/native-lib.dir/native-lib.cpp.o 
+  /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/native-lib.cpp.o -MF CMakeFiles/native-lib.dir/native-lib.cpp.o.d -o CMakeFiles/native-lib.dir/native-lib.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/native-lib.cpp'
+  In file included from /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/native-lib.cpp:1:
+  In file included from /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.h:23:
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:386:15: error: use of undeclared identifier 'Slice'
+    386 |   std::vector<Slice> mSlices;
+        |               ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:123:7: error: use of undeclared identifier 'updateLoopPoints'
+    123 |       updateLoopPoints();
+        |       ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:127:7: error: use of undeclared identifier 'updateLoopPoints'
+    127 |       updateLoopPoints();
+        |       ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:133:7: error: use of undeclared identifier 'mReverse'; did you mean 'mRelease'?
+    133 |       mReverse = value > 0.5f;
+        |       ^~~~~~~~
+        |       mRelease
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:382:58: note: 'mRelease' declared here
+    382 |   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+        |                                                          ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:182:11: error: use of undeclared identifier 'mReverse'
+    182 |       if (mReverse) {
+        |           ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:208:20: error: use of undeclared identifier 'mReverse'; did you mean 'mRelease'?
+    208 |       int index1 = mReverse ? index0 - 1 : index0 + 1;
+        |                    ^~~~~~~~
+        |                    mRelease
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:382:58: note: 'mRelease' declared here
+    382 |   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+        |                                                          ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:224:51: error: use of undeclared identifier 'mReverse'
+    224 |       float traverseRate = (mSpeed / mStretch) * (mReverse ? -1.0f : 1.0f);
+        |                                                   ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:232:11: error: use of undeclared identifier 'mReverse'
+    232 |       if (mReverse) {
+        |           ^
+  8 errors generated.
+  [2/3] Building CXX object CMakeFiles/native-lib.dir/AudioEngine.cpp.o
+  FAILED: CMakeFiles/native-lib.dir/AudioEngine.cpp.o 
+  /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp'
+  In file included from /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1:
+  In file included from /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.h:23:
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:386:15: error: use of undeclared identifier 'Slice'
+    386 |   std::vector<Slice> mSlices;
+        |               ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:123:7: error: use of undeclared identifier 'updateLoopPoints'
+    123 |       updateLoopPoints();
+        |       ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:127:7: error: use of undeclared identifier 'updateLoopPoints'
+    127 |       updateLoopPoints();
+        |       ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:133:7: error: use of undeclared identifier 'mReverse'; did you mean 'mRelease'?
+    133 |       mReverse = value > 0.5f;
+        |       ^~~~~~~~
+        |       mRelease
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:382:58: note: 'mRelease' declared here
+    382 |   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+        |                                                          ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:182:11: error: use of undeclared identifier 'mReverse'
+    182 |       if (mReverse) {
+        |           ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:208:20: error: use of undeclared identifier 'mReverse'; did you mean 'mRelease'?
+    208 |       int index1 = mReverse ? index0 - 1 : index0 + 1;
+        |                    ^~~~~~~~
+        |                    mRelease
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:382:58: note: 'mRelease' declared here
+    382 |   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+        |                                                          ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:224:51: error: use of undeclared identifier 'mReverse'
+    224 |       float traverseRate = (mSpeed / mStretch) * (mReverse ? -1.0f : 1.0f);
+        |                                                   ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/SamplerEngine.h:232:11: error: use of undeclared identifier 'mReverse'
+    232 |       if (mReverse) {
+        |           ^
+  8 errors generated.
+  ninja: build stopped: subcommand failed.
+  
+  C++ build system [build] failed while executing:
+      /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+        -C \
+        "/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a" \
+        native-lib
+    from /Users/danielmiller/Documents/Code Projects/ancient-halley/app
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 12s
+25 actionable tasks: 9 executed, 16 up-to-date

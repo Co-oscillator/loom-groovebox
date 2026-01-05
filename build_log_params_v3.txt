@@ -1,0 +1,203 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:configureCMakeDebug[arm64-v8a]
+
+> Task :app:buildCMakeDebug[arm64-v8a]
+C/C++: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a'
+C/C++: /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp'
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:262:5: error: expected expression
+C/C++:   262 |     else if (parameterId >= 150 && parameterId < 200) {
+C/C++:       |     ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:517:39: error: function definition is not allowed here
+C/C++:   517 |   void AudioEngine::processCommands() {
+C/C++:       |                                       ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:542:65: error: function definition is not allowed here
+C/C++:   542 |   void AudioEngine::releaseNoteLocked(int trackIndex, int note) {
+C/C++:       |                                                                 ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:576:76: error: function definition is not allowed here
+C/C++:   576 |       oboe::AudioStream * audioStream, void *audioData, int32_t numFrames) {
+C/C++:       |                                                                            ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:932:73: error: function definition is not allowed here
+C/C++:   932 |   void AudioEngine::triggerNote(int trackIndex, int note, int velocity) {
+C/C++:       |                                                                         ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:938:59: error: function definition is not allowed here
+C/C++:   938 |   void AudioEngine::releaseNote(int trackIndex, int note) {
+C/C++:       |                                                           ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:943:80: error: function definition is not allowed here
+C/C++:   943 |   void AudioEngine::setParameter(int trackIndex, int parameterId, float value) {
+C/C++:       |                                                                                ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:955:60: error: function definition is not allowed here
+C/C++:   955 |                             float probability, float gate) {
+C/C++:       |                                                            ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1018:58: error: function definition is not allowed here
+C/C++:  1018 |                                        int stepsPerPage) {
+C/C++:       |                                                          ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1032:41: error: function definition is not allowed here
+C/C++:  1032 |   void AudioEngine::setTempo(float bpm) {
+C/C++:       |                                         ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1037:46: error: function definition is not allowed here
+C/C++:  1037 |   void AudioEngine::setPlaying(bool playing) {
+C/C++:       |                                              ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1065:43: error: function definition is not allowed here
+C/C++:  1065 |   void AudioEngine::setSwing(float swing) {
+C/C++:       |                                           ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1072:50: error: function definition is not allowed here
+C/C++:  1072 |   void AudioEngine::setPatternLength(int length) {
+C/C++:       |                                                  ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1080:73: error: function definition is not allowed here
+C/C++:  1080 |   void AudioEngine::setPlaybackDirection(int trackIndex, int direction) {
+C/C++:       |                                                                         ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1087:69: error: function definition is not allowed here
+C/C++:  1087 |   void AudioEngine::setIsRandomOrder(int trackIndex, bool isRandom) {
+C/C++:       |                                                                     ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1094:64: error: function definition is not allowed here
+C/C++:  1094 |   void AudioEngine::setIsJumpMode(int trackIndex, bool isJump) {
+C/C++:       |                                                                ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1100:80: error: function definition is not allowed here
+C/C++:  1100 |   void AudioEngine::setSelectedFmDrumInstrument(int trackIndex, int drumIndex) {
+C/C++:       |                                                                                ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1108:68: error: function definition is not allowed here
+C/C++:  1108 |                                      int parameterId, float value) {
+C/C++:       |                                                                    ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1116:72: error: function definition is not allowed here
+C/C++:  1116 |   void AudioEngine::clearParameterLocks(int trackIndex, int stepIndex) {
+C/C++:       |                                                                        ^
+C/C++: fatal error: too many errors emitted, stopping now [-ferror-limit=]
+C/C++: 20 errors generated.
+
+> Task :app:buildCMakeDebug[arm64-v8a] FAILED
+> Task :app:compileDebugKotlin
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:64:5 'when' is exhaustive so 'else' is redundant here
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:146:9 Variable 'tabs' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:300:21 Variable 'track' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:510:9 Variable 'showTrackMenu' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:1235:47 Variable 'nextCarrier' initializer is redundant
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:1733:51 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:1971:21 Variable 'isDrum' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:2060:37 Name shadowed: isDrum
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:2528:45 Variable 'down' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:2529:45 Variable 'downTime' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:2915:21 Variable 'pinDist' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:2919:21 Variable 'angles' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3337:37 Name shadowed: track
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3857:9 Variable 'globalValue' is never used
+
+[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:buildCMakeDebug[arm64-v8a]'.
+> com.android.ide.common.process.ProcessException: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a'
+  [1/3] Building CXX object CMakeFiles/native-lib.dir/AudioEngine.cpp.o
+  FAILED: CMakeFiles/native-lib.dir/AudioEngine.cpp.o 
+  /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp'
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:262:5: error: expected expression
+    262 |     else if (parameterId >= 150 && parameterId < 200) {
+        |     ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:517:39: error: function definition is not allowed here
+    517 |   void AudioEngine::processCommands() {
+        |                                       ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:542:65: error: function definition is not allowed here
+    542 |   void AudioEngine::releaseNoteLocked(int trackIndex, int note) {
+        |                                                                 ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:576:76: error: function definition is not allowed here
+    576 |       oboe::AudioStream * audioStream, void *audioData, int32_t numFrames) {
+        |                                                                            ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:932:73: error: function definition is not allowed here
+    932 |   void AudioEngine::triggerNote(int trackIndex, int note, int velocity) {
+        |                                                                         ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:938:59: error: function definition is not allowed here
+    938 |   void AudioEngine::releaseNote(int trackIndex, int note) {
+        |                                                           ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:943:80: error: function definition is not allowed here
+    943 |   void AudioEngine::setParameter(int trackIndex, int parameterId, float value) {
+        |                                                                                ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:955:60: error: function definition is not allowed here
+    955 |                             float probability, float gate) {
+        |                                                            ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1018:58: error: function definition is not allowed here
+   1018 |                                        int stepsPerPage) {
+        |                                                          ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1032:41: error: function definition is not allowed here
+   1032 |   void AudioEngine::setTempo(float bpm) {
+        |                                         ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1037:46: error: function definition is not allowed here
+   1037 |   void AudioEngine::setPlaying(bool playing) {
+        |                                              ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1065:43: error: function definition is not allowed here
+   1065 |   void AudioEngine::setSwing(float swing) {
+        |                                           ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1072:50: error: function definition is not allowed here
+   1072 |   void AudioEngine::setPatternLength(int length) {
+        |                                                  ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1080:73: error: function definition is not allowed here
+   1080 |   void AudioEngine::setPlaybackDirection(int trackIndex, int direction) {
+        |                                                                         ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1087:69: error: function definition is not allowed here
+   1087 |   void AudioEngine::setIsRandomOrder(int trackIndex, bool isRandom) {
+        |                                                                     ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1094:64: error: function definition is not allowed here
+   1094 |   void AudioEngine::setIsJumpMode(int trackIndex, bool isJump) {
+        |                                                                ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1100:80: error: function definition is not allowed here
+   1100 |   void AudioEngine::setSelectedFmDrumInstrument(int trackIndex, int drumIndex) {
+        |                                                                                ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1108:68: error: function definition is not allowed here
+   1108 |                                      int parameterId, float value) {
+        |                                                                    ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1116:72: error: function definition is not allowed here
+   1116 |   void AudioEngine::clearParameterLocks(int trackIndex, int stepIndex) {
+        |                                                                        ^
+  fatal error: too many errors emitted, stopping now [-ferror-limit=]
+  20 errors generated.
+  [2/3] Building CXX object CMakeFiles/native-lib.dir/native-lib.cpp.o
+  ninja: build stopped: subcommand failed.
+  
+  C++ build system [build] failed while executing:
+      /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+        -C \
+        "/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a" \
+        native-lib
+    from /Users/danielmiller/Documents/Code Projects/ancient-halley/app
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 44s
+26 actionable tasks: 3 executed, 23 up-to-date

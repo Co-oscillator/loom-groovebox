@@ -1,3 +1,0 @@
-ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/b514eo4k/x86_64'
-[1/2] Building CXX object CMakeFiles/native-lib.dir/AudioEngine.cpp.o
-[2/2] Linking CXX shared library "/Users/danielmiller/Documents/Code Projects/ancient-halley/app/build/intermediates/cxx/Debug/b514eo4k/obj/x86_64/libnative-lib.so"

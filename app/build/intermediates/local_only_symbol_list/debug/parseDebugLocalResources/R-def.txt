@@ -1,6 +1,0 @@
-R_DEF: Internal format may change without notice
-local
-drawable ic_icon
-drawable ic_routing_cables
-string app_name
-style Theme.App

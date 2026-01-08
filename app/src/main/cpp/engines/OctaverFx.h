@@ -8,6 +8,7 @@
 // Simple Granular Pitch Shifter for Octaver
 class OctaverFx {
 public:
+  void updateSampleRate(float sr) {}
   OctaverFx() {
     mBuffer.resize(8192, 0.0f); // ~180ms circular buffer
   }
@@ -15,6 +16,8 @@ public:
   float process(float input, float sampleRate) {
     if (mMix <= 0.001f)
       return 0.0f;
+    if (!std::isfinite(input))
+      input = 0.0f;
 
     // Write to circular buffer
     mBuffer[mWritePos] = input;

@@ -13,6 +13,10 @@ public:
     if (frames < mBuffer.size())
       mDelayFrames = frames;
   }
+  void setDelayTime(float value) {
+    int frames = static_cast<int>(value * (mBuffer.size() - 1));
+    setDelay(std::max(1, frames));
+  }
 
   void setFeedback(float feedback) { mFeedback = feedback; }
   void setMix(float mix) { mMix = mix; }

@@ -11,6 +11,9 @@ public:
     mTone = tone;
     mLevel = level;
   }
+  void setDrive(float drive) { mDrive = drive * 10.0f + 1.0f; }
+  void setTone(float tone) { mTone = tone; }
+  void setLevel(float level) { mLevel = level; }
   void setMix(float mix) { mMix = mix; }
 
   float process(float input) {

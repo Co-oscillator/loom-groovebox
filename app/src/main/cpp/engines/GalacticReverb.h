@@ -24,6 +24,8 @@ public:
   }
 
   float process(float input, float feedback) {
+    if (std::isnan(input))
+      input = 0.0f;
     float bufOut = buffer[writePos];
     float output = -input + bufOut;
     float newVal = input + (bufOut * feedback);
@@ -45,6 +47,8 @@ public:
     while (readIdx < 0)
       readIdx += size;
 
+    if (std::isnan(input))
+      input = 0.0f;
     float bufOut = getInterpolated(buffer, readIdx);
 
     float output = -input + bufOut;
@@ -123,6 +127,7 @@ public:
     tankRightAP[1].init((int)(2656 * scale));
     tankRightAP[2].init((int)(3163 * scale));
   }
+  void updateSampleRate(float sr) { setSampleRate(sr); }
 
   // PARAMS:
   // size: 0.0-1.0 (Decay length)
@@ -175,6 +180,8 @@ public:
   int getType() const { return mType; }
   void setPreDelay(float preDelayMs) {
     preDelayReadLen = (int)(preDelayMs * 0.001f * currentSampleRate);
+    if (preDelayReadLen < 0)
+      preDelayReadLen = 0; // Safety floor
     if (preDelayReadLen >= preDelay.buffer.size())
       preDelayReadLen = preDelay.buffer.size() - 1;
   }
@@ -317,6 +324,11 @@ public:
 
     outWL = wetL * dryWet;
     outWR = wetR * dryWet;
+
+    if (std::isnan(outWL))
+      outWL = 0.0f;
+    if (std::isnan(outWR))
+      outWR = 0.0f;
   }
 
 private:

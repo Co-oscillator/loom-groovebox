@@ -12,8 +12,6 @@ public:
   }
 
   float process(float input, float sampleRate) {
-    if (mMix <= 0.001f)
-      return 0.0f;
     if (!std::isfinite(input))
       input = 0.0f;
 

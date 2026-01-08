@@ -46,7 +46,7 @@ struct Step {
 class Sequencer {
 public:
   Sequencer() {
-    mSteps.resize(128);
+    mSteps.resize(64);
     mNextStep = 0;
   }
 
@@ -56,7 +56,7 @@ public:
   }
 
   void setStep(int index, const Step &step) {
-    if (index >= 0 && index < 128)
+    if (index >= 0 && index < 64)
       mSteps[index] = step;
   }
 
@@ -73,13 +73,13 @@ public:
   }
 
   void setParameterLock(int stepIndex, int parameterId, float value) {
-    if (stepIndex >= 0 && stepIndex < 128) {
+    if (stepIndex >= 0 && stepIndex < 64) {
       mSteps[stepIndex].parameterLocks[parameterId] = value;
     }
   }
 
   void clearParameterLocks(int stepIndex) {
-    if (stepIndex >= 0 && stepIndex < 128) {
+    if (stepIndex >= 0 && stepIndex < 64) {
       mSteps[stepIndex].parameterLocks.clear();
     }
   }

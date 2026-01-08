@@ -12,6 +12,10 @@ public:
   void setRate2(float v) { mRate2 = 0.02f + (v * v * v) * 16.0f; }
   void setRate3(float v) { mRate3 = 0.02f + (v * v * v) * 16.0f; }
   void setRate5(float v) { mRate5 = 0.02f + (v * v * v) * 16.0f; }
+  void setRate(float v) {
+    mRate2 = 0.02f + (v * v * v) * 16.0f;
+    mActive2 = (v > 0.01f);
+  }
   void setActive2(bool v) { mActive2 = v; }
   void setActive3(bool v) { mActive3 = v; }
   void setActive5(bool v) { mActive5 = v; }

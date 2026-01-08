@@ -109,6 +109,7 @@ public:
   void clearSequencer(int trackIndex);
   void setMasterVolume(float volume);
   bool getStepActive(int trackIndex, int stepIndex, int drumIndex = -1);
+  void getStepActiveStates(int trackIndex, bool *out, int maxSize);
   std::vector<Step> getSequencerSteps(int trackIndex);
   std::vector<float> getAllTrackParameters(int trackIndex); // New sync method
   std::vector<float> getSamplerSlicePoints(int trackIndex);
@@ -177,8 +178,8 @@ private:
     WavetableEngine wavetableEngine;
     AnalogDrumEngine analogDrumEngine;
 
-    float parameters[1024] = {0.0f};
-    float appliedParameters[1024] = {0.0f}; // Values after P-locks and Mods
+    float parameters[2500] = {0.0f};
+    float appliedParameters[2500] = {0.0f}; // Values after P-locks and Mods
 
     struct RecordingNote {
       int note;

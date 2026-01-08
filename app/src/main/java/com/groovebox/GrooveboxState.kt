@@ -29,8 +29,8 @@ data class TrackState(
     val engineType: EngineType = EngineType.SUBTRACTIVE,
     val isActive: Boolean = true,
     val isMuted: Boolean = false,
-    val steps: List<StepState> = List(128) { StepState() },
-    val drumSteps: List<List<StepState>> = List(16) { List(128) { StepState() } }, // Support up to 16 drum instruments / slices
+    val steps: List<StepState> = List(64) { StepState() },
+    val drumSteps: List<List<StepState>> = List(16) { List(64) { StepState() } }, // Support up to 16 drum instruments / slices
     val numPages: Int = 1,
     val stepsPerPage: Int = 16,
     val selectedFmDrumInstrument: Int = 0, // For FM Drum track selection

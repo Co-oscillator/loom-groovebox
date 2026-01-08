@@ -136,8 +136,8 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         // Sync Steps
         if (t.engineType == EngineType.FM_DRUM || t.engineType == EngineType.ANALOG_DRUM || t.engineType == EngineType.SAMPLER) {
              // For drums, we must aggregate notes per step.
-             // We can assume 128 steps max.
-             for (stepIdx in 0 until 128) {
+             // We can assume 64 steps max.
+             for (stepIdx in 0 until 64) {
                  val activeNotes = mutableListOf<Int>()
                  var maxVelocity = 0.0f
                  var anyActive = false
@@ -559,15 +559,17 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
                 val updatedTracks = latestState.tracks.mapIndexed { tIdx, t ->
                     if (tIdx == latestState.selectedTrackIndex) {
                         val isDrum = t.engineType == EngineType.FM_DRUM
+                        val nativeStates = nativeLib.getAllStepActiveStates(tIdx)
+                        if (nativeStates.isEmpty()) return@mapIndexed t
+
                         if (isDrum) {
                             val instIdx = t.selectedFmDrumInstrument
                             val newDrumStepsList = t.drumSteps.mapIndexed { di, dsteps ->
                                 if (di == instIdx) {
                                     var drumChanged = false
                                     val newSteps = dsteps.mapIndexed { si, s ->
-                                        // Only poll current bank
-                                        if (si >= bankOffset && si < bankOffset + 16) {
-                                            val nativeActive = nativeLib.getStepActive(tIdx, si, instIdx)
+                                        if (si < nativeStates.size) {
+                                            val nativeActive = nativeStates[si]
                                             if (nativeActive != s.active) {
                                                 drumChanged = true
                                                 s.copy(active = nativeActive)
@@ -582,8 +584,8 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
                         } else {
                             var trackChanged = false
                             val newSteps = t.steps.mapIndexed { si, s ->
-                                if (si >= bankOffset && si < bankOffset + 16) {
-                                    val nativeActive = nativeLib.getStepActive(tIdx, si)
+                                if (si < nativeStates.size) {
+                                    val nativeActive = nativeStates[si]
                                     if (nativeActive != s.active) {
                                         trackChanged = true
                                         s.copy(active = nativeActive)
@@ -2353,51 +2355,33 @@ fun GranularParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (G
 
         // Removed "Grain Playheads" preview as per user request to use main sampler window.
         
-        // Row 1: Grains & Density (The Core)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ParameterGroup("Grain Cloud", modifier = Modifier.weight(1f), titleSize = 10) {
-                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("POS", 0.0f, 400, state, onStateChange, nativeLib, knobSize = 44.dp)
-                    Knob("SIZE", 0.2f, 406, state, onStateChange, nativeLib, knobSize = 44.dp)
-                    Knob("DENS", 0.5f, 407, state, onStateChange, nativeLib, knobSize = 44.dp)
-                }
-            }
-            ParameterGroup("Motion", modifier = Modifier.weight(1f), titleSize = 10) {
-                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("SPD", 0.5f, 401, state, onStateChange, nativeLib, knobSize = 44.dp)
-                    Knob("PITCH", 0.5f, 410, state, onStateChange, nativeLib, knobSize = 44.dp)
-                    Knob("SPRAY", 0.0f, 415, state, onStateChange, nativeLib, knobSize = 44.dp)
-                }
+        // Row 1: The Cloud (4 knobs)
+        ParameterGroup("Grain Cloud", modifier = Modifier.fillMaxWidth(), titleSize = 10) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("POS", 0.0f, 400, state, onStateChange, nativeLib, knobSize = 44.dp)
+                Knob("SIZE", 0.2f, 406, state, onStateChange, nativeLib, knobSize = 44.dp)
+                Knob("DENS", 0.5f, 407, state, onStateChange, nativeLib, knobSize = 44.dp)
+                Knob("SPRAY", 0.0f, 415, state, onStateChange, nativeLib, knobSize = 44.dp)
             }
         }
 
-        // Row 2: Envelopes (Grain + Main)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ParameterGroup("Amp Envelope (ADSR)", modifier = Modifier.weight(1f), titleSize = 10) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("ATK", 0.0f, 425, state, onStateChange, nativeLib, knobSize = 40.dp)
-                    Knob("DEC", 0.1f, 426, state, onStateChange, nativeLib, knobSize = 40.dp)
-                    Knob("SUS", 1.0f, 427, state, onStateChange, nativeLib, knobSize = 40.dp)
-                    Knob("REL", 0.1f, 428, state, onStateChange, nativeLib, knobSize = 40.dp)
-                }
+        // Row 2: Motion & Pitch (4 knobs)
+        ParameterGroup("Motion & Pitch", modifier = Modifier.fillMaxWidth(), titleSize = 10) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("SPEED", 0.5f, 401, state, onStateChange, nativeLib, knobSize = 44.dp)
+                Knob("PITCH", 0.5f, 410, state, onStateChange, nativeLib, knobSize = 44.dp)
+                Knob("JITTER", 0.0f, 411, state, onStateChange, nativeLib, knobSize = 44.dp)
+                Knob("REVERSE", 0.0f, 412, state, onStateChange, nativeLib, knobSize = 44.dp)
             }
-            // We can add Grain Envelope parameters here if we exposed them, currently 408/409/etc are somewhat hidden or auto-calculated in user logic.
-            // But let's show LFO 1 here as "Modulation"
-            ParameterGroup("LFO 1 (Pos/Spd)", modifier = Modifier.weight(1f), titleSize = 10) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("SHP", 0.0f, 402, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("RAT", 0.1f, 403, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("DPT", 0.0f, 404, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("TGT", 0.0f, 405, state, onStateChange, nativeLib, knobSize = 32.dp,
-                        valueFormatter = { v ->
-                            val i = (v * 2.9f).toInt()
-                            when (i) {
-                                1 -> "GrPos"
-                                2 -> "GrSpd"
-                                else -> "None"
-                            }
-                        })
-                }
+        }
+
+        // Row 3: Envelopes (ADSR)
+        ParameterGroup("Grain Envelope", modifier = Modifier.fillMaxWidth(), titleSize = 10) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("ATK", 0.0f, 425, state, onStateChange, nativeLib, knobSize = 40.dp)
+                Knob("DEC", 0.1f, 426, state, onStateChange, nativeLib, knobSize = 40.dp)
+                Knob("SUS", 1.0f, 427, state, onStateChange, nativeLib, knobSize = 40.dp)
+                Knob("REL", 0.1f, 428, state, onStateChange, nativeLib, knobSize = 40.dp)
             }
         }
 
@@ -3242,8 +3226,8 @@ fun SequencingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
                                          }
                                          val newTracks = latestState.tracks.map { t ->
                                              t.copy(
-                                                 steps = List(128) { StepState() },
-                                                 drumSteps = List(8) { List(128) { StepState() } }
+                                                 steps = List(64) { StepState() },
+                                                 drumSteps = List(16) { List(64) { StepState() } }
                                              )
                                          }
                                          latestOnStateChange(latestState.copy(tracks = newTracks))
@@ -3279,7 +3263,7 @@ fun SequencingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
                                                      nativeLib.clearSequencer(selectedTrackIndex)
                                                      val newTracks = latestState.tracks.mapIndexed { idx, t ->
                                                          if (idx == selectedTrackIndex) {
-                                                             t.copy(steps = List(128) { StepState() }, drumSteps = List(8) { List(128) { StepState() } })
+                                                             t.copy(steps = List(64) { StepState() }, drumSteps = List(16) { List(64) { StepState() } })
                                                          } else t
                                                      }
                                                      latestOnStateChange(latestState.copy(tracks = newTracks))
@@ -3511,7 +3495,7 @@ fun PlayingPad(
                                             onStateChange(currentState.copy(heldNotes = currentState.heldNotes + triggeredNote))
                                             
                                             if (currentState.isRecording) {
-                                                val stepIdx = if (currentState.isPlaying) currentState.currentStep else (currentBank * 16 + padIndex) % 128
+                                                val stepIdx = if (currentState.isPlaying) currentState.currentStep else (currentBank * 16 + padIndex) % 64
                                                 val currentTrack = currentState.tracks[currentTIdx]
                                                 if (currentTrack.engineType == EngineType.FM_DRUM) {
                                                     val drumIdx = triggeredNote - 60
@@ -3824,26 +3808,39 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
         ) {
             Box(
                 modifier = Modifier
-                    .width(180.dp)
+                    .width(480.dp) // Wider for 4 columns
                     .height(260.dp)
-                    .background(Color(0xFF1A1A1A), RoundedCornerShape(8.dp))
-                    .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                    .padding(4.dp)
+                    .background(Color(0xFF1A1A1A), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .padding(8.dp)
             ) {
-                androidx.compose.foundation.lazy.LazyColumn {
-                    items(ScaleType.values()) { type ->
-                        Text(
-                            type.displayName,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onStateChange(state.copy(scaleType = type))
-                                    showScaleMenu = false
-                                }
-                                .padding(12.dp),
-                            color = if (state.scaleType == type) Color.Cyan else Color.White,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(4),
+                    contentPadding = PaddingValues(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(ScaleType.values().size) { index ->
+                        val type = ScaleType.values()[index]
+                        Surface(
+                            onClick = {
+                                onStateChange(state.copy(scaleType = type))
+                                showScaleMenu = false
+                            },
+                            color = if (state.scaleType == type) Color.Cyan.copy(alpha=0.15f) else Color.DarkGray.copy(alpha=0.2f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                type.displayName,
+                                modifier = Modifier.padding(12.dp),
+                                color = if (state.scaleType == type) Color.Cyan else Color.White,
+                                style = MaterialTheme.typography.bodySmall, // Smaller text for grid
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }

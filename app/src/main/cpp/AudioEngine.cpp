@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <jni.h>
+#include <oboe/Oboe.h>
 
 #if defined(__i386__) || defined(__x86_64__)
 #include <xmmintrin.h>
@@ -61,6 +62,10 @@ void AudioEngine::setupTracks() {
   for (int i = 0; i < 8; ++i) {
     mTracks[i].volume = 0.8f;
     mTracks[i].smoothedVolume = 0.8f;
+    for (int p = 0; p < 1024; ++p) {
+      mTracks[i].parameters[p] = 0.0f;
+      mTracks[i].appliedParameters[p] = 0.0f;
+    }
     clearSequencer(i);
   }
 }
@@ -77,8 +82,33 @@ bool AudioEngine::start() {
   if (result != oboe::Result::OK)
     return false;
 
-  mReverbFx.setSampleRate(mStream->getSampleRate());
+  mReverbFx.updateSampleRate((float)mStream->getSampleRate());
+  mDelayFx.updateSampleRate((float)mStream->getSampleRate());
+  mCompressorFx.updateSampleRate((float)mStream->getSampleRate());
+  mFlangerFx.updateSampleRate((float)mStream->getSampleRate());
+  mStereoSpreadFx.updateSampleRate((float)mStream->getSampleRate());
+  mTapeEchoFx.updateSampleRate((float)mStream->getSampleRate());
+  mOctaverFx.updateSampleRate((float)mStream->getSampleRate());
+  mBitcrusherFx.updateSampleRate((float)mStream->getSampleRate());
+  mChorusFx.updateSampleRate((float)mStream->getSampleRate());
+  mPhaserFx.updateSampleRate((float)mStream->getSampleRate());
+  mOverdriveFx.updateSampleRate((float)mStream->getSampleRate());
+  mSlicerFx.updateSampleRate((float)mStream->getSampleRate());
+  mTapeWobbleFx.updateSampleRate((float)mStream->getSampleRate());
+  mFilterLfoFx.updateSampleRate((float)mStream->getSampleRate());
+  mTapeEchoFx.setDelayTime(0.3f); // Initialize with something
   mSampleRate = mStream->getSampleRate();
+
+  // Propagate sample rate to engines
+  for (auto &track : mTracks) {
+    track.samplerEngine.updateSampleRate((float)mSampleRate);
+    track.wavetableEngine.updateSampleRate((float)mSampleRate);
+    track.fmEngine.updateSampleRate((float)mSampleRate);
+    track.fmDrumEngine.updateSampleRate((float)mSampleRate);
+    track.subtractiveEngine.updateSampleRate((float)mSampleRate);
+    track.analogDrumEngine.updateSampleRate((float)mSampleRate);
+    track.granularEngine.updateSampleRate((float)mSampleRate);
+  }
 
   // Input stream for recording
   oboe::AudioStreamBuilder inBuilder;
@@ -114,7 +144,7 @@ void AudioEngine::stop() {
 // Internal Note Logic
 void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
                                     bool isSequencerTrigger, float gate,
-                                    bool punch) {
+                                    bool punch, bool forceRetrigger) {
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     Track &track = mTracks[trackIndex];
 
@@ -133,50 +163,32 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
     }
 
     // Check for "Tie" (Sustain across steps)
+    // Check for "Tie" (Sustain across steps)
     if (isSequencerTrigger) {
-      static int trigLog = 0;
-      if (trigLog++ % 50 == 0 ||
-          trackIndex == 1) { // ALWAYS log FM (T1) for now
-        float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
-        float effectiveMultiplier = std::max(0.01f, track.mClockMultiplier);
-        float trackSamplesPerStep = samplesPerStep / effectiveMultiplier;
-        __android_log_print(ANDROID_LOG_DEBUG, "GrooveboxAudio",
-                            "SeqTrigger T%d Note=%d SPS=%.2f Multi=%.2f "
-                            "Gate=%.2f Bank=%d Punch=%d",
-                            trackIndex, note, trackSamplesPerStep,
-                            effectiveMultiplier, gate,
-                            track.selectedFmDrumInstrument, punch);
+      for (int i = 0; i < AudioEngine::Track::MAX_POLYPHONY; ++i) {
+        if (track.mActiveNotes[i].active &&
+            track.mActiveNotes[i].note == note &&
+            track.mActiveNotes[i].durationRemaining > 128) {
+          float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
+          float trackSamplesPerStep =
+              samplesPerStep / std::max(0.01f, track.mClockMultiplier);
+
+          // Only tie if gate is long and we aren't forcing a retrigger
+          if (gate > 0.6f && !forceRetrigger) {
+            track.mActiveNotes[i].durationRemaining =
+                trackSamplesPerStep * (gate + 0.05f);
+            return;
+          } else {
+            track.mActiveNotes[i].active = false;
+          }
+        }
       }
     } else {
-      // Recording Logic Fix: Avoid duplicate notes if one is already recording
-      // for this pitch
+      // Recording Logic: Prevent "split triggers" immediately after recording
       if (mIsRecording) {
         for (const auto &rn : track.mRecordingNotes) {
           if (rn.note == note)
-            return; // Already recording this note (Legato/Slide)
-        }
-      }
-    }
-
-    if (punch) {
-      track.mPunchCounter = 4000; // Reset punch counter on trigger
-    }
-    for (int i = 0; i < AudioEngine::Track::MAX_POLYPHONY; ++i) {
-      if (track.mActiveNotes[i].active && track.mActiveNotes[i].note == note &&
-          track.mActiveNotes[i].durationRemaining > 512) {
-        float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
-        float trackSamplesPerStep =
-            samplesPerStep / std::max(0.01f, track.mClockMultiplier);
-
-        // Only tie if gate is explicitly long (legato)
-        if (gate > 0.9f) {
-          track.mActiveNotes[i].durationRemaining =
-              trackSamplesPerStep * (gate + 0.05f); // Overlap for tie
-          return; // Skip re-triggering (Legato)
-        } else {
-          // Retriggering: We need to steal this voice or let it release?
-          // Standard behavior: Cut it off and restart.
-          track.mActiveNotes[i].active = false; // Force re-allocation
+            return;
         }
       }
     }
@@ -236,13 +248,13 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
 
     if (mIsRecording && mIsPlaying && !isSequencerTrigger) {
       double phase = (double)mSampleCount / (mSamplesPerStep + 0.001);
-      int stepOffset = (phase > 0.5) ? 1 : 0;
-      float subStep = static_cast<float>(phase);
-      // If we are late in the step, we record to the NEXT step but with subStep
-      // near 0? Or just record to nearest.
+      // QUANTIZATION: If we are very late in the step (>85%), record to NEXT
+      // step
+      int stepOffset = (phase > 0.85) ? 1 : 0;
+      float subStep = (stepOffset == 1) ? 0.0f : static_cast<float>(phase);
 
       int currentStepIdx =
-          (track.sequencer.getCurrentStepIndex() + stepOffset) % 128;
+          (track.mInternalStepIndex + stepOffset) % mPatternLength;
 
       if (track.engineType == 5 || track.engineType == 6) {
         int drumIdx = -1;
@@ -290,14 +302,22 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
 
 // Internal Param Logic
 void AudioEngine::setParameter(int trackIndex, int parameterId, float value) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex < 0 || trackIndex >= mTracks.size())
     return;
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  // Update state (Base Value)
-  mTracks[trackIndex].parameters[parameterId] = value;
-  // Also update Applied Value so it takes effect immediately (until next step
-  // reset)
-  mTracks[trackIndex].appliedParameters[parameterId] = value;
+
+  // SANE PROTECTION: Prevent NaN/Inf from poisoning the audio graph
+  if (std::isnan(value) || std::isinf(value)) {
+    value = 0.0f;
+  }
+
+  // Update Base State (for UI/Saving)
+  if (parameterId >= 0 && parameterId < 1024) {
+    mTracks[trackIndex].parameters[parameterId] = value;
+    // Also update Applied Value so it takes effect immediately (until next step
+    // reset)
+    mTracks[trackIndex].appliedParameters[parameterId] = value;
+  }
 
   // Push to engine
   updateEngineParameter(trackIndex, parameterId, value);
@@ -375,7 +395,12 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
     case 7:
       track.subtractiveEngine.setLfoRate(value);
       break; // Assuming LFO Rate
-    case 8:
+    case 8:  // NOW: Keytrack (Shared)
+      track.subtractiveEngine.setKeytrack(value);
+      track.fmEngine.setKeytrack(value);
+      track.wavetableEngine.setParameter(18, value);
+      break;
+    case 9:
       track.subtractiveEngine.setLfoDepth(value);
       break; // Assuming LFO Depth
     }
@@ -556,37 +581,39 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         break;
       default:
         if (parameterId >= 160) {
-          LOGD("FM Param Set: %d val=%.2f", parameterId, value);
           int opIdx = (parameterId - 160) / 6;
-          int subId = (parameterId - 160) % 6;
-          switch (subId) {
-          case 0:
-            track.fmEngine.setOpLevel(opIdx, value);
-            break;
-          case 1:
-            track.fmEngine.setOpADSR(opIdx, value,
-                                     track.fmEngine.mOpDecay[opIdx],
-                                     track.fmEngine.mOpSustain[opIdx],
-                                     track.fmEngine.mOpRelease[opIdx]);
-            break;
-          case 2:
-            track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
-                                     value, track.fmEngine.mOpSustain[opIdx],
-                                     track.fmEngine.mOpRelease[opIdx]);
-            break;
-          case 3:
-            track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
-                                     track.fmEngine.mOpDecay[opIdx], value,
-                                     track.fmEngine.mOpRelease[opIdx]);
-            break;
-          case 4:
-            track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
-                                     track.fmEngine.mOpDecay[opIdx],
-                                     track.fmEngine.mOpSustain[opIdx], value);
-            break;
-          case 5:
-            track.fmEngine.setOpRatio(opIdx, 0.5f + (value * 31.5f));
-            break;
+          LOGD("FM Param Set: %d (Op %d) val=%.2f", parameterId, opIdx, value);
+          if (opIdx >= 0 && opIdx < 6) {
+            int subId = (parameterId - 160) % 6;
+            switch (subId) {
+            case 0:
+              track.fmEngine.setOpLevel(opIdx, value);
+              break;
+            case 1:
+              track.fmEngine.setOpADSR(opIdx, value,
+                                       track.fmEngine.mOpDecay[opIdx],
+                                       track.fmEngine.mOpSustain[opIdx],
+                                       track.fmEngine.mOpRelease[opIdx]);
+              break;
+            case 2:
+              track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
+                                       value, track.fmEngine.mOpSustain[opIdx],
+                                       track.fmEngine.mOpRelease[opIdx]);
+              break;
+            case 3:
+              track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
+                                       track.fmEngine.mOpDecay[opIdx], value,
+                                       track.fmEngine.mOpRelease[opIdx]);
+              break;
+            case 4:
+              track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
+                                       track.fmEngine.mOpDecay[opIdx],
+                                       track.fmEngine.mOpSustain[opIdx], value);
+              break;
+            case 5:
+              track.fmEngine.setOpRatio(opIdx, 0.5f + (value * 31.5f));
+              break;
+            }
           }
         }
         break;
@@ -604,8 +631,6 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
   else if (parameterId >= 600 && parameterId < 650) {
     int drumIdx = (parameterId - 600) / 10;
     int subId = (parameterId - 600) % 10;
-    LOGD("Analog Parameter: track=%d, drumIdx=%d, paramId=%d, value=%.2f",
-         trackIndex, drumIdx, subId, value);
     track.analogDrumEngine.setParameter(drumIdx, subId, value);
   }
   // Sampler & Focused Drum Params (300+)
@@ -628,12 +653,11 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
     track.granularEngine.setParameter(parameterId, value);
   }
   // Wavetable Params (450+)
-  else if (parameterId >= 450 && parameterId < 470) {
+  else if (parameterId >= 450 && parameterId < 480) {
     if (parameterId == 450)
       track.wavetableEngine.setParameter(0, value); // Morph
     else if (parameterId == 451)
       track.wavetableEngine.setParameter(1, value); // Detune
-    // 452, 453 Unused in UI currently (Spread, Unison Voices internal calc?)
     else if (parameterId == 454)
       track.wavetableEngine.setAttack(value);
     else if (parameterId == 455)
@@ -646,11 +670,8 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.wavetableEngine.setFilterCutoff(value);
     else if (parameterId == 459)
       track.wavetableEngine.setResonance(value);
-    // 460 Filter Attack (Unused in UI?)
     else if (parameterId == 461)
       track.wavetableEngine.setParameter(11, value); // Filter Decay
-    // 462 Filter Sustain
-    // 463 Filter Release
     else if (parameterId == 464)
       track.wavetableEngine.setParameter(14, value); // Filter Env Amount
     else if (parameterId == 465)
@@ -659,19 +680,59 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.wavetableEngine.setParameter(16, value); // Crush
     else if (parameterId == 467)
       track.wavetableEngine.setParameter(17, value); // Drive
+    else if (parameterId == 468)
+      track.wavetableEngine.setParameter(18, value); // Keytrack
   }
-  // Arpeggiator (500+)
-  else if (parameterId >= 500 && parameterId < 510) {
-    if (parameterId == 500)
+  // Drive
+  // Arpeggiator (1500+)
+  else if (parameterId >= 1500 && parameterId < 1510) {
+    if (parameterId == 1500)
       track.arpeggiator.setMode(
           static_cast<ArpMode>(static_cast<int>(value * 7.0f)));
-    else if (parameterId == 501)
+    else if (parameterId == 1501)
       track.arpeggiator.setLatched(value > 0.5f);
   } else if (parameterId >= 800 && parameterId < 810) {
     if (parameterId == 800)
       track.midiInChannel = static_cast<int>(value);
     else if (parameterId == 801)
       track.midiOutChannel = static_cast<int>(value);
+  }
+  // Global Effect Params (500-600 logic moved here for native update)
+  else if (parameterId >= 500 && parameterId < 600) {
+    if (parameterId >= 500 && parameterId < 510) { // Reverb (500-505)
+      float size = mTracks[0].parameters[500];
+      float damp = mTracks[0].parameters[501];
+      float mod = mTracks[0].parameters[502];
+      float mix = mTracks[0].parameters[503];
+      float pdly = mTracks[0].parameters[504];
+      float type = mTracks[0].parameters[505];
+      mReverbFx.setParameters(size, damp, mod, mix, pdly * 200.0f, mSampleRate);
+      mReverbFx.setType(type);
+    } else if (parameterId >= 510 && parameterId < 520) { // Chorus (510-513)
+      float rate = mTracks[0].parameters[510] * 5.0f;
+      float depth = mTracks[0].parameters[511];
+      float mix = mTracks[0].parameters[512];
+      int voices = static_cast<int>(mTracks[0].parameters[513] * 6) + 1;
+      mChorusFx.setParameters(rate, depth, mix, voices);
+    } else if (parameterId >= 550 && parameterId < 560) { // Phaser (550-551)
+      float rate = mTracks[0].parameters[550] * 2.0f;
+      float depth = mTracks[0].parameters[551];
+      mPhaserFx.setParameters(rate, depth, 0.5f); // Assuming default mix
+    } else if (parameterId >= 540 && parameterId < 550) { // Overdrive (540-543)
+      float drive = mTracks[0].parameters[540];
+      float mix = mTracks[0].parameters[541];
+      float level = mTracks[0].parameters[542];
+      float tone = mTracks[0].parameters[543];
+      mOverdriveFx.setParameters(drive, tone, level);
+      mOverdriveFx.setMix(mix);
+    }
+  }
+  // Arpeggiator (1530+) - Moved from 500 to avoid conflict
+  else if (parameterId >= 1530 && parameterId < 1540) {
+    if (parameterId == 1531) {
+      track.arpeggiator.setMode(
+          static_cast<ArpMode>(static_cast<int>(value * 7.0f)));
+    }
   }
   // Effect Params (500+) - This block is for GLOBAL FX, not track-specific.
   // It should remain in a global context or be called from a global
@@ -759,6 +820,47 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
     if (fxIdx < 15)
       track.fxSends[fxIdx] = value;
   }
+
+  // RESTORE GLOBAL FX PARAMETERS (IDs 500-600)
+  if (parameterId >= 500 && parameterId < 600) {
+    if (parameterId >= 500 && parameterId < 510) { // Delay (500-504)
+      float time = mTracks[0].parameters[500];
+      float feedback = mTracks[0].parameters[501];
+      float mix = mTracks[0].parameters[502];
+      mDelayFx.setParameters(time, feedback, mix);
+    } else if (parameterId >= 510 && parameterId < 520) { // Reverb (510-514)
+      float room = mTracks[0].parameters[510];
+      float damp = mTracks[0].parameters[511];
+      float mix = mTracks[0].parameters[512];
+      float width = mTracks[0].parameters[513];
+      // setParameters(size, damp, modDepth, mix, preDelayMs, sr)
+      // Mapping: room->size, damp->damp, width->modDepth, mix->mix
+      mReverbFx.setParameters(room, damp, width, mix, 0.0f, mSampleRate);
+    } else if (parameterId >= 520 && parameterId < 530) { // Chorus (520-524)
+      float rate = mTracks[0].parameters[520] * 5.0f;
+      float depth = mTracks[0].parameters[521];
+      float mix = mTracks[0].parameters[522];
+      int voices = (int)(mTracks[0].parameters[523] * 3.0f) + 1;
+      mChorusFx.setParameters(rate, depth, mix, voices);
+    } else if (parameterId >= 550 && parameterId < 560) { // Phaser (550-551)
+      float rate = mTracks[0].parameters[550] * 2.0f;
+      float depth = mTracks[0].parameters[551];
+      mPhaserFx.setParameters(rate, depth, 0.5f);
+    } else if (parameterId >= 540 && parameterId < 550) { // Overdrive (540-543)
+      float drive = mTracks[0].parameters[540];
+      float mix = mTracks[0].parameters[541];
+      float level = mTracks[0].parameters[542];
+      float tone = mTracks[0].parameters[543];
+      mOverdriveFx.setParameters(drive, tone, level);
+      mOverdriveFx.setMix(mix);
+    } else if (parameterId >= 530 &&
+               parameterId < 540) { // Bitcrusher (530-532)
+      float depth = mTracks[0].parameters[530];
+      float downsample = mTracks[0].parameters[531];
+      float mix = mTracks[0].parameters[532];
+      mBitcrusherFx.setParameters(depth, downsample, mix);
+    }
+  }
 }
 
 // End of updateEngineParameter
@@ -823,24 +925,39 @@ void AudioEngine::releaseNoteLocked(int trackIndex, int note,
         for (auto it = track.mRecordingNotes.begin();
              it != track.mRecordingNotes.end();) {
           if (it->note == note) {
-            // Calculate gate length
+            // Calculate gate length with wrap-around support
             double currentPos =
                 (double)mGlobalStepIndex +
                 ((double)mSampleCount / (mSamplesPerStep + 0.001));
+
+            // Handle wrap-around: if currentPos < startPos, we wrapped
+            if (currentPos < it->startGlobalStep) {
+              currentPos += mPatternLength;
+            }
+
             double startPos = (double)it->startGlobalStep + it->startOffset;
             float gate = static_cast<float>(currentPos - startPos);
 
             if (gate < 0.1f)
               gate = 0.1f;
-            if (gate > 16.0f)
-              gate = 16.0f; // Max 16 steps
+            if (gate > 64.0f)
+              gate = 64.0f; // Allow very long notes
 
-            if (it->drumIdx >= 0 && it->drumIdx < 8) {
-              track.drumSequencers[it->drumIdx]
-                  .getStepsMutable()[it->stepIndex]
-                  .gate = gate;
+            if (it->drumIdx >= 0 && it->drumIdx < 16) {
+              // Ensure drum index is valid before accessing
+              if (it->stepIndex >= 0 &&
+                  it->stepIndex < track.drumSequencers[it->drumIdx]
+                                      .getStepsMutable()
+                                      .size()) {
+                track.drumSequencers[it->drumIdx]
+                    .getStepsMutable()[it->stepIndex]
+                    .gate = gate;
+              }
             } else {
-              track.sequencer.getStepsMutable()[it->stepIndex].gate = gate;
+              if (it->stepIndex >= 0 &&
+                  it->stepIndex < track.sequencer.getStepsMutable().size()) {
+                track.sequencer.getStepsMutable()[it->stepIndex].gate = gate;
+              }
             }
             it = track.mRecordingNotes.erase(it);
           } else {
@@ -962,9 +1079,10 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                  safetyCounter < kMaxStepsPerBlock) {
             safetyCounter++;
             if (safetyCounter > 16) {
-              LOGD("Safety Break Track %d: SPS=%.2f Multi=%.2f Countdown=%.2f",
-                   t, samplesPerStep, effectiveMultiplier,
-                   track.mStepCountdown);
+              // LOGD("Safety Break Track %d: SPS=%.2f Multi=%.2f
+              // Countdown=%.2f",
+              //      t, samplesPerStep, effectiveMultiplier,
+              //      track.mStepCountdown);
               track.mStepCountdown =
                   trackSamplesPerStep; // Skip ahead to prevent machine gun
               break;
@@ -984,15 +1102,23 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
             if (seqStep < steps.size()) {
               const Step &s = steps[seqStep];
 
-              // Restore Base Parameters for this track at the start of the step
-              // Optimization: Only reset params 0-199 (Synth/Drum) to avoid
-              // 1024 overhead
-              for (int p = 0; p < 200; ++p) {
-                if (std::abs(track.appliedParameters[p] - track.parameters[p]) >
-                    0.001f) {
-                  track.appliedParameters[p] = track.parameters[p];
-                  updateEngineParameter(t, p, track.parameters[p]);
+              // Optimization: Only reset modified parameters
+              for (int p = 0; p < 1024; ++p) {
+                if (track.appliedParameters[p] != track.parameters[p]) {
+                  // Only reset if this parameter is NOT currently locked in
+                  // this step
+                  if (s.parameterLocks.find(p) == s.parameterLocks.end()) {
+                    track.appliedParameters[p] = track.parameters[p];
+                    updateEngineParameter(t, p, track.parameters[p]);
+                  }
                 }
+              }
+
+              // Apply Parameter Locks (even if step is inactive - "Trigless
+              // Locks")
+              for (auto const &[pid, val] : s.parameterLocks) {
+                track.appliedParameters[pid] = val; // Set applied param
+                updateEngineParameter(t, pid, val);
               }
 
               if (s.active) {
@@ -1006,11 +1132,11 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                                               // is <= 0 here
                     if (delayedSamples <= 1.0) {
                       triggerNoteLocked(t, ni.note, ni.velocity * 127, true,
-                                        s.gate);
+                                        s.gate, s.punch);
                     } else {
                       track.mPendingNotes.push_back(
                           {ni.note, ni.velocity * 127.0f, delayedSamples,
-                           s.gate, 1});
+                           s.gate, 1, s.punch, false});
                     }
 
                     // Ratchet Implementation
@@ -1020,13 +1146,10 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                       for (int r = 1; r < s.ratchet; ++r) {
                         double rDelay = delayedSamples + (r * ratchetInterval);
                         track.mPendingNotes.push_back(
-                            {ni.note, ni.velocity * 127.0f, rDelay, s.gate, 1});
+                            {ni.note, ni.velocity * 127.0f, rDelay, s.gate, 1,
+                             false, true});
                       }
                     }
-                  }
-                  for (auto const &[pid, val] : s.parameterLocks) {
-                    track.appliedParameters[pid] = val; // Set applied param
-                    updateEngineParameter(t, pid, val);
                   }
                 }
               }
@@ -1060,7 +1183,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                         } else {
                           track.mPendingNotes.push_back(
                               {ni.note, ni.velocity * 127.0f, delayedSamples,
-                               ds.gate, 1, ds.punch});
+                               ds.gate, 1, ds.punch, false});
                         }
 
                         // Ratchet implementation for drums
@@ -1072,14 +1195,21 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                                 delayedSamples + (r * ratchetInterval);
                             track.mPendingNotes.push_back(
                                 {ni.note, ni.velocity * 127.0f, rDelay, ds.gate,
-                                 1, ds.punch});
+                                 1, ds.punch, true});
                           }
                         }
                       }
-                      for (auto const &[pid, val] : ds.parameterLocks) {
-                        updateEngineParameter(t, pid, val);
-                      }
                     }
+                  }
+                  // Apply Drum P-locks regardless of activity (Trigless Locks)
+                  // Safety: Drum P-locks should only apply to parameters
+                  // relevant to drums (500-700) or general track params (0-300)
+                  // to avoid side effects on other engines
+                  for (auto const &[pid, val] : ds.parameterLocks) {
+                    if (std::isnan(val) || std::isinf(val))
+                      continue;
+                    track.appliedParameters[pid] = val;
+                    updateEngineParameter(t, pid, val);
                   }
                 }
               }
@@ -1126,17 +1256,32 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
              it != track.mPendingNotes.end();) {
           it->samplesRemaining -= framesToDo;
           if (it->samplesRemaining <= 0) {
-            triggerNoteLocked(t, it->note, (int)it->velocity, true, it->gate);
+            triggerNoteLocked(t, it->note, (int)it->velocity, true, it->gate,
+                              it->punch, it->forceRetrigger);
             it = track.mPendingNotes.erase(it);
           } else {
             ++it;
           }
         }
       }
-    } // End lock block
+      // Lock extends over renderStereo
 
-    // Audio Block
-    renderStereo(&output[frameIdx * numChannels], framesToDo);
+      // Audio Block
+      renderStereo(&output[frameIdx * numChannels], framesToDo);
+
+      // SANITIZER: Clamp and Kill NaNs immediately after render
+      for (int i = 0; i < framesToDo * numChannels; ++i) {
+        float val = output[frameIdx * numChannels + i];
+        if (std::isnan(val) || std::isinf(val))
+          val = 0.0f;
+        if (val > 2.0f)
+          val = 2.0f;
+        if (val < -2.0f)
+          val = -2.0f;
+        output[frameIdx * numChannels + i] = val;
+      }
+    } // End lock block
+    // Lock extends over renderStereo
 
     // --- Process Note Durations (Note Off) AFTER Audio processing ---
     // This ensures every triggered note plays for at least one block even if
@@ -1299,6 +1444,8 @@ void AudioEngine::setStep(int trackIndex, int stepIndex, bool active,
 }
 
 std::vector<float> AudioEngine::getAllTrackParameters(int trackIndex) {
+  __android_log_print(ANDROID_LOG_ERROR, "AudioEngine",
+                      "getAllTrackParameters called for track %d", trackIndex);
   std::lock_guard<std::recursive_mutex> lock(mLock);
   std::vector<float> params;
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
@@ -1388,9 +1535,16 @@ void AudioEngine::setSwing(float swing) {
 
 void AudioEngine::setPatternLength(int length) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  mPatternLength = (length <= 0) ? 1 : (length > 128 ? 128 : length);
+  mPatternLength = (length <= 0) ? 1 : (length > 64 ? 64 : length);
   if (mGlobalStepIndex >= mPatternLength) {
     mGlobalStepIndex = 0;
+  }
+  // Resize all native sequencers for consistency
+  for (int t = 0; t < 8; ++t) {
+    mTracks[t].sequencer.getStepsMutable().resize(mPatternLength);
+    for (int d = 0; d < 16; ++d) {
+      mTracks[t].drumSequencers[d].getStepsMutable().resize(mPatternLength);
+    }
   }
 }
 
@@ -1424,7 +1578,9 @@ void AudioEngine::setSelectedFmDrumInstrument(int trackIndex, int drumIndex) {
 void AudioEngine::setParameterLock(int trackIndex, int stepIndex,
                                    int parameterId, float value) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex >= 0 && trackIndex < mTracks.size()) {
+  if (std::isnan(value) || std::isinf(value))
+    value = 0.0f;
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     mTracks[trackIndex].sequencer.setParameterLock(stepIndex, parameterId,
                                                    value);
   }
@@ -1513,7 +1669,7 @@ void AudioEngine::applyModulations() {
 
       // Apply to Destination
       if (mod.destination == ModDestination::Parameter &&
-          mod.destParamId != -1) {
+          mod.destParamId >= 0 && mod.destParamId < 1024) {
         float baseVal =
             mTracks[t].parameters[mod.destParamId]; // Use BASE value
         float effectiveVal = baseVal + (srcValue * mod.amount);
@@ -1730,6 +1886,9 @@ void AudioEngine::stopRecordingSample(int trackIndex) {
 }
 
 void AudioEngine::setEngineType(int trackIndex, int type) {
+  __android_log_print(ANDROID_LOG_ERROR, "AudioEngine",
+                      "setEngineType called for track %d type %d", trackIndex,
+                      type);
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     mTracks[trackIndex].engineType = type;
@@ -2262,7 +2421,7 @@ void AudioEngine::renderToWav(int numCycles, const std::string &path) {
     // Check if we need to trigger next step
     if (mSampleCount >= mSamplesPerStep) {
       mSampleCount -= mSamplesPerStep;
-      mGlobalStepIndex = (mGlobalStepIndex + 1) % 128;
+      mGlobalStepIndex = (mGlobalStepIndex + 1) % 64;
       for (int t = 0; t < (int)mTracks.size(); ++t) {
         mTracks[t].sequencer.advance();
         const Step &s = mTracks[t].sequencer.getCurrentStep();
@@ -2282,6 +2441,7 @@ void AudioEngine::renderToWav(int numCycles, const std::string &path) {
 }
 
 void AudioEngine::loadWavetable(int trackIndex, const std::string &path) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     if (mTracks[trackIndex].engineType == 4) { // Wavetable Engine
       mTracks[trackIndex].wavetableEngine.loadWavetable(path);
@@ -2290,9 +2450,23 @@ void AudioEngine::loadWavetable(int trackIndex, const std::string &path) {
 }
 
 void AudioEngine::loadDefaultWavetable(int trackIndex) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     if (mTracks[trackIndex].engineType == 4) {
       mTracks[trackIndex].wavetableEngine.loadDefaultWavetable();
     }
+  }
+}
+
+void AudioEngine::getStepActiveStates(int trackIndex, bool *out, int maxSize) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (trackIndex < 0 || trackIndex >= mTracks.size()) {
+    std::fill(out, out + maxSize, false);
+    return;
+  }
+  const auto &steps = mTracks[trackIndex].sequencer.getSteps();
+  int limit = std::min(maxSize, (int)steps.size());
+  for (int i = 0; i < limit; ++i) {
+    out[i] = steps[i].active;
   }
 }

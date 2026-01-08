@@ -6,6 +6,7 @@
 
 class PhaserFx {
 public:
+  void updateSampleRate(float sr) {}
   void setRate(float v) { mRate = v; }
   void setDepth(float v) { mDepth = v; }
   void setFeedback(float v) { mFeedback = v; }

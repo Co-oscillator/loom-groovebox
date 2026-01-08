@@ -7,7 +7,17 @@
 
 class DelayFx {
 public:
-  DelayFx(int maxDelayFrames = 44100) { mBuffer.assign(maxDelayFrames, 0.0f); }
+  DelayFx(int maxDelayFrames = 96000) { mBuffer.assign(maxDelayFrames, 0.0f); }
+
+  void setSampleRate(float sr) {
+    mSampleRate = sr;
+    size_t requiredBuffer = static_cast<size_t>(sr * 2.0f);
+    if (requiredBuffer > mBuffer.size()) {
+      mBuffer.resize(requiredBuffer, 0.0f);
+    }
+    updateFilterCoeffs();
+  }
+  void updateSampleRate(float sr) { setSampleRate(sr); }
 
   void setDelay(int frames) {
     if (frames < mBuffer.size())
@@ -35,6 +45,15 @@ public:
     mType = type;
   } // 0=Digital, 1=Tape, 2=PingPong, 3=Reverse
 
+  void setParameters(float time, float feedback, float mix) {
+    int frames = (int)(time * mSampleRate);
+    if (frames < 1)
+      frames = 1;
+    setDelay(frames);
+    setFeedback(feedback);
+    setMix(mix);
+  }
+
   void clear() {
     std::fill(mBuffer.begin(), mBuffer.end(), 0.0f);
     mWriteIndex = 0;
@@ -55,7 +74,7 @@ public:
     } else {
       mMode = 2; // Bypass
     }
-    float f = 2.0f * sinf(M_PI * cutoff / 44100.0f);
+    float f = 2.0f * sinf(M_PI * cutoff / mSampleRate);
     mF = f;
   }
 
@@ -130,6 +149,7 @@ private:
   float mFeedback = 0.5f, mMix = 0.5f, mWowPhase = 0.0f;
   float mFilterMix = 0.5f, mResonance = 0.0f;
   float mLow = 0.0f, mBand = 0.0f, mHigh = 0.0f, mF = 0.1f;
+  float mSampleRate = 44100.0f;
   int mMode = 2, mType = 0;
 };
 

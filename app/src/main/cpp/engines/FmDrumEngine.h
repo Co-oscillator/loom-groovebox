@@ -132,6 +132,7 @@ public:
       e.setFrequency(100.0f, 44100.0f);
       break;
     }
+    e.setAlgorithm(0);
     e.setCarrierMask(1);
     e.setIgnoreNoteFrequency(true);
   }
@@ -157,6 +158,13 @@ public:
     // Only update the Sample Rate.
     for (int i = 0; i < 8; ++i) {
       mEngines[i].updateSampleRate(sampleRate);
+    }
+  }
+
+  void updateSampleRate(float sr) {
+    mSampleRate = sr;
+    for (int i = 0; i < 8; ++i) {
+      mEngines[i].updateSampleRate(sr);
     }
   }
 
@@ -205,7 +213,7 @@ public:
       }
 
       float pitchFreq = baseFreq + (v * v * freqRange);
-      e.setFrequency(pitchFreq, 44100.0f);
+      e.setFrequency(pitchFreq, mSampleRate);
 
     } else if (id == 1) { // REPLACES "ATK" -> "CLICK"
       // For Kicks/Toms: Control Pitch Sweep Amount
@@ -272,7 +280,7 @@ public:
     return false;
   }
 
-private:
+  float mSampleRate = 48000.0f;
   FmEngine mEngines[8];
   float mLastRenders[8] = {0.0f};
 };

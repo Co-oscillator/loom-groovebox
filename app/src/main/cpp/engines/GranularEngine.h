@@ -16,6 +16,7 @@ public:
   float mDecay = 0.1f;
   float mSustain = 1.0f;
   float mRelease = 0.1f;
+  float mSampleRate = 48000.0f;
 
   void setAttack(float v) { mAttack = v; }
   void setDecay(float v) { mDecay = v; }
@@ -137,6 +138,14 @@ public:
 
     mDensity = 0.5;
     mGrainSize = 0.2;
+    mBufferLock = std::make_shared<std::mutex>();
+  }
+
+  void updateSampleRate(float sr) {
+    mSampleRate = sr;
+    for (auto &v : mVoices) {
+      v.envelope.setSampleRate(sr);
+    }
   }
 
   void setSource(const std::vector<float> &source) {
@@ -200,7 +209,7 @@ public:
     v.spawnCounter = 0.0f;
 
     // Make sure ADSR parameters are applied to THIS voice's ADSR
-    v.envelope.setSampleRate(44100.0f);
+    v.envelope.setSampleRate(mSampleRate);
     v.envelope.setParameters(mMainAttack, mMainDecay, mMainSustain,
                              mMainRelease);
     v.envelope.trigger();
@@ -345,7 +354,7 @@ public:
       }
 
       // Spawn logic
-      float grainDuration = (mGrainSize * 44100.0f * 2.0f) + 100.0f;
+      float grainDuration = (mGrainSize * mSampleRate * 2.0f) + 100.0f;
       float overlap = 0.1f + (mDensity * 4.0f);
       float interval = grainDuration / overlap;
       if (interval < 1.0f)
@@ -392,6 +401,11 @@ public:
     float vol;
   };
   void getPlayheads(PlayheadInfo *out, int maxCount) {
+    if (!mBufferLock)
+      return; // Safety
+    std::lock_guard<std::mutex> lock(*mBufferLock);
+    if (mSource.empty())
+      return;
     int count = 0;
     for (const auto &g : mGrains) {
       if (g.isActive && count < maxCount) {
@@ -492,7 +506,7 @@ private:
         float length = mGrainSize;
         if (mLFOS[1].target == 1)
           length *= (1.0f + lfoOffsets[1]);
-        g.initialLife = static_cast<int>(length * 44100.0f * 2.0f + 100);
+        g.initialLife = static_cast<int>(length * mSampleRate * 2.0f + 100);
         g.life = g.initialLife;
         g.envValue = 0.0f;
         g.voiceIdx = voiceIdx; // Link to voice

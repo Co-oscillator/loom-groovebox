@@ -6,6 +6,7 @@
 
 class ChorusFx {
 public:
+  void updateSampleRate(float sr) {}
   ChorusFx(int maxDelay = 2048) { mBuffer.resize(maxDelay, 0.0f); }
 
   void setRate(float v) { mRate = v; }

@@ -5,9 +5,25 @@
 
 class BitcrusherFx {
 public:
+  void updateSampleRate(float sr) {}
   void setBits(int bits) { mBits = bits; }
   void setDownsample(int factor) { mDownsample = factor; }
   void setMix(float mix) { mMix = mix; }
+
+  void setParameters(float depth, float downsample, float mix) {
+    // Map normalized parameters to internal state
+    // Depth (0-1) -> Bits (16 down to 1). Higher depth = fewer bits
+    int bits = 16 - (int)(depth * 15.0f);
+    if (bits < 1)
+      bits = 1;
+
+    // Downsample (0-1) -> Factor (1 up to 50). Higher = more downsampling
+    int ds = 1 + (int)(downsample * 49.0f);
+
+    setBits(bits);
+    setDownsample(ds);
+    setMix(mix);
+  }
 
   float process(float input) {
     // Sample rate reduction

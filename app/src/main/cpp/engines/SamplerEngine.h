@@ -9,9 +9,7 @@
 #include <vector>
 
 class SamplerEngine {
-public:
-  enum PlayMode { OneShot, Sustain, Chops };
-
+private:
   struct Slice {
     size_t start;
     size_t end;
@@ -32,6 +30,9 @@ public:
     uint32_t grainTimer = 0;
     static const int GRAIN_SIZE = 1024; // Samples
 
+    // SVF Filter State
+    float svf_L = 0, svf_B = 0, svf_H = 0;
+
     void reset() {
       active = false;
       note = -1;
@@ -39,14 +40,38 @@ public:
       grainPosition = 0.0;
       grainTimer = 0;
       envelope.reset();
+      svf_L = svf_B = svf_H = 0.0f;
     }
   };
+
+  std::vector<Voice> mVoices;
+  float mTrimStart = 0.0f;
+  float mTrimEnd = 1.0f;
+  float mPitch = 0.0f;
+  float mStretch = 1.0f;
+  float mSpeed = 1.0f;
+  float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+  enum PlayMode { OneShot, Sustain, Chops };
+  PlayMode mPlayMode = OneShot;
+  bool mUseEnvelope = true;
+  float mCutoff = 1.0f;
+  float mResonance = 0.0f;
+  std::vector<Slice> mSlices;
+  std::vector<float> mBuffer;
+  float mSampleRate = 44100.0f;
+
+public:
+  std::shared_ptr<std::mutex> mBufferLock = std::make_shared<std::mutex>();
+  bool mReverse = false;
 
   SamplerEngine() {
     mVoices.resize(6);
     for (auto &v : mVoices)
       v.reset();
   }
+
+  void setSampleRate(float rate) { mSampleRate = rate; }
+  void updateSampleRate(float sr) { setSampleRate(sr); }
 
   void setSample(const std::vector<float> &data) {
     std::lock_guard<std::mutex> lock(*mBufferLock);
@@ -69,13 +94,7 @@ public:
       if (start < end)
         mSlices.push_back({start, end});
     }
-    // Ensure specific count or just use points?
-    // Existing logic used regions. WavUtils saves points.
-    // If points are just start markers:
-    // We can reconstruct regions [p[i], p[i+1]].
   }
-
-  void setPlaybackSpeed(float speed);
 
   void clearBuffer() {
     std::lock_guard<std::mutex> lock(*mBufferLock);
@@ -132,7 +151,6 @@ public:
     for (auto &v : mVoices) {
       v.active = false;
       v.envelope.reset();
-      v.active = false; // "isPlaying" equivalent
     }
   }
 
@@ -168,23 +186,15 @@ public:
     v.note = note;
     v.baseVelocity = velocity / 127.0f;
 
-    v.envelope.setSampleRate(44100.0f);
+    v.envelope.setSampleRate(mSampleRate);
     v.envelope.setParameters(mAttack, mDecay, mSustain, mRelease);
     v.envelope.trigger();
 
     if (mPlayMode == Chops && !mSlices.empty()) {
-      // Map Note 60 -> Slice 0. Safe modulo.
       int sliceIdx = 0;
       if (note >= 60)
         sliceIdx = (note - 60);
-
-      // Explicitly cycle through slices (User requested cycling, not clamping)
-      if (!mSlices.empty()) {
-        sliceIdx = sliceIdx % (int)mSlices.size();
-      } else {
-        sliceIdx = 0;
-      }
-
+      sliceIdx = sliceIdx % (int)mSlices.size();
       v.start = mSlices[sliceIdx].start;
       v.end = mSlices[sliceIdx].end;
     } else {
@@ -196,7 +206,6 @@ public:
         v.start = v.end - 1;
     }
 
-    // Fix: Start at end if reverse
     if (mReverse) {
       v.position = (double)v.end - 1.0;
     } else {
@@ -209,7 +218,7 @@ public:
     v.pitchRatio = powf(2.0f, (mPitch + keyShift) / 12.0f);
   }
 
-  int getPlayMode() const { return mPlayMode; } // Added Getter for AudioEngine
+  int getPlayMode() const { return mPlayMode; }
 
   void releaseNote(int note) {
     for (auto &v : mVoices) {
@@ -224,14 +233,20 @@ public:
   void setParameter(int id, float value) {
     std::lock_guard<std::mutex> lock(*mBufferLock);
     switch (id) {
-    case 300: // Pitch (semitones)
+    case 300:
       mPitch = (value - 0.5f) * 48.0f;
       break;
-    case 301: // Stretch (time)
-      mStretch = value * 4.0f;
+    case 301:
+      mStretch = exp2f((value - 0.5f) * 6.0f);
       break;
-    case 302: // Speed (classic)
+    case 302:
       mSpeed = value * 2.0f;
+      break;
+    case 1:
+      mCutoff = value;
+      break;
+    case 2:
+      mResonance = value;
       break;
     case 310:
       mAttack = value;
@@ -261,7 +276,7 @@ public:
       mReverse = value > 0.5f;
       break;
     case 340: {
-      int count = static_cast<int>(value * 14.0f) + 2; // 2 to 16
+      int count = static_cast<int>(value * 14.0f) + 2;
       findConstrainedSlices(count);
       break;
     }
@@ -299,19 +314,9 @@ public:
       }
       activeCount++;
 
-      // User Logic:
-      // Speed: Classic resampling (affects pitch and time)
-      // Pitch: Pitch change, time stay same
-      // Stretch: Time change, pitch stay same
-
-      // Resampling combined rate
       float classicRate = mSpeed * (mReverse ? -1.0f : 1.0f);
-
-      // Granular Travseral Rate (affects Time)
       float stretchFactor = std::max(0.01f, mStretch);
       float traverseRate = classicRate / stretchFactor;
-
-      // Grain Read Rate (affects Pitch)
       float readRate = classicRate * v.pitchRatio;
 
       bool useGranular =
@@ -327,27 +332,22 @@ public:
             v.envelope.release();
           }
         }
-        v.grainPosition = v.position;
-        int idx = static_cast<int>(v.grainPosition);
+        int idx = static_cast<int>(v.position);
         if (idx >= 0 && idx < (int)mBuffer.size()) {
           voiceOutput = mBuffer[idx];
         }
       } else {
-        // Dual-Grain Cross-fading for Smoothness
         v.position += traverseRate;
         v.grainTimer++;
 
-        // Grain 1
         double gp1 = v.position + (v.grainTimer * readRate);
         int idx1 = static_cast<int>(gp1);
 
-        // Grain 2 (Offset by half grain size)
         uint32_t timer2 =
             (v.grainTimer + (Voice::GRAIN_SIZE / 2)) % Voice::GRAIN_SIZE;
         double gp2 = v.position + (timer2 * readRate);
         int idx2 = static_cast<int>(gp2);
 
-        // Simple Triangle Window for Cross-fade
         float phase = (float)v.grainTimer / (float)Voice::GRAIN_SIZE;
         float w1 = 1.0f - std::abs(phase * 2.0f - 1.0f);
 
@@ -371,7 +371,20 @@ public:
         }
       }
 
-      mixedOutput += voiceOutput * env * v.baseVelocity;
+      // Filter Logic
+      float targetFreq = 20.0f * powf(1000.0f, mCutoff);
+      if (targetFreq > mSampleRate * 0.4f)
+        targetFreq = mSampleRate * 0.4f;
+      float f = 2.0f * sin(3.14159265f * targetFreq / mSampleRate);
+      float q = 1.0f - mResonance * 0.95f;
+      if (q < 0.05f)
+        q = 0.05f;
+
+      v.svf_H = voiceOutput - v.svf_L - q * v.svf_B;
+      v.svf_B = f * v.svf_H + v.svf_B;
+      v.svf_L = f * v.svf_B + v.svf_L;
+
+      mixedOutput += v.svf_L * env * v.baseVelocity;
     }
 
     if (activeCount > 1)
@@ -387,14 +400,10 @@ public:
 
     size_t totalSamples = mBuffer.size();
     size_t avgLength = totalSamples / count;
-    size_t windowSize = avgLength; // +/- 50% search window centered at beat
-
+    size_t windowSize = avgLength;
     size_t currentStart = 0;
     for (int i = 1; i < count; ++i) {
       size_t idealEnd = i * avgLength;
-
-      // Search for strongest transient in window [idealEnd - windowSize/2,
-      // idealEnd + windowSize/2]
       size_t searchStart =
           (idealEnd > windowSize / 2) ? (idealEnd - windowSize / 2) : 0;
       size_t searchEnd =
@@ -403,8 +412,6 @@ public:
       size_t bestTransient = idealEnd;
       float maxEnergyJump = 0.0f;
       float prevEnergy = 0.0f;
-
-      // Use smaller window for transient detection within the search window
       const int energyWindow = 256;
       for (size_t j = searchStart; j < searchEnd - energyWindow; j += 128) {
         float energy = 0.0f;
@@ -412,7 +419,6 @@ public:
           float s = mBuffer[j + k];
           energy += s * s;
         }
-
         if (j > searchStart) {
           float jump = energy / (prevEnergy + 0.001f);
           if (jump > maxEnergyJump && energy > 0.01f) {
@@ -422,8 +428,6 @@ public:
         }
         prevEnergy = energy;
       }
-
-      // Require a decent jump to snap, otherwise stay at ideal beat
       size_t sliceEnd = (maxEnergyJump > 1.4f) ? bestTransient : idealEnd;
       mSlices.push_back({currentStart, sliceEnd});
       currentStart = sliceEnd;
@@ -441,7 +445,8 @@ public:
     }
   }
 
-  std::vector<float> getSlicePoints() const {
+  std::vector<float> getSlicePoints() {
+    std::lock_guard<std::mutex> lock(*mBufferLock);
     std::vector<float> points;
     if (mBuffer.empty())
       return points;
@@ -451,7 +456,8 @@ public:
     return points;
   }
 
-  std::vector<float> getAmplitudeWaveform(int numPoints) const {
+  std::vector<float> getAmplitudeWaveform(int numPoints) {
+    std::lock_guard<std::mutex> lock(*mBufferLock);
     std::vector<float> result;
     if (mBuffer.empty())
       return result;
@@ -475,23 +481,6 @@ public:
         return true;
     return false;
   }
-
-  std::shared_ptr<std::mutex> mBufferLock = std::make_shared<std::mutex>();
-  bool mReverse = false;
-
-private:
-  std::vector<Voice> mVoices;
-  float mTrimStart = 0.0f;
-  float mTrimEnd = 1.0f;
-  float mPitch = 0.0f;
-  float mStretch = 1.0f;
-  float mSpeed = 1.0f;
-  float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
-  PlayMode mPlayMode = OneShot;
-  bool mUseEnvelope = true;
-
-  std::vector<Slice> mSlices;
-  std::vector<float> mBuffer;
 };
 
 #endif // SAMPLER_ENGINE_H

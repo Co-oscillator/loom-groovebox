@@ -6,6 +6,7 @@
 
 class OverdriveFx {
 public:
+  void updateSampleRate(float sr) {}
   void setParameters(float drive, float tone, float level) {
     mDrive = drive * 10.0f + 1.0f; // Range 1.0 to 11.0
     mTone = tone;
@@ -33,7 +34,9 @@ public:
     mLastOutput += lpAlpha * (mixed - mLastOutput);
 
     // Output Level + Slight Boost
-    float out = mLastOutput * mLevel * 1.2f * mMix;
+    float out = mLastOutput * mLevel * 1.5f * mMix; // Boosted factor to 1.5x
+    if (std::isnan(out) || std::isinf(out))
+      out = 0.0f;
     return std::max(-1.0f, std::min(1.0f, out));
   }
 

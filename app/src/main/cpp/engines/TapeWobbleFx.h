@@ -7,6 +7,7 @@
 
 class TapeWobbleFx {
 public:
+  void updateSampleRate(float sr) {}
   TapeWobbleFx(int maxDelay = 2048) {
     mBuffer.resize(maxDelay, 0.0f);
     mRandEngine.seed(std::random_device{}());

@@ -47,6 +47,7 @@ public:
     for (auto &v : mVoices)
       v.sampleRate = sr;
   }
+  void updateSampleRate(float sr) { setSampleRate(sr); }
 
   void allNotesOff() {
     for (auto &v : mVoices) {
@@ -66,8 +67,6 @@ public:
     if (drumIdx < 0 || drumIdx >= 8)
       return;
     AnalogVoice &v = mVoices[drumIdx];
-    LOGD("AnalogEngine::setParameter drum=%d, id=%d, val=%.2f", drumIdx,
-         paramId, value);
 
     switch (paramId) {
     case 0:

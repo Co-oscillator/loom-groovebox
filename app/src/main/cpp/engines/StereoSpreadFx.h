@@ -6,23 +6,12 @@
 
 class StereoSpreadFx {
 public:
+  void updateSampleRate(float sr) {}
   StereoSpreadFx() {
     // Short delays for Haas effect / widening
     mDelayL.resize(2048, 0.0f);
     mDelayR.resize(2048, 0.0f);
   }
-
-  // Process Stereo Input (or Mono -> Stereo)
-  // The engine's FX buses are Mono currently (float array).
-  // But render loop output is going to stereo.
-  // If we process a global FX bus, we return a value that gets summed?
-  // AudioEngine sums `wetSample` to L and R.
-  // If we want Stereo Spread, we need to return L and R separately usually.
-  // BUT, the current loop sums `wetSample` to BOTH `outL` and `outR`
-  // identically or assumes mono mix. AudioEngine.cpp: float outL = wetSample;
-  // float outR = wetSample; To implement TRUE Stereo Spread, AudioEngine's FX
-  // processing needs to support Stereo Return. For now, let's implement the
-  // class, and we'll hack AudioEngine to use it properly.
 
   void process(float input, float &outL, float &outR, float sampleRate) {
     if (mMix <= 0.001f) {
@@ -58,9 +47,6 @@ public:
     if (mPosR >= mDelayR.size())
       mPosR = 0;
 
-    // Output - purely wet signal?
-    // If this is a bus, we want the "spread" effect.
-    // Usually spread is added to dry.
     outL = sampL * mMix;
     outR = sampR * mMix;
   }

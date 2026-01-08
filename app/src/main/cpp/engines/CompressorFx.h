@@ -9,12 +9,15 @@ public:
   void setThreshold(float dB) { mThreshold = powf(10.0f, dB / 20.0f); }
   void setRatio(float ratio) { mRatio = std::max(1.0f, ratio); }
   void setAttack(float ms) {
-    mAttackRate = ms > 0 ? 1.0f - expf(-1.0f / (ms * 0.001f * 44100.0f)) : 1.0f;
+    mAttackRate =
+        ms > 0 ? 1.0f - expf(-1.0f / (ms * 0.001f * mSampleRate)) : 1.0f;
   }
   void setRelease(float ms) {
     mReleaseRate =
-        ms > 0 ? 1.0f - expf(-1.0f / (ms * 0.001f * 44100.0f)) : 1.0f;
+        ms > 0 ? 1.0f - expf(-1.0f / (ms * 0.001f * mSampleRate)) : 1.0f;
   }
+  void setSampleRate(float sr) { mSampleRate = sr; }
+  void updateSampleRate(float sr) { setSampleRate(sr); }
   void setMakeup(float dB) { mMakeup = powf(10.0f, dB / 20.0f); }
 
   float process(float input, float sidechain) {
@@ -65,6 +68,7 @@ private:
   float mReleaseRate = 0.001f;
   float mMakeup = 1.0f;
   float mEnvelope = 0.0f;
+  float mSampleRate = 44100.0f;
 };
 
 #endif // COMPRESSOR_FX_H

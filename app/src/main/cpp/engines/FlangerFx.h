@@ -7,6 +7,7 @@
 
 class FlangerFx {
 public:
+  void updateSampleRate(float sr) {}
   FlangerFx() {
     mBuffer.resize(44100, 0.0f); // 1 sec buffer
   }

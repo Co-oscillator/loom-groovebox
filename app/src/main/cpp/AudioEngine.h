@@ -109,6 +109,7 @@ public:
   void clearSequencer(int trackIndex);
   void setMasterVolume(float volume);
   bool getStepActive(int trackIndex, int stepIndex, int drumIndex = -1);
+  void getStepActiveStates(int trackIndex, bool *out, int maxSize);
   std::vector<Step> getSequencerSteps(int trackIndex);
   std::vector<float> getAllTrackParameters(int trackIndex); // New sync method
   std::vector<float> getSamplerSlicePoints(int trackIndex);
@@ -211,6 +212,7 @@ private:
       float gate = 0.5f;
       int ratchetCount = 1;
       bool punch = false;
+      bool forceRetrigger = false;
     };
     std::vector<PendingNote> mPendingNotes;
     float mClockMultiplier = 1.0f;
@@ -258,7 +260,7 @@ private:
   std::recursive_mutex mLock;
   void triggerNoteLocked(int trackIndex, int note, int velocity,
                          bool isSequencerTrigger = false, float gate = 0.95f,
-                         bool punch = false);
+                         bool punch = false, bool forceRetrigger = false);
   void releaseNoteLocked(int trackIndex, int note,
                          bool isSequencerTrigger = false);
   void setupTracks();

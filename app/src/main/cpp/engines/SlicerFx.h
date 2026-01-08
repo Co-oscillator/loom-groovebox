@@ -5,6 +5,7 @@
 
 class SlicerFx {
 public:
+  void updateSampleRate(float sr) {}
   // Input v is 0.0 - 1.0 from GUI.
   // We want range approx 0.125 (1/8th speed) to 16.0 (16x speed) divisions per
   // step? Or if 'rate' represents slices per step: v=0 -> 0.1 slices/step (very

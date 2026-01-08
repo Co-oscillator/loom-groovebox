@@ -272,8 +272,9 @@ Java_com_groovebox_NativeLib_getGranularPlayheads(JNIEnv *env, jobject thiz,
                                                   jint track_index) {
   const int MAX_GRAINS = 32;
   jfloatArray result = env->NewFloatArray(MAX_GRAINS * 2);
-  if (engine) {
+  if (engine && track_index >= 0 && track_index < 8) {
     GranularEngine::PlayheadInfo info[MAX_GRAINS];
+    memset(info, 0, sizeof(info)); // Safety
     engine->getGranularPlayheads(track_index, info, MAX_GRAINS);
 
     jfloat buffer[MAX_GRAINS * 2];
@@ -323,7 +324,7 @@ Java_com_groovebox_NativeLib_stopRecordingSample(JNIEnv *env, jobject thiz,
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_groovebox_NativeLib_getWaveform(JNIEnv *env, jobject thiz,
                                          jint track_index) {
-  if (engine) {
+  if (engine && track_index >= 0 && track_index < 8) {
     std::vector<float> waveform = engine->getSamplerWaveform(track_index, 500);
     jfloatArray result = env->NewFloatArray(waveform.size());
     env->SetFloatArrayRegion(result, 0, waveform.size(), waveform.data());
@@ -513,17 +514,18 @@ Java_com_groovebox_NativeLib_getAllTrackParameters(JNIEnv *env, jobject thiz,
 extern "C" JNIEXPORT jbooleanArray JNICALL
 Java_com_groovebox_NativeLib_getAllStepActiveStates(JNIEnv *env, jobject thiz,
                                                     jint track_index) {
-  if (engine) {
-    // We reuse existing logic to get active states
-    // Since getSequencerSteps returns complex objects, we iterate them here
-    std::vector<Step> steps = engine->getSequencerSteps(track_index);
-    jbooleanArray result = env->NewBooleanArray(steps.size());
-    jboolean *temp = new jboolean[steps.size()];
-    for (size_t i = 0; i < steps.size(); ++i) {
-      temp[i] = steps[i].active ? JNI_TRUE : JNI_FALSE;
+  if (engine && track_index >= 0 && track_index < 8) {
+    // Optimized path: Direct boolean fetch
+    const int MAX_STEPS = 64; // Match our new limit
+    bool states[MAX_STEPS];
+    engine->getStepActiveStates(track_index, states, MAX_STEPS);
+
+    jbooleanArray result = env->NewBooleanArray(MAX_STEPS);
+    jboolean temp[MAX_STEPS];
+    for (int i = 0; i < MAX_STEPS; ++i) {
+      temp[i] = states[i] ? JNI_TRUE : JNI_FALSE;
     }
-    env->SetBooleanArrayRegion(result, 0, steps.size(), temp);
-    delete[] temp;
+    env->SetBooleanArrayRegion(result, 0, MAX_STEPS, temp);
     return result;
   }
   return env->NewBooleanArray(0);

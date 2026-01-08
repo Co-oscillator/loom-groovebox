@@ -13,18 +13,16 @@ public:
     mDecay = d;
     mSustain = s;
     mRelease = r;
-    // Pre-calculate coefficients could be done here for optimization,
-    // but calculating per-sample is okay for now or valid in nextValue with
-    // pow/exp approximations. For simple exp decay: val *= coeff.
-    // Cubic curve for fine control at low values
-    float aCurve = mAttack * mAttack * mAttack;
-    float dCurve = mDecay * mDecay * mDecay;
-    float rCurve = mRelease * mRelease * mRelease;
 
-    // Max times: Attack 2s, Decay 3s, Release 3s
-    mDecayCoeff = exp(-1.0f / (dCurve * mSampleRate * 3.0f + 1.0f));
-    mReleaseCoeff = exp(-1.0f / (rCurve * mSampleRate * 3.0f + 1.0f));
-    mAttackRate = 1.0f / (aCurve * mSampleRate * 2.0f + 1.0f);
+    // Scaling: quadratic instead of cubic for better range at low values
+    float aScl = mAttack * mAttack;
+    float dScl = mDecay * mDecay;
+    float rScl = mRelease * mRelease;
+
+    // Longer max times and smoother curves
+    mDecayCoeff = exp(-1.0f / (dScl * mSampleRate * 5.0f + 10.0f));
+    mReleaseCoeff = exp(-1.0f / (rScl * mSampleRate * 5.0f + 10.0f));
+    mAttackRate = 1.0f / (aScl * mSampleRate * 3.0f + 5.0f);
   }
 
   void trigger() { mStage = AdsrStage::Attack; }

@@ -8,6 +8,7 @@
 // Simple Granular Pitch Shifter for Octaver
 class OctaverFx {
 public:
+  void updateSampleRate(float sr) {}
   OctaverFx() {
     mBuffer.resize(8192, 0.0f); // ~180ms circular buffer
   }

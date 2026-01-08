@@ -62,8 +62,9 @@ public:
       v.filterEnv.setSampleRate(sr);
     }
   }
+  void updateSampleRate(float sr) { setSampleRate(sr); }
 
-  void setFrequency(float freq, float sampleRate) { mSampleRate = sampleRate; }
+  void setFrequency(float freq, float sampleRate) { setSampleRate(sampleRate); }
   void setFMEnabled(bool enabled);
   void setRingVal(float val);
 
@@ -174,6 +175,7 @@ public:
   void setNoiseLevel(float v) { mNoiseLevel = v; }
   void setChordVoicing(float v) { mChordType = static_cast<int>(v * 5); }
   void setFilterEnvAmount(float v) { mF_Amt = v * 2.0f - 1.0f; }
+  void setKeytrack(float v) { mKeytrack = v; }
   void setUseEnvelope(bool use) { mUseEnvelope = use; }
 
   // Stubs for generic modulation compatibility
@@ -270,18 +272,30 @@ public:
       float output = subOutput * 0.5f * v.amplitude * envVal;
 
       // Filter
+      float keyFreqRatio = v.frequency / 440.0f;
+      float keytrackOffset =
+          (log2f(keyFreqRatio) * mKeytrack) / 10.0f; // Scale to cutoff range
+
       float modCutoff = std::max(
-          0.0f, std::min(1.0f, mCutoff + v.currentFilterEnvVal * mF_Amt));
-      float radians = (float)M_PI * (20.0f + modCutoff * modCutoff * 14980.0f) /
-                      mSampleRate;
-      float f = 2.0f * FastSine::getInstance().sin(radians);
+          0.0f, std::min(1.0f, mCutoff + (v.currentFilterEnvVal * mF_Amt) +
+                                   keytrackOffset));
+      float targetFreq = 20.0f + (modCutoff * modCutoff * 12000.0f);
+      float f = 2.0f * sinf(M_PI * std::min(targetFreq, mSampleRate * 0.25f) /
+                            mSampleRate);
       float q = 1.0f - mResonance * 0.95f;
-      if (q < 0.05f)
-        q = 0.05f;
+      if (q < 0.1f)
+        q = 0.1f;
 
       v.svf_H = output - v.svf_L - q * v.svf_B;
       v.svf_B = f * v.svf_H + v.svf_B;
       v.svf_L = f * v.svf_B + v.svf_L;
+
+      if (!std::isfinite(v.svf_L) || !std::isfinite(v.svf_B) ||
+          !std::isfinite(v.svf_H)) {
+        v.svf_L = 0;
+        v.svf_B = 0;
+        v.svf_H = 0;
+      }
 
       float res = (mCutoff < 0.5f) ? v.svf_L : v.svf_H;
 
@@ -294,17 +308,6 @@ public:
         res = res * (27.0f + res * res) / (27.0f + 9.0f * res * res);
 
       mixedOutput += res;
-
-      // Debug
-      static int debugCounter = 0;
-      if (debugCounter++ % 5000 == 0) {
-        __android_log_print(ANDROID_LOG_DEBUG, "SubtractiveDebug",
-                            "V%d: Note=%d Osc1=%.2f Osc2=%.2f Ring=%d FM=%.2f "
-                            "Vol1=%.2f Vol2=%.2f Env=%.2f Out=%.2f",
-                            activeCount, v.note, osc1Val, osc2Val, mRingMod,
-                            mFmAmt, mOscVolumes[0], mOscVolumes[1], envVal,
-                            res);
-      }
     }
 
     if (activeCount > 1)
@@ -335,7 +338,7 @@ private:
   float mCutoff = 0.45f, mResonance = 0.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.5f;
   float mF_Atk = 0.01f, mF_Dcy = 0.1f, mF_Sus = 0.0f, mF_Rel = 0.5f;
-  float mF_Amt = 0.0f;
+  float mF_Amt = 0.0f, mKeytrack = 0.0f;
   float mMorph = 0.0f, mDetune = 0.0f, mNoiseLevel = 0.0f;
   unsigned int mNoiseSeed = 12345;
   int mChordType = 0;

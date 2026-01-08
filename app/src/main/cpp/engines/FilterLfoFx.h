@@ -9,6 +9,7 @@ enum class FilterLfoMode { LowPass, HighPass };
 
 class FilterLfoFx {
 public:
+  void updateSampleRate(float sr) {}
   FilterLfoFx(FilterLfoMode mode) : mMode(mode) {}
 
   void setParameters(float rate, float depth, float shape, float cutoff,

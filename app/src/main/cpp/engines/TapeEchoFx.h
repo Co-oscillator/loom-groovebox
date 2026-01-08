@@ -7,13 +7,12 @@
 
 class TapeEchoFx {
 public:
+  void updateSampleRate(float sr) {}
   TapeEchoFx() {
-    mBuffer.resize(88200, 0.0f); // 2 sec
+    mBuffer.resize(96000, 0.0f); // 2 sec at 48k
   }
 
   float process(float input, float sampleRate) {
-    if (mMix <= 0.001f)
-      return 0.0f;
     if (!std::isfinite(input))
       input = 0.0f;
 
@@ -84,6 +83,10 @@ public:
     mWritePos++;
     if (mWritePos >= mBuffer.size())
       mWritePos = 0;
+
+    // Apply mix at the very end
+    if (mMix <= 0.001f)
+      return 0.0f;
 
     return echo * mMix;
   }

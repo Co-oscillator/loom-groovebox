@@ -46,7 +46,7 @@ struct Step {
 class Sequencer {
 public:
   Sequencer() {
-    mSteps.resize(128);
+    mSteps.resize(64);
     mNextStep = 0;
   }
 
@@ -56,8 +56,11 @@ public:
   }
 
   void setStep(int index, const Step &step) {
-    if (index >= 0 && index < 128)
+    if (index >= 0) {
+      if (index >= (int)mSteps.size())
+        mSteps.resize(index + 1);
       mSteps[index] = step;
+    }
   }
 
   void setSwing(float swing) { mSwing = swing; }
@@ -73,13 +76,15 @@ public:
   }
 
   void setParameterLock(int stepIndex, int parameterId, float value) {
-    if (stepIndex >= 0 && stepIndex < 128) {
+    if (stepIndex >= 0) {
+      if (stepIndex >= (int)mSteps.size())
+        mSteps.resize(stepIndex + 1);
       mSteps[stepIndex].parameterLocks[parameterId] = value;
     }
   }
 
   void clearParameterLocks(int stepIndex) {
-    if (stepIndex >= 0 && stepIndex < 128) {
+    if (stepIndex >= 0 && stepIndex < (int)mSteps.size()) {
       mSteps[stepIndex].parameterLocks.clear();
     }
   }
@@ -110,9 +115,17 @@ public:
     }
   }
 
-  const Step &getCurrentStep() const { return mSteps[mCurrentStep]; }
+  const Step &getCurrentStep() const {
+    if (mCurrentStep >= (int)mSteps.size()) {
+      static Step emptyStep; // Thread-safe in C++11+
+      return emptyStep;
+    }
+    return mSteps[mCurrentStep];
+  }
   int getCurrentStepIndex() const { return mCurrentStep; }
-  int getCurrentPage() const { return mCurrentStep / mStepsPerPage; }
+  int getCurrentPage() const {
+    return (mStepsPerPage > 0) ? mCurrentStep / mStepsPerPage : 0;
+  }
 
   float getSwing() const { return mSwing; }
   bool isEvenStep() const { return (mCurrentStep % 2) == 0; }

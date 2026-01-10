@@ -41,15 +41,16 @@ public:
     }
 
     float mod = sinf(mPhase + mRandomOffset);
-    // Delay modulated around 10ms
-    // Depth controls intensity of pitch wobble
-    float delaySamples = (10.0f + mod * mDepth * 8.0f) * (sampleRate / 1000.0f);
+    // Reduced intensity: 2.5ms instead of 8.0ms for more subtle wobble
+    float targetDelay = (10.0f + mod * mDepth * 2.5f);
+    mSmoothedDelay += 0.005f * (targetDelay - mSmoothedDelay);
+    float delaySamples = mSmoothedDelay * (sampleRate / 1000.0f);
 
     float tap = getInterpolatedTap(delaySamples);
 
     // Apply Saturation (Tape Crunch)
     if (mSaturation > 0.0f) {
-      float drive = 1.0f + mSaturation * 4.0f;
+      float drive = 1.0f + mSaturation * 3.0f; // Slightly less aggressive
       tap = std::tanh(tap * drive) / std::tanh(drive);
     }
 
@@ -81,6 +82,7 @@ private:
   float mDepth = 0.5f;
   float mSaturation = 0.0f;
   float mMix = 0.5f;
+  float mSmoothedDelay = 10.0f;
   float mRandomOffset = 0.0f;
   std::mt19937 mRandEngine;
 };

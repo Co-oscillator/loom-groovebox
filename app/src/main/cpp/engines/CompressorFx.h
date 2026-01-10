@@ -54,8 +54,8 @@ public:
       gain = 1.0f;
 
     float out = input * gain * mMakeup;
-    // Hard clip at 0dB to prevent digital wrap-around/extreme distortion
-    return std::max(-1.0f, std::min(1.0f, out));
+    // Soft clip at 0dB to prevent harsh digital distortion
+    return std::tanh(out);
   }
 
 private:

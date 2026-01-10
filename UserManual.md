@@ -31,7 +31,11 @@ Create and edit patterns with the 16-pad grid.
 ![Drum Kit Sequencer](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Sequencer Screen (Drum Kit).png)
 ````
 
-- **Step Options**: Long-press any active step to adjust velocity, gate length, or probability.
+- **Step Options**: Long-press any active step to access the Step Editor.
+    - **Velocity**: Adjust the loudness of the step.
+    - **Gate Length**: Control note duration. Gates > 100% create "Legato" slides if the engine supports it.
+    - **Probability**: Set the chance (0-100%) that the step will play.
+    - **Ratchet**: Repeat the note multiple times within a single step (e.g., 2x, 3x, 4x) for drum rolls or glitches.
 - **Octave +/-**: Quickly shift the entire sequence pitch.
 
 ---
@@ -57,6 +61,11 @@ Shape your sound using the dedicated controls for each engine.
 ![MIDI Output Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (MIDI).png)
 ````
 
+**Sampler Modes**:
+- **One Shot**: Plays the sample from start to finish. Good for drums.
+- **Chopped**: Splits the sample into 16 slices, mapped to the step sequencer. Each step can trigger a specific slice.
+- **Loop**: Loops the sample continuously while the key is held.
+
 ---
 
 ### Effects & Routing
@@ -67,6 +76,21 @@ Chain your tracks through high-quality FX and manage the signal path.
 <!-- slide -->
 ![Routing Matrix](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Patch Screen.png)
 ````
+
+**Global Effects Suite**:
+The effects chain processes audio in a semi-parallel bus structure. Each track has a **Send** amount to the FX bus.
+- **Reverb (Hall)**: Spacious hall reverb with Size and Damping controls.
+- **Delay**: Stereo delay with Feedback and Mix.
+- **Overdrive**: Analog-style saturation and wave-folding.
+- **Bitcrusher**: Reduces sample rate and bit depth for lo-fi textures.
+- **Chorus / Phaser / Flanger**: Modulation effects for widening and motion.
+- **Slicer**: Rhythmic gating effect synced to the tempo.
+- **Compressor**: Dynamics control to glue the mix together.
+- **Tape Wobble**: Simulates the pitch instability of worn tape.
+
+**Routing Matrix**:
+- Connect LFOs (Left Side) to any destinations (Top Labels).
+- "Cables" show active connections. Tap a node to adjust modulation depth.
 
 ---
 
@@ -91,3 +115,4 @@ The new Arpeggiator supports 3 rhythm lanes:
 To provide maximum headroom and prevent clipping:
 - Track volumes are default-scaled to **45%** on load.
 - Global saturation and internal gain stages are optimized to allow for layering multiple heavy synth engines without digital distortion.
+- **Global Limiter**: A master soft-limiter prevents digital overs at the final output.

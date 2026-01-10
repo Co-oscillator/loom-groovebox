@@ -35,24 +35,36 @@ class MidiRouter(private val nativeLib: NativeLib, private val onBankChange: (In
         }
 
         if (msgType == 0xB0) { // Control Change (CC)
-            handleCC(data1, data2)
+            handleCC(data1, data2, state)
         }
     }
 
-    private fun handleNoteOn(note: Int, velocity: Int) {
-        // nativeLib.triggerNote(0, note, velocity)
-    }
-
-    private fun handleNoteOff(note: Int) {
-        // nativeLib.releaseNote(0, note)
-    }
-
-    private fun handleCC(ccNumber: Int, value: Int) {
+    private fun handleCC(ccNumber: Int, value: Int, state: com.groovebox.GrooveboxState) {
         // Map knobs/faders to parameters
         if (ccNumber in 10..17) {
             val trackIndex = ccNumber - 10
             val normalizedVolume = value / 127.0f
             nativeLib.setTrackVolume(trackIndex, normalizedVolume)
+        }
+
+        // CC 24-31: Control the 8 software Strips/Knobs
+        if (ccNumber in 24..31) {
+            val stripIdx = ccNumber - 24
+            val normalizedValue = value / 127.0f
+            
+            val routing = if (stripIdx < 4) {
+                state.stripRoutings.getOrNull(stripIdx)
+            } else {
+                state.knobRoutings.getOrNull(stripIdx - 4)
+            }
+
+            routing?.let {
+                if (it.targetType == 1) { // Track Parameter
+                    nativeLib.setParameter(state.selectedTrackIndex, it.targetId, normalizedValue)
+                } else if (it.targetType == 2) { // Global FX
+                    nativeLib.setParameter(0, it.targetId, normalizedValue)
+                }
+            }
         }
         
         // EMP16 Bank Buttons A, B, C, D (Assuming CC 20-23)

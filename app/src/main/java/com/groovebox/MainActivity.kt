@@ -1401,25 +1401,27 @@ fun AnalogDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: 
         val knobSize = 50.dp // Increased size
         
         // Kick
-        AnalogDrumColumn("KICK", trackIndex, 60, nativeLib, drumColor, colModifier,
+        AnalogDrumColumn("KICK", trackIndex, 0, 60, nativeLib, drumColor, state, onStateChange, colModifier,
             icon = { color -> Canvas(Modifier.size(32.dp)) { drawCircle(color = color) } }
         ) {
              Knob("Dcy", 0.5f, 600, state, onStateChange, nativeLib, knobSize = knobSize)
              Knob("Tone", 0.8f, 601, state, onStateChange, nativeLib, knobSize = knobSize)
              Knob("Tune", 0.25f, 602, state, onStateChange, nativeLib, knobSize = knobSize)
+             Knob("Gain", 0.8f, 605, state, onStateChange, nativeLib, knobSize = knobSize)
         }
         
         // Snare
-        AnalogDrumColumn("SNARE", trackIndex, 61, nativeLib, drumColor, colModifier,
+        AnalogDrumColumn("SNARE", trackIndex, 1, 61, nativeLib, drumColor, state, onStateChange, colModifier,
             icon = { color -> Canvas(Modifier.size(32.dp)) { drawRect(color = color) } }
         ) {
              Knob("Dcy", 0.2f, 610, state, onStateChange, nativeLib, knobSize = knobSize)
              Knob("Snap", 0.4f, 613, state, onStateChange, nativeLib, knobSize = knobSize) // Changed from 611 to 613 for ParamA
              Knob("Tune", 0.33f, 612, state, onStateChange, nativeLib, knobSize = knobSize)
+             Knob("Gain", 0.8f, 615, state, onStateChange, nativeLib, knobSize = knobSize)
         }
         
         // Cymbal
-        AnalogDrumColumn("CYMBAL", trackIndex, 62, nativeLib, drumColor, colModifier,
+        AnalogDrumColumn("CYMBAL", trackIndex, 2, 62, nativeLib, drumColor, state, onStateChange, colModifier,
             icon = { color -> 
                 Canvas(Modifier.size(32.dp)) { 
                     val path = androidx.compose.ui.graphics.Path().apply {
@@ -1435,10 +1437,11 @@ fun AnalogDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: 
              Knob("Dcy", 0.3f, 620, state, onStateChange, nativeLib, knobSize = knobSize)
              Knob("Col", 0.0f, 621, state, onStateChange, nativeLib, knobSize = knobSize)
              Knob("Tune", 0.5f, 622, state, onStateChange, nativeLib, knobSize = knobSize)
+             Knob("Gain", 0.8f, 625, state, onStateChange, nativeLib, knobSize = knobSize)
         }
         
         // Hat Closed
-        AnalogDrumColumn("HAT C", trackIndex, 63, nativeLib, drumColor, colModifier,
+        AnalogDrumColumn("HAT C", trackIndex, 3, 63, nativeLib, drumColor, state, onStateChange, colModifier,
             icon = { color -> 
                  Canvas(Modifier.size(32.dp)) { 
                      drawLine(color, start = androidx.compose.ui.geometry.Offset(0f, size.height/2), end = androidx.compose.ui.geometry.Offset(size.width, size.height/2), strokeWidth = 5f)
@@ -1448,10 +1451,11 @@ fun AnalogDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: 
         ) {
              Knob("Dcy", 0.1f, 630, state, onStateChange, nativeLib, knobSize = knobSize)
              Knob("Col", 0.8f, 631, state, onStateChange, nativeLib, knobSize = knobSize)
+             Knob("Gain", 0.8f, 635, state, onStateChange, nativeLib, knobSize = knobSize)
         }
         
         // Hat Open
-        AnalogDrumColumn("HAT O", trackIndex, 64, nativeLib, drumColor, colModifier,
+        AnalogDrumColumn("HAT O", trackIndex, 4, 64, nativeLib, drumColor, state, onStateChange, colModifier,
             icon = { color -> 
                  Canvas(Modifier.size(32.dp)) { 
                       drawCircle(color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f))
@@ -1460,6 +1464,7 @@ fun AnalogDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: 
         ) {
              Knob("Dcy", 0.4f, 640, state, onStateChange, nativeLib, knobSize = knobSize)
              Knob("Col", 0.8f, 641, state, onStateChange, nativeLib, knobSize = knobSize)
+             Knob("Gain", 0.8f, 645, state, onStateChange, nativeLib, knobSize = knobSize)
         }
     }
 }
@@ -1468,13 +1473,19 @@ fun AnalogDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: 
 fun AnalogDrumColumn(
     label: String, 
     trackIndex: Int, 
+    drumIndex: Int,
     note: Int, 
     nativeLib: NativeLib, 
     color: Color, 
+    state: GrooveboxState,
+    onStateChange: (GrooveboxState) -> Unit,
     modifier: Modifier = Modifier,
     icon: @Composable (Color) -> Unit, 
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val hotPink = Color(0xFFFF69B4)
+    val isSelectedForSidechain = state.isSelectingSidechain && state.sidechainSourceTrack == trackIndex && state.sidechainSourceDrumIdx == drumIndex
+
     Column(
         modifier = modifier
             .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
@@ -1490,24 +1501,36 @@ fun AnalogDrumColumn(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (isPressed) color.copy(alpha=0.5f) else Color.Transparent)
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                         while(true) {
-                             awaitFirstDown()
-                             isPressed = true
-                             nativeLib.triggerNote(trackIndex, note, 100)
-                             waitForUpOrCancellation()
-                             isPressed = false
-                             nativeLib.releaseNote(trackIndex, note)
-                         }
-                    }
+                .then(if (state.isSelectingSidechain) Modifier.border(2.dp, hotPink, CircleShape).padding(4.dp) else Modifier)
+                .pointerInput(state.isSelectingSidechain) {
+                    detectTapGestures(
+                        onPress = {
+                            if (!state.isSelectingSidechain) {
+                                try {
+                                    isPressed = true
+                                    nativeLib.triggerNote(trackIndex, note, 100)
+                                    awaitRelease()
+                                } finally {
+                                    isPressed = false
+                                    nativeLib.releaseNote(trackIndex, note)
+                                }
+                            }
+                        },
+                        onTap = {
+                            if (state.isSelectingSidechain) {
+                                nativeLib.setParameter(0, 585, trackIndex.toFloat())
+                                nativeLib.setParameter(0, 586, drumIndex.toFloat())
+                                onStateChange(state.copy(isSelectingSidechain = false, sidechainSourceTrack = trackIndex, sidechainSourceDrumIdx = drumIndex, selectedTab = 3))
+                            }
+                        }
+                    )
                 }
                 .padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            icon(currentColor)
-            Text(label, style = MaterialTheme.typography.labelMedium, color = currentColor, maxLines = 1, fontWeight = FontWeight.Bold)
+            icon(if (isSelectedForSidechain) hotPink else currentColor)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = if (isSelectedForSidechain) hotPink else currentColor, maxLines = 1, fontWeight = FontWeight.Bold)
         }
         
         content()
@@ -1642,7 +1665,18 @@ fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange:
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Knob("DETUNE", 0.1f, 106, state, onStateChange, nativeLib, knobSize = 48.dp)
-                        Knob("CHORD", 0f, 111, state, onStateChange, nativeLib, knobSize = 48.dp)
+                        Knob("CHORD", 0f, 111, state, onStateChange, nativeLib, knobSize = 48.dp, valueFormatter = { v ->
+                            val idx = (v * 5.99f).toInt()
+                            when(idx) {
+                                0 -> "OFF"
+                                1 -> "OCT"
+                                2 -> "5TH"
+                                3 -> "MAJ"
+                                4 -> "MIN"
+                                5 -> "SUS4"
+                                else -> "OFF"
+                            }
+                        })
                     }
                 }
             }
@@ -2016,8 +2050,8 @@ fun FmDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                         .then(if (state.isSelectingSidechain) Modifier.border(2.dp, hotPink, CircleShape).padding(4.dp) else Modifier)
                         .clickable {
                         if (state.isSelectingSidechain) {
-                            nativeLib.setParameter(0, 590, trackIndex.toFloat())
-                            nativeLib.setParameter(0, 591, i.toFloat())
+                            nativeLib.setParameter(0, 585, trackIndex.toFloat())
+                            nativeLib.setParameter(0, 586, i.toFloat())
                             onStateChange(state.copy(isSelectingSidechain = false, sidechainSourceTrack = trackIndex, sidechainSourceDrumIdx = i, selectedTab = 3))
                         } else {
                             nativeLib.setSelectedFmDrumInstrument(trackIndex, i)
@@ -2034,7 +2068,7 @@ fun FmDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                 Knob("PITCH", 0.5f, baseId, state, onStateChange, nativeLib, knobSize = 44.dp)
                 Knob("CLICK", 0.1f, baseId + 1, state, onStateChange, nativeLib, knobSize = 44.dp)
                 Knob("DECAY", 0.3f, baseId + 2, state, onStateChange, nativeLib, knobSize = 44.dp)
-                Knob("TONE", 0.5f, baseId + 3, state, onStateChange, nativeLib, knobSize = 44.dp)
+                Knob("GAIN", 0.8f, baseId + 5, state, onStateChange, nativeLib, knobSize = 44.dp)
             }
         }
     }
@@ -2355,51 +2389,56 @@ fun GranularParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (G
 
         // Removed "Grain Playheads" preview as per user request to use main sampler window.
         
-        // Row 1: The Cloud (4 knobs)
-        ParameterGroup("Grain Cloud", modifier = Modifier.fillMaxWidth(), titleSize = 10) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Knob("POS", 0.0f, 400, state, onStateChange, nativeLib, knobSize = 44.dp)
-                Knob("SIZE", 0.2f, 406, state, onStateChange, nativeLib, knobSize = 44.dp)
-                Knob("DENS", 0.5f, 407, state, onStateChange, nativeLib, knobSize = 44.dp)
-                Knob("SPRAY", 0.0f, 415, state, onStateChange, nativeLib, knobSize = 44.dp)
+        // Row 1: The Cloud & Motion
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ParameterGroup("Cloud", modifier = Modifier.weight(1f), titleSize = 10) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("POS", 0.0f, 400, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    Knob("SIZE", 0.2f, 406, state, onStateChange, nativeLib, knobSize = 44.dp)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("DENS", 0.5f, 407, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    Knob("SPRAY", 0.0f, 415, state, onStateChange, nativeLib, knobSize = 44.dp)
+                }
+            }
+            ParameterGroup("Motion", modifier = Modifier.weight(1f), titleSize = 10) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("SPEED", 0.5f, 401, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    Knob("JITTER", 0.0f, 411, state, onStateChange, nativeLib, knobSize = 44.dp)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("REVERSE", 0.0f, 412, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    Knob("PITCH", 0.5f, 410, state, onStateChange, nativeLib, knobSize = 44.dp)
+                }
             }
         }
 
-        // Row 2: Motion & Pitch (4 knobs)
-        ParameterGroup("Motion & Pitch", modifier = Modifier.fillMaxWidth(), titleSize = 10) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Knob("SPEED", 0.5f, 401, state, onStateChange, nativeLib, knobSize = 44.dp)
-                Knob("PITCH", 0.5f, 410, state, onStateChange, nativeLib, knobSize = 44.dp)
-                Knob("JITTER", 0.0f, 411, state, onStateChange, nativeLib, knobSize = 44.dp)
-                Knob("REVERSE", 0.0f, 412, state, onStateChange, nativeLib, knobSize = 44.dp)
+        // Row 2: Envelope & Advanced
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ParameterGroup("Envelope", modifier = Modifier.weight(1f), titleSize = 10) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("ATK", 0.0f, 425, state, onStateChange, nativeLib, knobSize = 40.dp)
+                    Knob("DEC", 0.1f, 426, state, onStateChange, nativeLib, knobSize = 40.dp)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("SUS", 1.0f, 427, state, onStateChange, nativeLib, knobSize = 40.dp)
+                    Knob("REL", 0.1f, 428, state, onStateChange, nativeLib, knobSize = 40.dp)
+                }
             }
-        }
-
-        // Row 3: Envelopes (ADSR)
-        ParameterGroup("Grain Envelope", modifier = Modifier.fillMaxWidth(), titleSize = 10) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Knob("ATK", 0.0f, 425, state, onStateChange, nativeLib, knobSize = 40.dp)
-                Knob("DEC", 0.1f, 426, state, onStateChange, nativeLib, knobSize = 40.dp)
-                Knob("SUS", 1.0f, 427, state, onStateChange, nativeLib, knobSize = 40.dp)
-                Knob("REL", 0.1f, 428, state, onStateChange, nativeLib, knobSize = 40.dp)
-            }
-        }
-
-        // Row 3: Advanced & Random
-        ParameterGroup("Advanced & Stereo", titleSize = 10) {
-            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Knob("DETUN", 0.0f, 416, state, onStateChange, nativeLib, knobSize = 40.dp)
-                Knob("RAND", 0.0f, 417, state, onStateChange, nativeLib, knobSize = 40.dp)
-                Knob("COUNT", 0.2f, 418, state, onStateChange, nativeLib, knobSize = 40.dp)
-                Knob("WIDTH", 0.5f, 419, state, onStateChange, nativeLib, knobSize = 40.dp)
-                Knob("REV", 0.0f, 420, state, onStateChange, nativeLib, knobSize = 40.dp)
-                // LFO 2
-                Knob("L2RT", 0.1f, 412, state, onStateChange, nativeLib, knobSize = 40.dp)
-                Knob("L2DT", 0.0f, 413, state, onStateChange, nativeLib, knobSize = 40.dp)
+            ParameterGroup("Advanced", modifier = Modifier.weight(1f), titleSize = 10) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("DETUN", 0.0f, 416, state, onStateChange, nativeLib, knobSize = 40.dp)
+                    Knob("RAND", 0.0f, 417, state, onStateChange, nativeLib, knobSize = 40.dp)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("COUNT", 0.2f, 418, state, onStateChange, nativeLib, knobSize = 40.dp)
+                    Knob("WIDTH", 0.5f, 419, state, onStateChange, nativeLib, knobSize = 40.dp)
+                }
             }
         }
     }
 }
+
 
 @Composable
 fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
@@ -2525,7 +2564,7 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                 colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                 shape = RoundedCornerShape(4.dp)
             ) {
-                Text("TAP", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                Text("TAP", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = Color.White)
             }
             Text("${latestState.tempo.toInt()}", style = MaterialTheme.typography.labelSmall, color = Color.White)
             
@@ -2818,7 +2857,7 @@ fun Knob(
                                         valueFormatter(v)
                                     } else if (parameterId != -1 && (parameterId in 100..103 || parameterId in 150..152)) { // ADSR/Filter special handling
                                         "%.2f".format(v)
-                                    } else if (label == "MODE" && (parameterId == 320 || parameterId == 1530)) {
+                                    } else if (label == "MODE" && (parameterId == 320 || parameterId == 1531)) {
                                         val modeIdx = (v * 2.9f).toInt()
                                         when(modeIdx) {
                                             0 -> "1 SHOT"
@@ -2837,7 +2876,7 @@ fun Knob(
                                                 2 -> "DOWN"
                                                 3 -> "SUB+"
                                                 4 -> "DUAL"
-                                                5 -> "PWR"
+                                                5 -> "5TH"
                                                 6 -> "MAJ"
                                                 7 -> "MIN"
                                                 8 -> "DIM"
@@ -3594,7 +3633,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(0.dp)
                                 ) {
-                                    Text(getNoteLabel(state.rootNote).filter { !it.isDigit() }, style = MaterialTheme.typography.titleMedium)
+                                    Text(getNoteLabel(state.rootNote).filter { !it.isDigit() }, style = MaterialTheme.typography.titleMedium, color = Color.White)
                                 }
                                 Text("ROOT", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             }
@@ -3607,7 +3646,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(0.dp)
                                 ) {
-                                    Text(state.scaleType.displayName.uppercase(), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                    Text(state.scaleType.displayName.uppercase(), style = MaterialTheme.typography.labelSmall, maxLines = 1, color = Color.White)
                                 }
                                 Text("SCALE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             }
@@ -3620,7 +3659,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(0.dp)
-                                ) { Text("-", style = MaterialTheme.typography.titleMedium) }
+                                ) { Text("-", style = MaterialTheme.typography.titleMedium, color = Color.White) }
                                 
                                 Button(
                                     onClick = { onStateChange(state.copy(rootNote = (state.rootNote + 12).coerceAtMost(110))) },
@@ -3628,7 +3667,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(0.dp)
-                                ) { Text("+", style = MaterialTheme.typography.titleMedium) }
+                                ) { Text("+", style = MaterialTheme.typography.titleMedium, color = Color.White) }
                             }
                         }
 
@@ -3795,51 +3834,64 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         }
                     }
                 }
-                }
+            }
             }
         }
     }
 
-    // Scale Menu
+    // Scale Selection Bottom Sheet
+    val sheetState = rememberModalBottomSheetState()
     if (showScaleMenu) {
-        androidx.compose.ui.window.Popup(
+        ModalBottomSheet(
             onDismissRequest = { showScaleMenu = false },
-            properties = androidx.compose.ui.window.PopupProperties(focusable = true)
+            sheetState = sheetState,
+            containerColor = Color(0xFF111111),
+            scrimColor = Color.Black.copy(alpha = 0.5f),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.Gray) }
         ) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .width(480.dp) // Wider for 4 columns
-                    .height(260.dp)
-                    .background(Color(0xFF1A1A1A), RoundedCornerShape(12.dp))
-                    .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                    .padding(8.dp)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .padding(bottom = 32.dp) // Extra padding for system bars
             ) {
+                Text(
+                    "SELECT SCALE",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
                 androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(4),
-                    contentPadding = PaddingValues(4.dp),
+                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(ScaleType.values().size) { index ->
-                        val type = ScaleType.values()[index]
+                    items(ScaleType.values()) { type ->
+                        val isSelected = state.scaleType == type
                         Surface(
                             onClick = {
                                 onStateChange(state.copy(scaleType = type))
                                 showScaleMenu = false
                             },
-                            color = if (state.scaleType == type) Color.Cyan.copy(alpha=0.15f) else Color.DarkGray.copy(alpha=0.2f),
+                            color = if (isSelected) Color.Cyan.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
                             shape = RoundedCornerShape(8.dp),
+                            border = if (isSelected) BorderStroke(1.dp, Color.Cyan) else null,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                type.displayName,
+                            Box(
                                 modifier = Modifier.padding(12.dp),
-                                color = if (state.scaleType == type) Color.Cyan else Color.White,
-                                style = MaterialTheme.typography.bodySmall, // Smaller text for grid
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    type.displayName.uppercase(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (isSelected) Color.Cyan else Color.White,
+                                    maxLines = 1,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 }
@@ -5251,7 +5303,24 @@ fun EffectsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                              GlobalKnob("MIX", 0.5f, 1530, state, onStateChange, nativeLib)
                          }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            GlobalKnob("MODE", 0.5f, 1531, state, onStateChange, nativeLib) 
+                            GlobalKnob("MODE", 0.5f, 1531, state, onStateChange, nativeLib, valueFormatter = { v ->
+                                val mode = (v * 11.99f).toInt()
+                                when(mode) {
+                                    0 -> "OCT UP"
+                                    1 -> "2 OCT UP"
+                                    2 -> "OCT DWN"
+                                    3 -> "2 OCT DWN"
+                                    4 -> "UP/DWN"
+                                    5 -> "MAJ"
+                                    6 -> "MIN"
+                                    7 -> "SUS4"
+                                    8 -> "DOM7"
+                                    9 -> "MAJ7"
+                                    10 -> "MIN7"
+                                    11 -> "DIM"
+                                    else -> "PWR"
+                                }
+                            })
                             GlobalKnob("UNISON", 0.0f, 1532, state, onStateChange, nativeLib) 
                         }
                     }

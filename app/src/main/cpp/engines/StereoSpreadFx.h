@@ -61,8 +61,10 @@ public:
     // Output - purely wet signal?
     // If this is a bus, we want the "spread" effect.
     // Usually spread is added to dry.
-    outL = sampL * mMix;
-    outR = sampR * mMix;
+    // Output - Blend Dry and Wet
+    // Mix 0.0 = All Dry, 1.0 = All Wet (Spread)
+    outL = (input * (1.0f - mMix)) + (sampL * mMix);
+    outR = (input * (1.0f - mMix)) + (sampR * mMix);
   }
 
   void setParameters(float width, float rate, float depth, float mix) {

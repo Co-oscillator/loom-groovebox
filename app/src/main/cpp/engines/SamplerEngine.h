@@ -27,6 +27,7 @@ public:
     float baseVelocity = 1.0f;
     float pitchRatio = 1.0f;
     Adsr envelope;
+    Svf filter;
 
     // Simple Granular state
     uint32_t grainTimer = 0;
@@ -49,14 +50,14 @@ public:
   }
 
   void setSample(const std::vector<float> &data) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     mBuffer = data;
   }
   void loadSample(const std::vector<float> &data) { setSample(data); }
   const std::vector<float> &getSampleData() const { return mBuffer; }
 
   void setSlicePoints(const std::vector<float> &points) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     mSlices.clear();
     if (mBuffer.empty())
       return;
@@ -78,7 +79,7 @@ public:
   void setPlaybackSpeed(float speed);
 
   void clearBuffer() {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     mBuffer.clear();
     mSlices.clear();
     for (auto &v : mVoices)
@@ -86,12 +87,12 @@ public:
   }
 
   void pushSample(float sample) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     mBuffer.push_back(sample);
   }
 
   void normalize() {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     if (mBuffer.empty())
       return;
     float maxVal = 0.0f;
@@ -105,7 +106,7 @@ public:
   }
 
   void trim() {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     if (mBuffer.empty())
       return;
     size_t start = static_cast<size_t>(mTrimStart * mBuffer.size());
@@ -139,7 +140,7 @@ public:
   void triggerNote(int note, int velocity) {
     if (!mBufferLock->try_lock())
       return;
-    std::lock_guard<std::mutex> lock(*mBufferLock, std::adopt_lock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock, std::adopt_lock);
 
     if (mBuffer.empty())
       return;
@@ -222,8 +223,14 @@ public:
   }
 
   void setParameter(int id, float value) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     switch (id) {
+    case 1: // Cutoff
+      setFilterCutoff(value);
+      break;
+    case 2: // Resonance
+      setFilterResonance(value);
+      break;
     case 300: // Pitch (semitones)
       mPitch = (value - 0.5f) * 48.0f;
       break;
@@ -232,6 +239,12 @@ public:
       break;
     case 302: // Speed (classic)
       mSpeed = value * 2.0f;
+      break;
+    case 303: // Filter Cutoff
+      setFilterCutoff(value);
+      break;
+    case 304: // Filter Resonance
+      setFilterResonance(value);
       break;
     case 310:
       mAttack = value;
@@ -244,6 +257,9 @@ public:
       break;
     case 313:
       mRelease = value;
+      break;
+    case 314: // Filter EG Intensity
+      setFilterEnvAmount(value);
       break;
     case 320:
       mPlayMode = static_cast<PlayMode>(std::min(2, (int)(value * 3.0f)));
@@ -265,6 +281,9 @@ public:
       findConstrainedSlices(count);
       break;
     }
+    case 118: // Filter Env Amount
+      setFilterEnvAmount(value);
+      break;
     }
     for (auto &v : mVoices) {
       if (v.active)
@@ -276,11 +295,14 @@ public:
   void setDecay(float v) { mDecay = v; }
   void setSustain(float v) { mSustain = v; }
   void setRelease(float v) { mRelease = v; }
+  void setFilterCutoff(float v) { mFilterCutoff = v; }
+  void setFilterResonance(float v) { mFilterResonance = v; }
+  void setFilterEnvAmount(float v) { mFilterEnvAmount = v; }
 
   float render() {
     if (!mBufferLock->try_lock())
       return 0.0f;
-    std::lock_guard<std::mutex> lock(*mBufferLock, std::adopt_lock);
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock, std::adopt_lock);
 
     if (mBuffer.empty())
       return 0.0f;
@@ -370,6 +392,15 @@ public:
           }
         }
       }
+
+      // Filter Processing
+      float cutoff = 20.0f + (mFilterCutoff * mFilterCutoff * 18000.0f);
+      // Integrate envelope to filter cutoff
+      cutoff += env * mFilterEnvAmount * 12000.0f;
+      cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
+
+      v.filter.setParams(cutoff, 0.7f + mFilterResonance * 5.0f, 44100.0f);
+      voiceOutput = v.filter.process(voiceOutput, Svf::LowPass);
 
       mixedOutput += voiceOutput * env * v.baseVelocity;
     }
@@ -476,7 +507,8 @@ public:
     return false;
   }
 
-  std::shared_ptr<std::mutex> mBufferLock = std::make_shared<std::mutex>();
+  std::shared_ptr<std::recursive_mutex> mBufferLock =
+      std::make_shared<std::recursive_mutex>();
   bool mReverse = false;
 
 private:
@@ -487,6 +519,7 @@ private:
   float mStretch = 1.0f;
   float mSpeed = 1.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
+  float mFilterCutoff = 1.0f, mFilterResonance = 0.0f, mFilterEnvAmount = 0.0f;
   PlayMode mPlayMode = OneShot;
   bool mUseEnvelope = true;
 

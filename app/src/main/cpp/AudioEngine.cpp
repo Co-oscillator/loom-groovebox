@@ -29,8 +29,17 @@ struct FastRandom {
 static inline float softLimit(float x) {
   if (std::isnan(x))
     return 0.0f;
-  // Use tanh for smooth, continuous saturation
-  return std::tanh(x);
+  // Soft-Knee Limiter (Linear until -3dB, then smooth curve to 0dB)
+  // -3dB = 0.707
+  float absX = std::abs(x);
+  if (absX < 0.707f)
+    return x;
+
+  // Soft compression above -3dB: x = sign(x) * (0.707 + (1.0 - 0.707) *
+  // tanh((absX - 0.707) / (1.0 - 0.707)))
+  float extended = (absX - 0.707f) / 0.293f;
+  float limited = 0.707f + 0.293f * std::tanh(extended);
+  return (x > 0) ? limited : -limited;
 }
 
 AudioEngine::AudioEngine() {
@@ -44,6 +53,8 @@ AudioEngine::AudioEngine() {
   mLpLfoFx.setCutoff(1.0f);
   mHpLfoFx.reset((float)mSampleRate);
   mLpLfoFx.reset((float)mSampleRate);
+  mSidechainSourceTrack = -1;
+  mSidechainSourceDrumIdx = -1;
 }
 
 AudioEngine::~AudioEngine() { stop(); }
@@ -493,9 +504,11 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       break;
     case 112:
       track.subtractiveEngine.setCutoff(value);
+      track.samplerEngine.setFilterCutoff(value);
       break;
     case 113:
       track.subtractiveEngine.setResonance(value);
+      track.samplerEngine.setFilterResonance(value);
       break;
     case 114:
       track.subtractiveEngine.setFilterAttack(value);
@@ -657,84 +670,140 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
     else if (parameterId == 467)
       track.wavetableEngine.setParameter(17, value); // Drive
   }
-  // Arpeggiator (500-509)
-  else if (parameterId >= 500 && parameterId < 510) {
-    if (parameterId == 500)
-      track.arpeggiator.setMode(
-          static_cast<ArpMode>(static_cast<int>(value * 7.0f)));
-    else if (parameterId == 501)
-      track.arpeggiator.setLatched(value > 0.5f);
-  }
-  // Global Effects (510-600)
-  else if (parameterId >= 510 && parameterId < 600) {
-    int fxId = (parameterId - 510) / 10;
+  // Global Effects & Arp (500-600)
+  else if (parameterId >= 500 && parameterId < 600) {
+    int fxId = (parameterId - 500) / 10;
     int subId = parameterId % 10;
+
     switch (fxId) {
-    case 0: // Delay
-      if (subId == 0)
-        mDelayFx.setDelayTime(value);
-      else if (subId == 1)
-        mDelayFx.setFeedback(value);
-      else if (subId == 2)
-        mDelayFx.setMix(value);
-      break;
-    case 1: // Reverb
+    case 0: // Reverb (500-509)
       if (subId == 0)
         mReverbFx.setSize(value);
       else if (subId == 1)
         mReverbFx.setDamping(value);
       else if (subId == 2)
-        mReverbFx.setMix(value);
+        mReverbFx.setModDepth(value);
       else if (subId == 3)
+        mReverbFx.setMix(value);
+      else if (subId == 4)
         mReverbFx.setPreDelay(value);
+      else if (subId == 5)
+        mReverbFx.setType(static_cast<int>(value * 3.9f));
       break;
-    case 2: // Overdrive
-      if (subId == 0)
-        mOverdriveFx.setDrive(value);
-      else if (subId == 1)
-        mOverdriveFx.setMix(value);
-      break;
-    case 3: // Bitcrusher
-      if (subId == 0)
-        mBitcrusherFx.setBits(value);
-      else if (subId == 1)
-        mBitcrusherFx.setMix(value);
-      break;
-    case 4: // Chorus
+
+    case 1: // Chorus (510-519)
       if (subId == 0)
         mChorusFx.setRate(value);
       else if (subId == 1)
         mChorusFx.setDepth(value);
       else if (subId == 2)
         mChorusFx.setMix(value);
+      else if (subId == 3)
+        mChorusFx.setVoices(value);
       break;
-    case 5: // Phaser
+
+    case 2: // Delay (520-529)
+      if (subId == 0)
+        mDelayFx.setDelayTime(value);
+      else if (subId == 1)
+        mDelayFx.setFeedback(value);
+      else if (subId == 2)
+        mDelayFx.setMix(value);
+      else if (subId == 3)
+        mDelayFx.setFilterMix(value);
+      else if (subId == 4)
+        mDelayFx.setFilterResonance(value);
+      else if (subId == 5)
+        mDelayFx.setType(static_cast<int>(value * 3.9f));
+      break;
+
+    case 3: // Bitcrusher (530-539)
+      if (subId == 0)
+        mBitcrusherFx.setBits(value);
+      else if (subId == 1)
+        mBitcrusherFx.setRate(value);
+      else if (subId == 2)
+        mBitcrusherFx.setMix(value);
+      break;
+
+    case 4: // Overdrive (540-549)
+      if (subId == 0)
+        mOverdriveFx.setDrive(value);
+      else if (subId == 1)
+        mOverdriveFx.setMix(value);
+      else if (subId == 2)
+        mOverdriveFx.setLevel(value);
+      else if (subId == 3)
+        mOverdriveFx.setTone(value);
+      break;
+
+    case 5: // Phaser (550-559)
       if (subId == 0)
         mPhaserFx.setRate(value);
       else if (subId == 1)
         mPhaserFx.setDepth(value);
       else if (subId == 2)
         mPhaserFx.setMix(value);
+      else if (subId == 3)
+        mPhaserFx.setIntensity(value);
       break;
-    case 6: // Tape Wobble
+
+    case 6: // Tape Wobble (560-569)
       if (subId == 0)
         mTapeWobbleFx.setRate(value);
       else if (subId == 1)
         mTapeWobbleFx.setDepth(value);
       else if (subId == 2)
+        mTapeWobbleFx.setSaturation(value);
+      else if (subId == 3)
         mTapeWobbleFx.setMix(value);
       break;
-    case 7: // Slicer
+
+    case 7: // Slicer (570-579)
       if (subId == 0)
-        mSlicerFx.setRate(value);
+        mSlicerFx.setRate1(value);
       else if (subId == 1)
+        mSlicerFx.setRate2(value);
+      else if (subId == 2)
+        mSlicerFx.setRate3(value);
+      else if (subId == 3)
+        mSlicerFx.setActive1(value > 0.5f);
+      else if (subId == 4)
+        mSlicerFx.setActive2(value > 0.5f);
+      else if (subId == 5)
+        mSlicerFx.setActive3(value > 0.5f);
+      else if (subId == 6)
         mSlicerFx.setDepth(value);
       break;
-    case 8: // Compressor
+
+    case 8: // Compressor (580-589)
       if (subId == 0)
         mCompressorFx.setThreshold(value);
       else if (subId == 1)
         mCompressorFx.setRatio(value);
+      else if (subId == 2)
+        mCompressorFx.setAttack(value);
+      else if (subId == 3)
+        mCompressorFx.setRelease(value);
+      else if (subId == 4)
+        mCompressorFx.setMakeup(value);
+      else if (subId == 5)
+        mSidechainSourceTrack = static_cast<int>(value);
+      else if (subId == 6)
+        mSidechainSourceDrumIdx = static_cast<int>(value);
+      break;
+
+    case 9: // HP LFO (590-599)
+      if (subId == 0)
+        mHpLfoFx.setRate(value);
+      else if (subId == 1)
+        mHpLfoFx.setDepth(value);
+      else if (subId == 2)
+        mHpLfoFx.setShape(value);
+      else if (subId == 3)
+        mHpLfoFx.setCutoff(value);
+      else if (subId == 4)
+        mHpLfoFx.setResonance(value);
       break;
     }
   } else if (parameterId >= 800 && parameterId < 810) {
@@ -805,10 +874,6 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       mLpLfoFx.setCutoff(value);
     else if (subId == 4)
       mLpLfoFx.setResonance(value);
-  } else if (parameterId >= 2000 && parameterId < 2500) {
-    int fxIdx = (parameterId - 2000) / 10;
-    if (fxIdx < 15)
-      track.fxSends[fxIdx] = value;
   }
 }
 
@@ -961,6 +1026,9 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
   float samplesPerStep =
       (static_cast<float>(mSampleRate) * 60.0f) / (std::max(1.0f, mBpm) * 4.0f);
+  // Safety: Prevent near-infinite loops if BPM is crazy high
+  if (samplesPerStep < 10.0f)
+    samplesPerStep = 10.0f;
   mSamplesPerStep = samplesPerStep;
 
   // Process UI Commands safely before block loop
@@ -976,9 +1044,6 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
       for (int l = 0; l < 5; ++l)
         mLfos[l].process((float)mSampleRate, framesToDo);
-
-      mLpLfoFx.recalculate((float)mSampleRate);
-      mHpLfoFx.recalculate((float)mSampleRate);
 
       mSampleCount += framesToDo;
       while (mSampleCount >= samplesPerStep && samplesPerStep > 0.0f) {
@@ -1327,7 +1392,7 @@ void AudioEngine::setSequencerConfig(int trackIndex, int numPages,
     mTracks[trackIndex].sequencer.setConfiguration(numPages, stepsPerPage);
     if (mTracks[trackIndex].engineType == 5 ||
         mTracks[trackIndex].engineType == 6) {
-      for (int i = 0; i < 8; ++i) {
+      for (int i = 0; i < 16; ++i) {
         mTracks[trackIndex].drumSequencers[i].setConfiguration(numPages,
                                                                stepsPerPage);
       }
@@ -1337,7 +1402,8 @@ void AudioEngine::setSequencerConfig(int trackIndex, int numPages,
 
 void AudioEngine::setTempo(float bpm) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  mBpm = bpm;
+  // Safety clamp BPM to reasonable musical range
+  mBpm = std::max(1.0f, std::min(999.0f, bpm));
 }
 
 void AudioEngine::setPlaying(bool playing) {
@@ -1372,6 +1438,10 @@ void AudioEngine::setPlaying(bool playing) {
     }
     // Clear Global FX Buffers on Start to prevent noise burst
     mDelayFx.clear();
+    mLpLfoFx.setDepth(0.0f);
+    mHpLfoFx.setDepth(0.0f);
+    mLpLfoFx.setCutoff(1.0f); // Fully open LP
+    mHpLfoFx.setCutoff(0.0f); // Fully open HP
     mReverbFx.clear();
     mTapeWobbleFx.clear();
     mPhaserFx.clear();
@@ -1409,6 +1479,9 @@ void AudioEngine::setPlaybackDirection(int trackIndex, int direction) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     mTracks[trackIndex].sequencer.setPlaybackDirection(direction);
+    for (int i = 0; i < 16; ++i) {
+      mTracks[trackIndex].drumSequencers[i].setPlaybackDirection(direction);
+    }
   }
 }
 
@@ -1416,12 +1489,19 @@ void AudioEngine::setIsRandomOrder(int trackIndex, bool isRandom) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     mTracks[trackIndex].sequencer.setIsRandomOrder(isRandom);
+    for (int i = 0; i < 16; ++i) {
+      mTracks[trackIndex].drumSequencers[i].setIsRandomOrder(isRandom);
+    }
   }
 }
 
 void AudioEngine::setIsJumpMode(int trackIndex, bool isJump) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    mTracks[trackIndex].sequencer.setIsJumpMode(isJump);
+    for (int i = 0; i < 16; ++i) {
+      mTracks[trackIndex].drumSequencers[i].setIsJumpMode(isJump);
+    }
   }
 }
 
@@ -1558,8 +1638,9 @@ void AudioEngine::jumpToStep(int stepIndex) {
   mGlobalStepIndex = stepIndex % mPatternLength;
 
   for (auto &track : mTracks) {
+    track.mStepCountdown = 0.0; // Force immediate trigger on next block
     track.sequencer.jumpToStep(mGlobalStepIndex);
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < 16; ++i) {
       track.drumSequencers[i].jumpToStep(mGlobalStepIndex);
     }
   }
@@ -2108,7 +2189,9 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
 
       // Punch (Drum Compression) Logic
       if (track.mPunchCounter > 0) {
-        float x = trackOutput * 2.25f; // 50% increase from 1.5x (original gain)
+        float x =
+            trackOutput *
+            1.6f; // Reduced from 2.25x (3.375x total) to 1.6x (2.4x total)
         float x2 = x * x;
         // More aggressive saturation formula for "Drive +100%"
         // trackOutput = x * (27.0f + x2) / (27.0f + 9.0f * x2); // original
@@ -2118,14 +2201,27 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       }
 
       trackOutput = std::tanh(trackOutput);
-      // HEADROOM SCALING: Scale down internal engine output by 0.5x
+      // HEADROOM SCALING: Scale down internal engine output by 0.35x
       // This prevents the mix bus from clipping when multiple tracks are
       // active. Master Volume can boost this back up if needed.
-      mixedSample += trackOutput * 0.5f;
+      // Higher Headroom (0.25x allows 4 tracks to sum without clipping)
+      mixedSample += trackOutput * 0.25f;
 
       if (mSidechainSourceTrack >= 0 &&
           &track == &mTracks[mSidechainSourceTrack % 8]) {
-        sidechainSignal = trackOutput;
+        if (mSidechainSourceDrumIdx != -1) {
+          if (track.engineType == 5) { // FM Drum
+            sidechainSignal =
+                track.fmDrumEngine.getVoiceOutput(mSidechainSourceDrumIdx);
+          } else if (track.engineType == 6) { // Analog Drum
+            sidechainSignal =
+                track.analogDrumEngine.getVoiceOutput(mSidechainSourceDrumIdx);
+          } else {
+            sidechainSignal = trackOutput;
+          }
+        } else {
+          sidechainSignal = trackOutput;
+        }
       }
 
       for (int f = 0; f < 15; ++f) {
@@ -2161,6 +2257,11 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       routeFx(0, mOverdriveFx.process(fxBuses[0]));
     if (std::abs(fxBuses[1]) > kSilence)
       routeFx(1, mBitcrusherFx.process(fxBuses[1]));
+    if (std::abs(fxBuses[9]) > kSilence)
+      routeFx(9, mHpLfoFx.process(fxBuses[9], sampleRate));
+
+    if (std::abs(fxBuses[10]) > kSilence)
+      routeFx(10, mLpLfoFx.process(fxBuses[10], sampleRate));
     if (std::abs(fxBuses[2]) > kSilence)
       routeFx(2, mChorusFx.process(fxBuses[2], sampleRate));
     if (std::abs(fxBuses[3]) > kSilence)
@@ -2211,6 +2312,9 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     if (std::abs(fxBuses[12]) > kSilence) {
       float sL = 0, sR = 0;
       mStereoSpreadFx.process(fxBuses[12], sL, sR, sampleRate);
+      // Ensure Spread adds to the mix, but also preserve some center (Dry is
+      // usually implicitly in mixedSample, but for FX bus routing we need to be
+      // careful)
       int dest = mFxChainDest[12];
       if (dest >= 0 && dest < 15)
         fxBuses[dest] += (sL + sR) * 0.5f;
@@ -2226,18 +2330,17 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       routeFx(14, mOctaverFx.process(fxBuses[14], sampleRate));
 
     // LP/HP LFO Pedals (Final utility filters)
-    currentSampleL = mLpLfoFx.process(currentSampleL);
-    currentSampleR = mLpLfoFx.process(currentSampleR);
-    currentSampleL = mHpLfoFx.process(currentSampleL);
-    currentSampleR = mHpLfoFx.process(currentSampleR);
+    currentSampleL = mLpLfoFx.process(currentSampleL, sampleRate);
+    currentSampleR = mLpLfoFx.process(currentSampleR, sampleRate);
+    currentSampleL = mHpLfoFx.process(currentSampleL, sampleRate);
+    currentSampleR = mHpLfoFx.process(currentSampleR, sampleRate);
 
-    // Apply Master Volume with 2.0 boost multiplier (higher headroom)
-    // Since we scaled internal engines by 0.5x, 2.0x here restores 100% level
+    // Apply Master Volume with 1.4 boost multiplier (higher headroom)
+    // Since we scaled internal engines by 0.35x, 1.4x here restores 100% level
     // at max knob. Normalized range allows boosting quiet mixes.
-    float finalL =
-        (currentSampleL + wetSample + spreadL) * (mMasterVolume * 2.0f);
-    float finalR =
-        (currentSampleR + wetSample + spreadR) * (mMasterVolume * 2.0f);
+    // Higher Headroom: Master Volume multiplier is 1.0 (No hidden boost)
+    float finalL = (currentSampleL + wetSample + spreadL) * mMasterVolume;
+    float finalR = (currentSampleR + wetSample + spreadR) * mMasterVolume;
 
     // Soft Limiter to prevent "screaming" / explosion / NaNs
     // Final Safety Clamps

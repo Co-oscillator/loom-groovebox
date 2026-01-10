@@ -22,6 +22,9 @@ public:
     // SVF state
     float svf_L = 0, svf_B = 0, svf_H = 0;
     float currentFilterEnvVal = 0.0f;
+    class SubtractiveEngine *parent = nullptr;
+    uint32_t controlCounter = 0;
+    float f = 0.1f, q = 1.0f;
 
     Voice() { oscillators.resize(4); }
 
@@ -36,8 +39,10 @@ public:
 
   SubtractiveEngine() {
     mVoices.resize(6);
-    for (auto &v : mVoices)
+    for (auto &v : mVoices) {
       v.reset();
+      v.parent = this;
+    }
 
     mOscVolumes.assign(4, 0.0f);
     mOscVolumes[0] = 0.6f;
@@ -118,6 +123,7 @@ public:
     // FIX: Must set oscillator frequency for phase increment to be non-zero!
     for (int i = 0; i < 4; ++i) {
       v.oscillators[i].setFrequency(v.frequency, mSampleRate);
+      v.oscillators[i].resetPhase();
     }
   }
 
@@ -269,19 +275,23 @@ public:
 
       float output = subOutput * 0.5f * v.amplitude * envVal;
 
-      // Filter
-      float modCutoff = std::max(
-          0.0f, std::min(1.0f, mCutoff + v.currentFilterEnvVal * mF_Amt));
-      float radians = (float)M_PI * (20.0f + modCutoff * modCutoff * 14980.0f) /
-                      mSampleRate;
-      float f = 2.0f * FastSine::getInstance().sin(radians);
-      float q = 1.0f - mResonance * 0.95f;
-      if (q < 0.05f)
-        q = 0.05f;
+      // Filter (Control Rate Optimized)
+      if (v.controlCounter++ % 16 == 0) {
+        float modCutoff = std::max(
+            0.0f, std::min(0.999f, mCutoff + v.currentFilterEnvVal * mF_Amt));
+        // Exponential mapping at control rate
+        float radians = (float)M_PI *
+                        (20.0f + modCutoff * modCutoff * 14980.0f) /
+                        mSampleRate;
+        v.f = 2.0f * FastSine::getInstance().sin(radians);
+        v.q = 1.0f - mResonance * 0.95f;
+        if (v.q < 0.05f)
+          v.q = 0.05f;
+      }
 
-      v.svf_H = output - v.svf_L - q * v.svf_B;
-      v.svf_B = f * v.svf_H + v.svf_B;
-      v.svf_L = f * v.svf_B + v.svf_L;
+      v.svf_H = output - v.svf_L - v.q * v.svf_B;
+      v.svf_B = v.f * v.svf_H + v.svf_B;
+      v.svf_L = v.f * v.svf_B + v.svf_L;
 
       float res = (mCutoff < 0.5f) ? v.svf_L : v.svf_H;
 
@@ -294,17 +304,6 @@ public:
         res = res * (27.0f + res * res) / (27.0f + 9.0f * res * res);
 
       mixedOutput += res;
-
-      // Debug
-      static int debugCounter = 0;
-      if (debugCounter++ % 5000 == 0) {
-        __android_log_print(ANDROID_LOG_DEBUG, "SubtractiveDebug",
-                            "V%d: Note=%d Osc1=%.2f Osc2=%.2f Ring=%d FM=%.2f "
-                            "Vol1=%.2f Vol2=%.2f Env=%.2f Out=%.2f",
-                            activeCount, v.note, osc1Val, osc2Val, mRingMod,
-                            mFmAmt, mOscVolumes[0], mOscVolumes[1], envVal,
-                            res);
-      }
     }
 
     if (activeCount > 1)

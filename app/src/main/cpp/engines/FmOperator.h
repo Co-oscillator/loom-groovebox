@@ -20,6 +20,7 @@ public:
 
   void trigger() {
     mIsNoteHeld = true;
+    mOscillator.resetPhase();
     mEnv.trigger();
   }
 

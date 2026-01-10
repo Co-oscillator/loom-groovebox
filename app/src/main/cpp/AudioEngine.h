@@ -14,6 +14,7 @@
 #include "engines/FlangerFx.h"
 #include "engines/FmDrumEngine.h"
 #include "engines/FmEngine.h"
+// #include "engines/HallReverbFx.h" // Unused, GalacticReverb is active
 #include "engines/GalacticReverb.h"
 #include "engines/GranularEngine.h"
 #include "engines/LfoEngine.h"

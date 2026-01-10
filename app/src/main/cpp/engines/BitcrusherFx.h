@@ -5,9 +5,14 @@
 
 class BitcrusherFx {
 public:
-  void setBits(int bits) { mBits = bits; }
-  void setDownsample(int factor) { mDownsample = factor; }
-  void setMix(float mix) { mMix = mix; }
+  void setBits(float v) {
+    mBits = 1.0f + v * 15.0f; // 1 to 16 bits
+  }
+  void setDownsample(float v) {
+    mDownsample = 1 + (int)(v * 31.0f); // 1x to 32x downsampling
+  }
+  void setRate(float v) { setDownsample(v); }
+  void setMix(float v) { mMix = v; }
 
   float process(float input) {
     // Sample rate reduction
@@ -24,7 +29,7 @@ public:
   }
 
 private:
-  int mBits = 8;
+  float mBits = 8.0f;
   int mDownsample = 4;
   int mCounter = 0;
   float mLastOutput = 0.0f;

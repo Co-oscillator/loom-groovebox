@@ -91,6 +91,9 @@ public:
     case 4:
       v.paramB = value;
       break; // Metal / Distortion
+    case 5:
+      v.gain = value;
+      break; // Volume/Gain
     }
   }
 
@@ -136,9 +139,13 @@ public:
 
   float render() {
     float out = 0.0f;
-    for (auto &v : mVoices) {
-      if (v.active)
-        out += v.render();
+    for (int i = 0; i < 8; ++i) {
+      if (mVoices[i].active) {
+        mLastRenders[i] = mVoices[i].render();
+        out += mLastRenders[i];
+      } else {
+        mLastRenders[i] = 0.0f;
+      }
     }
     // Boost and soft limit to prevent harsh "growly" distortion
     out *= 1.2f;
@@ -157,7 +164,15 @@ public:
     return false;
   }
 
+  float getVoiceOutput(int index) {
+    if (index >= 0 && index < 8) {
+      return mLastRenders[index];
+    }
+    return 0.0f;
+  }
+
 private:
+  float mLastRenders[8] = {0.0f};
   struct AnalogVoice {
     DrumType type = DrumType::Kick;
     bool active = false;
@@ -186,6 +201,7 @@ private:
     float tone = 0.5f;   // Brightness/Filter
     float paramA = 0.5f; // "Punch" or "Snappy"
     float paramB = 0.0f; // "Metal"
+    float gain = 0.8f;
 
     float velocity = 0.0f;
 
@@ -344,7 +360,7 @@ private:
 
       if (env <= 0.0f)
         active = false;
-      return out * velocity;
+      return out * velocity * gain;
     }
   };
 

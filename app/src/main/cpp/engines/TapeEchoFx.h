@@ -8,25 +8,24 @@
 class TapeEchoFx {
 public:
   TapeEchoFx() {
-    mBuffer.resize(88200, 0.0f); // 2 sec
+    mBuffer.resize(96000, 0.0f); // 2 sec at 48k
+  }
+
+  void clear() {
+    std::fill(mBuffer.begin(), mBuffer.end(), 0.0f);
+    mWritePos = 0;
+    mFilterState = 0.0f;
   }
 
   float process(float input, float sampleRate) {
     if (!std::isfinite(input))
       input = 0.0f;
 
-    // Tape Speed / Wow & Flutter
-    // We modulate the READ speed, not just position, to simulate varispeed
-    // pitch effects. Or simpler: modulate delay time, but with interpolation it
-    // creates pitch shift naturally.
-
-    // Wow LFO (Slow)
-    mWowPhase += 0.5f / sampleRate; // 0.5 Hz
+    // Wow & Flutter LFOs
+    mWowPhase += 0.5f / sampleRate;
     if (mWowPhase >= 1.0f)
       mWowPhase -= 1.0f;
-
-    // Flutter LFO (Fast)
-    mFlutterPhase += 8.0f / sampleRate; // 8 Hz
+    mFlutterPhase += 12.0f / sampleRate;
     if (mFlutterPhase >= 1.0f)
       mFlutterPhase -= 1.0f;
 
@@ -34,54 +33,59 @@ public:
         (std::sin(2.0f * 3.14159265f * mWowPhase) * mWowAmount) +
         (std::sin(2.0f * 3.14159265f * mFlutterPhase) * mFlutterAmount);
 
-    float targetDelay = mTime + modulation * mTime;
+    float targetDelaySamples = (mTime + modulation * mTime) * sampleRate;
 
-    // Target Delay in samples
-    float delaySamples = targetDelay * sampleRate;
+    // Faster smoothing for "rubbery" transitions
+    mSmoothedDelay += 0.001f * (targetDelaySamples - mSmoothedDelay);
 
-    // Smoothed Delay for rubbery transitions
-    mSmoothedDelay += 0.0002f * (delaySamples - mSmoothedDelay);
-
-    // Read
+    // Read positions
     float readPos = (float)mWritePos - mSmoothedDelay;
     while (readPos < 0.0f)
-      readPos += mBuffer.size();
-    while (readPos >= mBuffer.size())
-      readPos -= mBuffer.size();
+      readPos += (float)mBuffer.size();
+    while (readPos >= (float)mBuffer.size())
+      readPos -= (float)mBuffer.size();
 
-    // Cubic Interpolation for better quality repitching? Linear is fine for
-    // grit.
-    int i0 = (int)readPos;
-    int i1 = i0 + 1;
-    if (i1 >= mBuffer.size())
-      i1 = 0;
-    float frac = readPos - i0;
-    float echo = mBuffer[i0] * (1.0f - frac) + mBuffer[i1] * frac;
+    // Hermite Interpolation (4-point)
+    int i1 = (int)readPos;
+    int i2 = (i1 + 1) % mBuffer.size();
+    int i3 = (i2 + 1) % mBuffer.size();
+    int i0 = (i1 - 1 + mBuffer.size()) % mBuffer.size();
 
-    // Saturation on echo
+    float frac = readPos - (float)i1;
+
+    float y0 = mBuffer[i0];
+    float y1 = mBuffer[i1];
+    float y2 = mBuffer[i2];
+    float y3 = mBuffer[i3];
+
+    float a = (3.0f * (y1 - y2) - y0 + y3) * 0.5f;
+    float b = 2.0f * y2 + y0 - 5.0f * y1 * 0.5f - y3 * 0.5f;
+    float c = (y2 - y0) * 0.5f;
+    float d = y1;
+
+    float echo = ((a * frac + b) * frac + c) * frac + d;
+
+    // Tape Saturation (Soft Clip)
     if (mSaturation > 0.0f) {
-      echo = std::tanh(echo * (1.0f + mSaturation * 2.0f));
+      echo = std::tanh(echo * (1.0f + mSaturation * 4.0f));
     }
 
-    // Feedback
+    // Filter Processing
     float feedbackSig = echo * mFeedback;
-    // Simple LPF on feedback to simulate tape degradation
-    mFilterState += 0.4f * (feedbackSig - mFilterState); // Darken
-    // Anti-Denormal
+    // Low-pass to simulate tape head wear
+    mFilterState += 0.1f * (feedbackSig - mFilterState); // Smoother
     if (std::abs(mFilterState) < 1.0e-15f)
       mFilterState = 0.0f;
     feedbackSig = mFilterState;
 
     float toWrite = input + feedbackSig;
-    if (!std::isfinite(toWrite)) {
+    toWrite =
+        std::max(-2.5f, std::min(2.5f, toWrite)); // Slightly tighter clamp
+
+    if (std::abs(toWrite) < 1.0e-15f)
       toWrite = 0.0f;
-      mFilterState = 0.0f;
-    }
-    toWrite = std::max(-4.0f, std::min(4.0f, toWrite));
     mBuffer[mWritePos] = toWrite;
-    mWritePos++;
-    if (mWritePos >= mBuffer.size())
-      mWritePos = 0;
+    mWritePos = (mWritePos + 1) % mBuffer.size();
 
     return echo * mMix;
   }
@@ -91,17 +95,18 @@ public:
     setFeedback(feedback);
     setDrive(saturation);
     setMix(mix);
-    // Defaults for others
     mWowAmount = 0.002f;
     mFlutterAmount = 0.0005f;
   }
 
-  void setDelayTime(float v) { mTime = 0.05f + v * 0.95f; } // 50ms - 1s
+  void setDelayTime(float v) { mTime = 0.05f + (v * v) * 1.95f; }
+
   void setFeedback(float v) {
-    mFeedback = v * 0.95f;
-  } // Lowered to prevent runaway clipping
-  void setWow(float v) { mWowAmount = v * 0.005f; }
-  void setFlutter(float v) { mFlutterAmount = v * 0.002f; }
+    // Reduced scale for stability: 0.85 instead of 0.98
+    mFeedback = v * 0.85f;
+  }
+  void setWow(float v) { mWowAmount = v * 0.006f; }
+  void setFlutter(float v) { mFlutterAmount = v * 0.003f; }
   void setDrive(float v) { mSaturation = v; }
   void setMix(float v) { mMix = v; }
 
@@ -116,7 +121,7 @@ private:
   float mTime = 0.3f;
   float mFeedback = 0.4f;
   float mSaturation = 0.0f;
-  float mMix = 0.0f;
+  float mMix = 0.3f;
 
   float mWowAmount = 0.002f;
   float mFlutterAmount = 0.0005f;

@@ -37,7 +37,7 @@ public:
 
     // Output Level + Slight Boost
     float out = mLastOutput * mLevel * 1.2f * mMix;
-    return std::max(-1.0f, std::min(1.0f, out));
+    return std::tanh(out);
   }
 
 private:

@@ -23,9 +23,8 @@ public:
     float output = readVal;
     float newVal = input + (mFilterStore * feedback);
 
-    // Anti-Denormal
-    if (std::abs(newVal) < 1.0e-15f)
-      newVal = 0.0f;
+    // Safety Saturation (prevent explosion)
+    newVal = std::tanh(newVal);
 
     mBuffer[mWritePos] = newVal;
     mWritePos++;
@@ -63,16 +62,15 @@ public:
   float process(float input) {
     float bufOut = mBuffer[mWritePos];
 
-    // Anti-Denormal check for buffer content
+    // Anti-Denormal
     if (std::abs(bufOut) < 1.0e-15f)
       bufOut = 0.0f;
 
     float output = -input + bufOut;
-    float newVal = input + (bufOut * 0.5f); // 0.5 feedback
+    float newVal = input + (bufOut * 0.5f);
 
-    // Anti-Denormal
-    if (std::abs(newVal) < 1.0e-15f)
-      newVal = 0.0f;
+    // Safety Saturation
+    newVal = std::tanh(newVal);
 
     mBuffer[mWritePos] = newVal;
     mWritePos++;
@@ -120,31 +118,45 @@ public:
     mAllPass[1].setBufferSize((int)(556 * scale));
   }
 
+  void setSize(float size) {
+    mSize =
+        0.7f +
+        (size *
+         0.25f); // Reduced max feedback from 0.98 to 0.95 to prevent explosion
+  }
+  void setDamping(float damp) { mDamp = damp * 0.4f; }
+  void setMix(float mix) { mMix = mix; }
+  void setPreDelay(float val) { /* TODO: Implement PreDelay line */ }
+
+  // Safe Parameter Setter
   void setParameters(float size, float damp, float mix) {
-    mSize = 0.7f + (size * 0.28f); // 0.7 to 0.98 feedback
-    mDamp = damp * 0.4f;
-    mMix = mix;
+    setSize(size);
+    setDamping(damp);
+    setMix(mix);
   }
 
   float process(float input) {
     if (mMix <= 0.001f)
-      return 0.0f; // Early exit optimisation
-
+      return 0.0f;
     float out = 0.0f;
-    // Parallel Combs
     for (int i = 0; i < 4; ++i) {
       out += mCombs[i].process(input, mSize, mDamp);
     }
-
-    // Series AllPass
     out = mAllPass[0].process(out);
     out = mAllPass[1].process(out);
+    return out * mMix * 0.3f;
+  }
 
-    return out * mMix * 0.3f; // Scale down
+  void processStereoWet(float inL, float inR, float &outL, float &outR) {
+    // Simple mono-summed reverb for now, can be improved to true stereo
+    float input = (inL + inR) * 0.5f;
+    float wet = process(input);
+    outL = wet;
+    outR = wet;
   }
 
 private:
-  float mSize = 0.8f;
+  float mSize = 0.5f;
   float mDamp = 0.2f;
   float mMix = 0.3f;
 

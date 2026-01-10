@@ -237,6 +237,8 @@ public:
         maxLevel = 0.8f;
 
       e.setOpLevel(1, minLevel + (v * (maxLevel - minLevel)));
+    } else if (id == 5) { // GAIN
+      setVoiceGain(drumIdx, v);
     } else {
       e.setParameter(id, v);
     }
@@ -251,10 +253,15 @@ public:
   float render() {
     float mixed = 0.0f;
     for (int i = 0; i < 8; ++i) {
-      mLastRenders[i] = mEngines[i].render();
+      mLastRenders[i] = mEngines[i].render() * mGains[i];
       mixed += mLastRenders[i];
     }
-    return mixed; // Boosted volume
+    return mixed * 1.1f; // Slight overall boost
+  }
+
+  void setVoiceGain(int index, float gain) {
+    if (index >= 0 && index < 8)
+      mGains[index] = gain;
   }
 
   float getVoiceOutput(int index) {
@@ -275,6 +282,7 @@ public:
 private:
   FmEngine mEngines[8];
   float mLastRenders[8] = {0.0f};
+  float mGains[8] = {0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f};
 };
 
 #endif // FM_DRUM_ENGINE_H

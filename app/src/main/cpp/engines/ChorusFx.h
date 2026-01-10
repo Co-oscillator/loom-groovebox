@@ -11,12 +11,8 @@ public:
   void setRate(float v) { mRate = v; }
   void setDepth(float v) { mDepth = v; }
   void setMix(float v) { mMix = v; }
-  void setVoices(int v) {
-    mVoices = v;
-    if (mVoices < 1)
-      mVoices = 1;
-    if (mVoices > 7)
-      mVoices = 7;
+  void setVoices(float v) {
+    mVoices = 1 + (int)(v * 6.0f); // 1 to 7 voices
   }
 
   void setParameters(float rate, float depth, float mix, int voices) {

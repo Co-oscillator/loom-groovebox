@@ -1,6 +1,7 @@
 #ifndef HALL_REVERB_FX_H
 #define HALL_REVERB_FX_H
 
+#include "../Utils.h"
 #include <cmath>
 #include <vector>
 
@@ -118,14 +119,9 @@ public:
     mAllPass[1].setBufferSize((int)(556 * scale));
   }
 
-  void setSize(float size) {
-    mSize =
-        0.7f +
-        (size *
-         0.25f); // Reduced max feedback from 0.98 to 0.95 to prevent explosion
-  }
-  void setDamping(float damp) { mDamp = damp * 0.4f; }
-  void setMix(float mix) { mMix = mix; }
+  void setSize(float size) { mTargetSize = 0.7f + (size * 0.25f); }
+  void setDamping(float damp) { mTargetDamp = damp * 0.4f; }
+  void setMix(float mix) { mTargetMix = mix; }
   void setPreDelay(float val) { /* TODO: Implement PreDelay line */ }
 
   // Safe Parameter Setter
@@ -133,18 +129,27 @@ public:
     setSize(size);
     setDamping(damp);
     setMix(mix);
+    // Sync smoothed states on load to prevent slow ramp from 0
+    mSmoothedSize = mTargetSize;
+    mSmoothedDamp = mTargetDamp;
+    mSmoothedMix = mTargetMix;
   }
 
   float process(float input) {
-    if (mMix <= 0.001f)
+    // Smooth Params
+    mSmoothedSize += 0.001f * (mTargetSize - mSmoothedSize);
+    mSmoothedDamp += 0.001f * (mTargetDamp - mSmoothedDamp);
+    mSmoothedMix += 0.001f * (mTargetMix - mSmoothedMix);
+
+    if (mSmoothedMix <= 0.001f)
       return 0.0f;
     float out = 0.0f;
     for (int i = 0; i < 4; ++i) {
-      out += mCombs[i].process(input, mSize, mDamp);
+      out += mCombs[i].process(input, mSmoothedSize, mSmoothedDamp);
     }
     out = mAllPass[0].process(out);
     out = mAllPass[1].process(out);
-    return out * mMix * 0.3f;
+    return out * mSmoothedMix * 0.3f;
   }
 
   void processStereoWet(float inL, float inR, float &outL, float &outR) {
@@ -156,9 +161,9 @@ public:
   }
 
 private:
-  float mSize = 0.5f;
-  float mDamp = 0.2f;
-  float mMix = 0.3f;
+  float mTargetSize = 0.5f, mSmoothedSize = 0.5f;
+  float mTargetDamp = 0.2f, mSmoothedDamp = 0.2f;
+  float mTargetMix = 0.3f, mSmoothedMix = 0.3f;
 
   CombFilter mCombs[4];
   AllPassFilter mAllPass[2];

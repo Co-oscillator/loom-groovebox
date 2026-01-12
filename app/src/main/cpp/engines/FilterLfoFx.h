@@ -30,7 +30,8 @@ public:
     // Control rate update (every 16 samples)
     if (mControlCounter++ % 16 == 0) {
       // 1. LFO Calculation (Control Rate)
-      float rateHz = 0.1f + (mRate * mRate) * 19.9f;
+      // Allow extremely slow rates (0.01Hz) as requested
+      float rateHz = 0.01f + (mRate * mRate) * 19.99f;
       // Increment phase by 16 samples worth of time
       mPhase += (rateHz * 16.0f) / sampleRate;
       if (mPhase >= 1.0f) {

@@ -1,6 +1,7 @@
 #ifndef FM_DRUM_ENGINE_H
 #define FM_DRUM_ENGINE_H
 
+#include "../Utils.h"
 #include "FmEngine.h"
 
 class FmDrumEngine {
@@ -160,6 +161,13 @@ public:
     }
   }
 
+  void resetToDefaults() {
+    for (int i = 0; i < 8; ++i) {
+      initEngine(i, static_cast<DrumType>(i));
+      mGains[i] = 0.8f;
+    }
+  }
+
   void setParameter(int drumIdx, int id, float value) {
     if (drumIdx < 0 || drumIdx >= 8)
       return;
@@ -256,7 +264,7 @@ public:
       mLastRenders[i] = mEngines[i].render() * mGains[i];
       mixed += mLastRenders[i];
     }
-    return mixed * 1.1f; // Slight overall boost
+    return fast_tanh(mixed * 1.35f); // Boosted + Saturated
   }
 
   void setVoiceGain(int index, float gain) {

@@ -20,7 +20,11 @@ data class ArpConfig(
     val randomSequence: List<Int> = emptyList(), // The 8-step random seed
     val arpRate: Float = 1.0f,
     val arpDivisionMode: Int = 0 // 0=Reg, 1=Dotted, 2=Triplet
-) : java.io.Serializable
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 data class TrackState(
     val id: Int,
@@ -45,8 +49,13 @@ data class TrackState(
     val midiOutChannel: Int = 1,  // 1-16
     val lastSamplePath: String = "",
     val activeWavetableName: String = "Basic",
+    val filterMode: Int = 0, // 0=LP, 1=HP, 2=BP
     val clockMultiplier: Float = 1.0f
-) : java.io.Serializable
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 data class StepState(
     val active: Boolean = false,
@@ -57,7 +66,11 @@ data class StepState(
     val probability: Float = 1.0f,
     val gate: Float = 1.0f, // 0.0 to 1.0 (1/128 to 1 full step)
     val parameterLocks: Map<Int, Float> = emptyMap() // parameterId -> value (max 4)
-) : java.io.Serializable
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 data class LfoState(
     val rate: Float = 0.5f, // 0..1 (UI value)
@@ -68,14 +81,22 @@ data class LfoState(
     val targetType: Int = 0, // 0=None, 1=TrackParam, 2=GlobalFX, 3=Macro
     val targetId: Int = -1,
     val targetLabel: String = "None"
-) : java.io.Serializable
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 data class MacroTarget(
     val targetId: Int = -1,
     val targetLabel: String = "None",
     val isInverted: Boolean = false,
     val enabled: Boolean = false
-) : java.io.Serializable
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 
 data class MacroState(
@@ -85,7 +106,11 @@ data class MacroState(
     var sourceIndex: Int = -1, 
     val targets: List<MacroTarget> = List(3) { MacroTarget() },
     val value: Float = 0.0f
-) : java.io.Serializable
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 data class RoutingConnection(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -93,7 +118,11 @@ data class RoutingConnection(
     val destTrack: Int,
     val destParam: Int, // ModDestination Enum Int
     val amount: Float = 0.0f
-) : java.io.Serializable
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 data class StripRouting(
     val stripIndex: Int,
@@ -102,7 +131,11 @@ data class StripRouting(
     val targetId: Int = 0,
     val min: Float = 0f,
     val max: Float = 1f
-) : java.io.Serializable
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 data class GrooveboxState(
     val tracks: List<TrackState> = List(8) { i -> 
@@ -145,6 +178,7 @@ data class GrooveboxState(
     val midiLearnSelectedStrip: Int? = null,
     val focusedParameter: Int? = null, // parameterId
     val currentSequencerBank: Int = 0, // 0=A, 1=B, 2=C, 3=D
+    val echoModeActive: Boolean = false, // Debugging: Echo received MIDI back to device
 
     // Transport & Sequencing Logic
     val swing: Float = 0f, // -0.23f to +0.23f
@@ -183,5 +217,13 @@ data class GrooveboxState(
     // Macro Learn
     val macroLearnActive: Boolean = false,
     val macroLearnMacroIndex: Int = -1,
-    val macroLearnTargetIndex: Int = -1
-) : java.io.Serializable
+    val macroLearnTargetIndex: Int = -1,
+    
+    // MIDI UI Feedback
+    val lastMidiNote: Int = -1,
+    val lastMidiVelocity: Int = 0
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}

@@ -24,7 +24,11 @@ enum class ScaleType(val displayName: String, val intervals: List<Int>) : java.i
     BEBOP_MAJOR("Bebop Major", listOf(0, 2, 4, 5, 7, 8, 9, 11)),
     BEBOP_MINOR("Bebop Minor", listOf(0, 2, 3, 4, 5, 7, 9, 10)),
     SPANISH_GYPSY("Spanish", listOf(0, 1, 4, 5, 7, 8, 10)),
-    FLAMENCO("Flamenco", listOf(0, 1, 3, 4, 5, 7, 8, 10))
+    FLAMENCO("Flamenco", listOf(0, 1, 3, 4, 5, 7, 8, 10));
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
 }
 
 object ScaleLogic {

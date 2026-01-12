@@ -1,13 +1,14 @@
 #ifndef DELAY_FX_H
 #define DELAY_FX_H
 
+#include "../Utils.h"
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
 class DelayFx {
 public:
-  DelayFx(int maxDelayFrames = 96000) { mBuffer.assign(maxDelayFrames, 0.0f); }
+  DelayFx(int maxDelayFrames = 192000) { mBuffer.assign(maxDelayFrames, 0.0f); }
 
   void setDelay(float frames) {
     if (frames < mBuffer.size())
@@ -19,14 +20,14 @@ public:
       mTargetDelayFrames = 1.0f;
   }
 
-  void setFeedback(float feedback) { mFeedback = feedback; }
-  void setMix(float mix) { mMix = mix; }
-  void setFilterMix(float mix) { mFilterMix = mix; }
-  void setFilterResonance(float res) { mResonance = res; }
+  void setFeedback(float feedback) { mTargetFeedback = feedback; }
+  void setMix(float mix) { mTargetMix = mix; }
+  void setFilterMix(float mix) { mTargetFilterMix = mix; }
+  void setFilterResonance(float res) { mTargetResonance = res; }
 
   void setFilter(float filterMix, float resonance) {
-    mFilterMix = filterMix;
-    mResonance = resonance;
+    mTargetFilterMix = filterMix;
+    mTargetResonance = resonance;
   }
 
   void setType(int type) {
@@ -36,19 +37,27 @@ public:
   void clear() {
     std::fill(mBuffer.begin(), mBuffer.end(), 0.0f);
     mWriteIndex = 0;
-    mLow = 0.0f;
-    mBand = 0.0f;
-    mHigh = 0.0f;
+    mSvfZ1 = 0.0f;
+    mSvfZ2 = 0.0f;
     mSmoothedDelay = mTargetDelayFrames;
+    mFeedback = mTargetFeedback;
+    mMix = mTargetMix;
+    mFilterMix = mTargetFilterMix;
+    mResonance = mTargetResonance;
   }
 
-  void processStereo(float inL, float inR, float &outL, float &outR) {
+  void processStereo(float inL, float inR, float &outL, float &outR,
+                     float sampleRate = 48000.0f) {
     if (!std::isfinite(inL))
       inL = 0.0f;
     float input = (inL + inR) * 0.5f;
 
-    // Smooth Delay Transition
+    // Smooth Transitions
     mSmoothedDelay += 0.001f * (mTargetDelayFrames - mSmoothedDelay);
+    mFeedback += 0.001f * (mTargetFeedback - mFeedback);
+    mMix += 0.001f * (mTargetMix - mMix);
+    mFilterMix += 0.001f * (mTargetFilterMix - mFilterMix);
+    mResonance += 0.001f * (mTargetResonance - mResonance);
 
     float delayed = 0.0f;
     if (mType == 3) { // Reverse
@@ -68,47 +77,64 @@ public:
     }
 
     if (mType == 1) { // Tape
-      delayed = std::tanh(delayed * 1.5f);
+      delayed = fast_tanh(delayed * 1.5f);
     }
 
-    // Filter Processing
-    float cutoff = 20000.0f;
+    // Trapezoidal SVF (Zero-Delay Feedback) Processing
+    float targetCutoff = 20000.0f;
+    float lpMix = 0.0f;
+    float hpMix = 0.0f;
+    float dryMix = 1.0f;
+
     if (mFilterMix < 0.45f) {
-      cutoff = 200.0f + (mFilterMix / 0.45f) * 11800.0f;
-      mMode = 0; // LP
+      float t = mFilterMix / 0.45f;
+      targetCutoff = 100.0f * powf(200.0f, t);
+      lpMix = 1.0f;
+      dryMix = 0.0f;
     } else if (mFilterMix > 0.55f) {
-      cutoff = 50.0f + ((mFilterMix - 0.55f) / 0.45f) * 8000.0f;
-      mMode = 1; // HP
-    } else {
-      mMode = 2; // Bypass
+      float t = (mFilterMix - 0.55f) / 0.45f;
+      targetCutoff = 40.0f * powf(200.0f, t);
+      hpMix = 1.0f;
+      dryMix = 0.0f;
     }
-    float targetF = 2.0f * sinf(M_PI * cutoff / 44100.0f);
-    mF += 0.01f * (targetF - mF); // Smooth filter transition
 
-    float filtered = delayed;
-    if (mMode != 2) {
-      float q = 0.5f + mResonance * 3.0f;
-      mLow = mLow + mF * mBand;
-      mHigh = filtered - mLow - mBand / q;
-      mBand = mBand + mF * mHigh;
-      if (mMode == 0)
-        filtered = mLow;
-      else if (mMode == 1)
-        filtered = mHigh;
+    // Coeffs
+    float maxCutoff = sampleRate * 0.45f;
+    if (targetCutoff > maxCutoff)
+      targetCutoff = maxCutoff;
+    if (targetCutoff < 20.0f)
+      targetCutoff = 20.0f;
 
-      // Denormal prevention
-      if (std::abs(mLow) < 1.0e-15f)
-        mLow = 0.0f;
-      if (std::abs(mBand) < 1.0e-15f)
-        mBand = 0.0f;
-    }
+    float g = tanf(M_PI * targetCutoff / sampleRate);
+    float k = 2.0f - (mResonance * 1.95f); // Slightly more reso room
+    float a1 = 1.0f / (1.0f + g * (g + k));
+    float a2 = g * a1;
+    float a3 = g * a2;
+
+    // Filter Sample
+    float v3 = delayed - mSvfZ2;
+    float v1 = a1 * mSvfZ1 + a2 * v3;
+    float v2 = mSvfZ2 + a2 * mSvfZ1 + a3 * v3;
+
+    // State Update
+    mSvfZ1 = 2.0f * v1 - mSvfZ1;
+    mSvfZ2 = 2.0f * v2 - mSvfZ2;
+
+    // Output Mix
+    float filtered =
+        (v2 * lpMix) + ((delayed - k * v1 - v2) * hpMix) + (delayed * dryMix);
+
+    // Denormal prevention
+    if (std::abs(mSvfZ1) < 1.0e-12f)
+      mSvfZ1 = 0.0f;
+    if (std::abs(mSvfZ2) < 1.0e-12f)
+      mSvfZ2 = 0.0f;
 
     float toWrite = input + filtered * mFeedback;
-    toWrite = std::max(-2.0f, std::min(2.0f, toWrite));
-    if (std::abs(toWrite) < 1.0e-15f)
-      toWrite = 0.0f;
-    mBuffer[mWriteIndex] = toWrite;
+    // Use soft saturation in feedback loop to prevent cumulative degradation
+    toWrite = fast_tanh(toWrite);
 
+    mBuffer[mWriteIndex] = toWrite;
     mWriteIndex = (mWriteIndex + 1) % mBuffer.size();
 
     if (mType == 2) { // Ping-Pong
@@ -125,9 +151,9 @@ public:
     }
   }
 
-  float process(float input) {
+  float process(float input, float sampleRate = 48000.0f) {
     float l = 0, r = 0;
-    processStereo(input, input, l, r);
+    processStereo(input, input, l, r, sampleRate);
     return (l + r) * 0.5f;
   }
 
@@ -136,12 +162,15 @@ private:
   int mWriteIndex = 0;
   float mTargetDelayFrames = 11025.0f;
   float mSmoothedDelay = 11025.0f;
-  int mCounter = 1; // For Reverse
+  int mCounter = 1;
+
   bool mPingPongState = false;
-  float mFeedback = 0.5f, mMix = 0.5f;
-  float mFilterMix = 0.5f, mResonance = 0.0f;
-  float mLow = 0.0f, mBand = 0.0f, mHigh = 0.0f, mF = 0.1f;
-  int mMode = 2, mType = 0;
+  float mFeedback = 0.5f, mTargetFeedback = 0.5f;
+  float mMix = 0.5f, mTargetMix = 0.5f;
+  float mFilterMix = 0.5f, mTargetFilterMix = 0.5f;
+  float mResonance = 0.0f, mTargetResonance = 0.0f;
+  float mSvfZ1 = 0.0f, mSvfZ2 = 0.0f;
+  int mType = 0;
 };
 
 #endif // DELAY_FX_H

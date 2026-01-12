@@ -529,3 +529,15 @@ Java_com_groovebox_NativeLib_getAllStepActiveStates(JNIEnv *env, jobject thiz,
   }
   return env->NewBooleanArray(0);
 }
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setFilterMode(
+    JNIEnv *env, jobject thiz, jint track_index, jint mode) {
+  if (engine) {
+    engine->setFilterMode(track_index, mode);
+  }
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_restorePresets(JNIEnv *env, jobject thiz) {
+  if (engine)
+    engine->restorePresets();
+}

@@ -26,6 +26,8 @@ struct FastRandom {
   }
 } gRng;
 
+// (Using fast_tanh from Utils.h)
+
 static inline float softLimit(float x) {
   if (std::isnan(x))
     return 0.0f;
@@ -36,9 +38,9 @@ static inline float softLimit(float x) {
     return x;
 
   // Soft compression above -3dB: x = sign(x) * (0.707 + (1.0 - 0.707) *
-  // tanh((absX - 0.707) / (1.0 - 0.707)))
+  // fast_tanh((absX - 0.707) / (1.0 - 0.707)))
   float extended = (absX - 0.707f) / 0.293f;
-  float limited = 0.707f + 0.293f * std::tanh(extended);
+  float limited = 0.707f + 0.293f * fast_tanh(extended);
   return (x > 0) ? limited : -limited;
 }
 
@@ -84,6 +86,13 @@ bool AudioEngine::start() {
   oboe::Result result = builder.openStream(mStream);
   if (result != oboe::Result::OK)
     return false;
+
+  // Fix for startup choppiness:
+  // Exclusive mode often defaults to 1 burst, which is too aggressive during
+  // app initialization jitter. We explicitly set it to 2 bursts (Double
+  // Buffering) for stability.
+  int burstFrames = mStream->getFramesPerBurst();
+  mStream->setBufferSizeInFrames(burstFrames * 2);
 
   mReverbFx.setSampleRate(mStream->getSampleRate());
   mSampleRate = mStream->getSampleRate();
@@ -321,163 +330,87 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
     return;
   Track &track = mTracks[trackIndex];
 
-  if (parameterId >= 2000) { // Global / FX
+  // Specific Logic for Global / Sends
+  if (parameterId >= 2000) {
     int fxIndex = (parameterId - 2000) / 10;
-    int subId = (parameterId - 2000) % 10;
     if (fxIndex >= 0 && fxIndex < 15) {
       track.fxSends[fxIndex] = value;
     }
     return;
   }
 
-  // Subtractive Engine Enhancements (IDs 150-199)
-  if (parameterId >= 150 && parameterId < 200) {
-    if (track.engineType == 0) {
-      track.subtractiveEngine.setParameter(parameterId, value);
-    }
-    return;
-  }
+  // Common Track Params (< 100)
   if (parameterId < 100) {
-    // Synth Params
     switch (parameterId) {
-    case 0:                                   // Track Volume
-      track.volume = std::max(0.001f, value); // Safety floor
+    case 0:
+      track.volume = std::max(0.001f, value);
       break;
-    case 1: // Filter Cutoff
-      // Original logic for parameterId 1 was track.engineType =
-      // static_cast<int>(value); This new logic seems to be a replacement for a
-      // different parameter mapping.
-      track.subtractiveEngine.setCutoff(
-          value); // Assuming this is the new Filter Cutoff
-      track.fmEngine.setFilter(
-          value); // Assuming this is the new Filter Cutoff for FM
-      track.samplerEngine.setParameter(
-          parameterId,
-          value); // Assuming sampler uses generic setParameter for this
+    case 1: // Common Filter Cutoff
+      track.subtractiveEngine.setCutoff(value);
+      track.fmEngine.setFilter(value);
+      track.samplerEngine.setFilterCutoff(value);
       track.wavetableEngine.setFilterCutoff(value);
-      track.granularEngine.setParameter(
-          parameterId,
-          value); // Assuming granular uses generic setParameter for this
+      track.granularEngine.setParameter(1, value);
       break;
-    case 2: // Resonance
+    case 2: // Common Resonance
       track.subtractiveEngine.setResonance(value);
       track.fmEngine.setResonance(value);
-      track.samplerEngine.setParameter(parameterId, value);
+      track.samplerEngine.setFilterResonance(value);
       track.wavetableEngine.setResonance(value);
-      track.granularEngine.setParameter(parameterId, value);
+      track.granularEngine.setParameter(2, value);
       break;
     case 3: // Env Amount
-      track.subtractiveEngine.setFilterEnvAmount(
-          value); // Assuming this maps to filter env amount
-      track.fmEngine.setParameter(parameterId, value); // Generic for FM
+      track.subtractiveEngine.setFilterEnvAmount(value);
+      track.fmEngine.setParameter(3, value);
       break;
     case 4:
       track.subtractiveEngine.setOscWaveform(1, value);
-      break; // Assuming OSC 2 Wave
+      break;
     case 5:
       track.subtractiveEngine.setOscVolume(0, std::max(0.001f, value));
-      break; // Assuming OSC 1 Volume
+      break;
     case 6:
       track.subtractiveEngine.setDetune(value);
-      break; // Assuming Detune
+      break;
     case 7:
       track.subtractiveEngine.setLfoRate(value);
-      break; // Assuming LFO Rate
+      break;
     case 8:
       track.subtractiveEngine.setLfoDepth(value);
-      break; // Assuming LFO Depth
+      break;
     }
   }
-
-  // Specific Ranges
-  if (parameterId >= 100 && parameterId < 110) { // ADSR
+  // ADSR / Internal Params (100-149)
+  else if (parameterId >= 100 && parameterId < 150) {
     switch (parameterId) {
-    case 100: // Attack
+    case 100:
       track.subtractiveEngine.setAttack(value);
-      track.fmEngine.setParameter(parameterId, value); // Generic for FM
       track.samplerEngine.setAttack(value);
       track.granularEngine.setAttack(value);
       track.wavetableEngine.setAttack(value);
+      track.fmEngine.setParameter(100, value);
       break;
-    case 101: // Decay
+    case 101:
       track.subtractiveEngine.setDecay(value);
-      track.fmEngine.setParameter(parameterId, value); // Generic for FM
       track.samplerEngine.setDecay(value);
       track.granularEngine.setDecay(value);
       track.wavetableEngine.setDecay(value);
+      track.fmEngine.setParameter(101, value);
       break;
-    case 102: // Sustain
+    case 102:
       track.subtractiveEngine.setSustain(value);
-      track.fmEngine.setParameter(parameterId, value); // Generic for FM
       track.samplerEngine.setSustain(value);
       track.granularEngine.setSustain(value);
       track.wavetableEngine.setSustain(value);
+      track.fmEngine.setParameter(102, value);
       break;
-    case 103: // Release
+    case 103:
       track.subtractiveEngine.setRelease(value);
-      track.fmEngine.setParameter(parameterId, value); // Generic for FM
       track.samplerEngine.setRelease(value);
       track.granularEngine.setRelease(value);
       track.wavetableEngine.setRelease(value);
+      track.fmEngine.setParameter(103, value);
       break;
-    }
-  }
-
-  // GLOBAL FX Params (500+) handled by direct FX calls usually, not here?
-  // Let's check existing setParameter logic for 500+
-  // The original logic for parameterId 500-600 was for global FX, which should
-  // remain in the global context. This updateEngineParameter is track-specific.
-  // The user's instruction implies this block should be here, but it conflicts
-  // with the global nature of the original 500-600 block. I will assume the
-  // user wants to keep the original global FX logic as is, and this comment is
-  // a note to themselves. The provided snippet for 500-600 is empty, so I will
-  // not add anything new here.
-
-  // FM Drum and Analog Drum logic
-  if (parameterId >= 400 && parameterId < 464) {
-    if (track.engineType == 5) {
-      track.fmDrumEngine.setParameter(
-          track.selectedFmDrumInstrument, (parameterId - 400),
-          value); // Adjusted to match original FM Drum logic
-    }
-  }
-  if (parameterId >= 600 && parameterId < 700) {
-    if (track.engineType == 6) {
-      int drumIdx = (parameterId - 600) / 10;
-      int subId = (parameterId - 600) % 10;
-      track.analogDrumEngine.setParameter(drumIdx, subId, value);
-    }
-  }
-
-  // Original logic from setParameterLocked, now in updateEngineParameter
-  // Note: The original setParameterLocked had a 'bool isFromSequencer'
-  // parameter. The new updateEngineParameter does not. The recording logic that
-  // used 'isFromSequencer' needs to be handled elsewhere or removed if no
-  // longer applicable in this context. For now, I will remove the recording
-  // logic as it was tied to the 'isFromSequencer' parameter. The user's
-  // provided snippet ends with '&& mIsPlaying && !isFromSequencer &&
-  // parameterId >= 8) { ... }' which suggests this recording logic should be
-  // moved to the new setParameter function, or handled by a separate function
-  // that calls updateEngineParameter. Given the instruction, I will place the
-  // recording logic in the new setParameter function, and remove it from
-  // updateEngineParameter.
-
-  // The original setParameterLocked also had these initial checks and
-  // assignments: if (parameterId == 0) track.volume = value; else if
-  // (parameterId == 1) track.engineType = static_cast<int>(value); else if
-  // (parameterId >= 8 && parameterId < 16)
-  // track.subtractiveEngine.setCutoff(value); These are now superseded by the
-  // new switch/if blocks for parameterId < 100. I will ensure the new blocks
-  // cover these or provide a generic fallback.
-
-  // Engine Specific Params (100-150) - This block is partially covered by the
-  // new ADSR block (100-110) I will merge the remaining cases from the original
-  // 100-150 block into the new structure.
-  if (parameterId >= 100 && parameterId < 150) {
-    // Cases 100-103 are handled by the new ADSR block.
-    // Remaining cases from original setParameterLocked:
-    switch (parameterId) {
-    // Cases 100-103 are already handled above in the new ADSR block.
     case 104:
       track.subtractiveEngine.setOscWaveform(0, value);
       break;
@@ -488,19 +421,16 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.subtractiveEngine.setDetune(value);
       break;
     case 107:
-      track.subtractiveEngine.setOscVolume(0, std::max(0.001f, value));
+      track.subtractiveEngine.setOscVolume(0, value);
       break;
     case 108:
-      track.subtractiveEngine.setOscVolume(1, std::max(0.0001f, value));
+      track.subtractiveEngine.setOscVolume(1, value);
       break;
     case 109:
-      track.subtractiveEngine.setOscVolume(2, std::max(0.0001f, value));
+      track.subtractiveEngine.setOscVolume(2, value);
       break;
     case 110:
       track.subtractiveEngine.setNoiseLevel(value);
-      break;
-    case 111:
-      track.subtractiveEngine.setChordVoicing(value);
       break;
     case 112:
       track.subtractiveEngine.setCutoff(value);
@@ -510,115 +440,26 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.subtractiveEngine.setResonance(value);
       track.samplerEngine.setFilterResonance(value);
       break;
-    case 114:
-      track.subtractiveEngine.setFilterAttack(value);
-      break;
-    case 115:
-      track.subtractiveEngine.setFilterDecay(value);
-      break;
-    case 116:
-      track.subtractiveEngine.setFilterSustain(value);
-      break;
-    case 117:
-      track.subtractiveEngine.setFilterRelease(value);
-      break;
     case 118:
       track.subtractiveEngine.setFilterEnvAmount(value);
+      track.samplerEngine.setFilterEnvAmount(value);
       break;
     }
   }
-
-  // FM Params (150-199) - Shared with Subtractive Sound Design
+  // FM / Sound Design (150-199)
   else if (parameterId >= 150 && parameterId < 200) {
-    if (track.engineType == 0) { // SUBTRACTIVE
+    if (track.engineType == 0) { // Subtractive
       track.subtractiveEngine.setParameter(parameterId, value);
-    } else { // FM (EngineType 1)
-      switch (parameterId) {
-      case 150:
-        track.fmEngine.setAlgorithm(static_cast<int>(value * 8));
-        break;
-      case 151:
-        track.fmEngine.setFilter(value);
-        break;
-      case 152:
-        track.fmEngine.setResonance(value);
-        break;
-      case 153:
-        track.fmEngine.setCarrierMask(static_cast<int>(value));
-        break;
-      case 154:
-        track.fmEngine.setFeedback(value);
-        break;
-      case 156:
-        track.fmEngine.setParameter(4, value);
-        break;
-      case 155:
-        track.fmEngine.setActiveMask(static_cast<int>(value));
-        break;
-      case 157:
-        track.fmEngine.setParameter(5, value); // Brightness
-        break;
-      case 158:
-        track.fmEngine.setParameter(6, value); // Detune
-        break;
-      case 159:
-        track.fmEngine.setParameter(7, value); // Feedback Drive
-        break;
-      default:
-        if (parameterId >= 160) {
-          LOGD("FM Param Set: %d val=%.2f", parameterId, value);
-          int opIdx = (parameterId - 160) / 6;
-          int subId = (parameterId - 160) % 6;
-          switch (subId) {
-          case 0:
-            track.fmEngine.setOpLevel(opIdx, value);
-            break;
-          case 1:
-            track.fmEngine.setOpADSR(opIdx, value,
-                                     track.fmEngine.mOpDecay[opIdx],
-                                     track.fmEngine.mOpSustain[opIdx],
-                                     track.fmEngine.mOpRelease[opIdx]);
-            break;
-          case 2:
-            track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
-                                     value, track.fmEngine.mOpSustain[opIdx],
-                                     track.fmEngine.mOpRelease[opIdx]);
-            break;
-          case 3:
-            track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
-                                     track.fmEngine.mOpDecay[opIdx], value,
-                                     track.fmEngine.mOpRelease[opIdx]);
-            break;
-          case 4:
-            track.fmEngine.setOpADSR(opIdx, track.fmEngine.mOpAttack[opIdx],
-                                     track.fmEngine.mOpDecay[opIdx],
-                                     track.fmEngine.mOpSustain[opIdx], value);
-            break;
-          case 5:
-            track.fmEngine.setOpRatio(opIdx, 0.5f + (value * 31.5f));
-            break;
-          }
-        }
-        break;
-      }
+    } else if (track.engineType == 1) { // FM
+      track.fmEngine.setParameter(parameterId, value);
     }
   }
-  // FM Drum Params (200+) - This block is partially covered by the new 400-464
-  // block. I will keep the original 200-300 block as it is distinct.
+  // FM Drum (200-299)
   else if (parameterId >= 200 && parameterId < 300) {
     track.fmDrumEngine.setParameter((parameterId - 200) / 10,
                                     (parameterId - 200) % 10, value);
   }
-  // Analog Drum Params (600+) - This block is partially covered by the new
-  // 600-700 block. I will keep the original 600-650 block as it is distinct.
-  else if (parameterId >= 600 && parameterId < 650) {
-    int drumIdx = (parameterId - 600) / 10;
-    int subId = (parameterId - 600) % 10;
-    LOGD("Analog Parameter: track=%d, drumIdx=%d, paramId=%d, value=%.2f",
-         trackIndex, drumIdx, subId, value);
-    track.analogDrumEngine.setParameter(drumIdx, subId, value);
-  }
-  // Sampler & Focused Drum Params (300+)
+  // Sampler & Engine Sub-params (300-399)
   else if (parameterId >= 300 && parameterId < 400) {
     if (parameterId == 350) {
       track.subtractiveEngine.setUseEnvelope(value > 0.5f);
@@ -632,18 +473,16 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.samplerEngine.setParameter(parameterId, value);
     }
   }
-  // Granular Params (400+) - This block is partially covered by the new 400-464
-  // block. I will keep the original 400-450 block as it is distinct.
+  // Granular (400-449)
   else if (parameterId >= 400 && parameterId < 450) {
     track.granularEngine.setParameter(parameterId, value);
   }
-  // Wavetable Params (450+)
-  else if (parameterId >= 450 && parameterId < 470) {
+  // Wavetable (450-489)
+  else if (parameterId >= 450 && parameterId < 490) {
     if (parameterId == 450)
-      track.wavetableEngine.setParameter(0, value); // Morph
+      track.wavetableEngine.setParameter(0, value);
     else if (parameterId == 451)
-      track.wavetableEngine.setParameter(1, value); // Detune
-    // 452, 453 Unused in UI currently (Spread, Unison Voices internal calc?)
+      track.wavetableEngine.setParameter(1, value);
     else if (parameterId == 454)
       track.wavetableEngine.setAttack(value);
     else if (parameterId == 455)
@@ -656,110 +495,122 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.wavetableEngine.setFilterCutoff(value);
     else if (parameterId == 459)
       track.wavetableEngine.setResonance(value);
-    // 460 Filter Attack (Unused in UI?)
     else if (parameterId == 461)
-      track.wavetableEngine.setParameter(11, value); // Filter Decay
-    // 462 Filter Sustain
-    // 463 Filter Release
+      track.wavetableEngine.setParameter(11, value);
     else if (parameterId == 464)
-      track.wavetableEngine.setParameter(14, value); // Filter Env Amount
+      track.wavetableEngine.setParameter(14, value);
     else if (parameterId == 465)
-      track.wavetableEngine.setParameter(15, value); // Warp
+      track.wavetableEngine.setParameter(15, value);
     else if (parameterId == 466)
-      track.wavetableEngine.setParameter(16, value); // Crush
+      track.wavetableEngine.setParameter(16, value);
     else if (parameterId == 467)
-      track.wavetableEngine.setParameter(17, value); // Drive
+      track.wavetableEngine.setParameter(17, value);
   }
-  // Global Effects & Arp (500-600)
+  // LP LFO (490-499). Note: Global effects start at 500.
+  else if (parameterId >= 490 && parameterId < 500) {
+    int subId = parameterId % 10;
+    if (subId == 0)
+      mLpLfoFx.setRate(value);
+    else if (subId == 1)
+      mLpLfoFx.setDepth(value);
+    else if (subId == 2)
+      mLpLfoFx.setShape(value);
+    else if (subId == 3)
+      mLpLfoFx.setCutoff(value);
+    else if (subId == 4)
+      mLpLfoFx.setResonance(value);
+  }
+  // Global Effects & Arp (500-599)
   else if (parameterId >= 500 && parameterId < 600) {
     int fxId = (parameterId - 500) / 10;
     int subId = parameterId % 10;
-
     switch (fxId) {
-    case 0: // Reverb (500-509)
+    case 0: // Reverb
       if (subId == 0)
         mReverbFx.setSize(value);
       else if (subId == 1)
         mReverbFx.setDamping(value);
       else if (subId == 2)
         mReverbFx.setModDepth(value);
-      else if (subId == 3)
+      else if (subId == 3) {
         mReverbFx.setMix(value);
-      else if (subId == 4)
+        mFxMixLevels[6] = value;
+      } else if (subId == 4)
         mReverbFx.setPreDelay(value);
       else if (subId == 5)
         mReverbFx.setType(static_cast<int>(value * 3.9f));
       break;
-
-    case 1: // Chorus (510-519)
+    case 1: // Chorus
       if (subId == 0)
         mChorusFx.setRate(value);
       else if (subId == 1)
         mChorusFx.setDepth(value);
-      else if (subId == 2)
+      else if (subId == 2) {
         mChorusFx.setMix(value);
-      else if (subId == 3)
+        mFxMixLevels[2] = value;
+      } else if (subId == 3)
         mChorusFx.setVoices(value);
       break;
-
-    case 2: // Delay (520-529)
+    case 2: // Delay
       if (subId == 0)
         mDelayFx.setDelayTime(value);
       else if (subId == 1)
         mDelayFx.setFeedback(value);
-      else if (subId == 2)
+      else if (subId == 2) {
         mDelayFx.setMix(value);
-      else if (subId == 3)
+        mFxMixLevels[5] = value;
+      } else if (subId == 3)
         mDelayFx.setFilterMix(value);
       else if (subId == 4)
         mDelayFx.setFilterResonance(value);
       else if (subId == 5)
         mDelayFx.setType(static_cast<int>(value * 3.9f));
       break;
-
-    case 3: // Bitcrusher (530-539)
+    case 3: // Bitcrusher
       if (subId == 0)
         mBitcrusherFx.setBits(value);
       else if (subId == 1)
         mBitcrusherFx.setRate(value);
-      else if (subId == 2)
+      else if (subId == 2) {
         mBitcrusherFx.setMix(value);
+        mFxMixLevels[1] = value;
+      }
       break;
-
-    case 4: // Overdrive (540-549)
+    case 4: // Overdrive
       if (subId == 0)
         mOverdriveFx.setDrive(value);
-      else if (subId == 1)
+      else if (subId == 1) {
         mOverdriveFx.setMix(value);
-      else if (subId == 2)
+        mFxMixLevels[0] = value;
+      } else if (subId == 2)
         mOverdriveFx.setLevel(value);
       else if (subId == 3)
         mOverdriveFx.setTone(value);
       break;
-
-    case 5: // Phaser (550-559)
+    case 5: // Phaser
       if (subId == 0)
         mPhaserFx.setRate(value);
       else if (subId == 1)
         mPhaserFx.setDepth(value);
-      else if (subId == 2)
+      else if (subId == 2) {
         mPhaserFx.setMix(value);
-      else if (subId == 3)
+        mFxMixLevels[3] = value;
+      } else if (subId == 3)
         mPhaserFx.setIntensity(value);
       break;
-
-    case 6: // Tape Wobble (560-569)
+    case 6: // Tape Wobble
       if (subId == 0)
         mTapeWobbleFx.setRate(value);
       else if (subId == 1)
         mTapeWobbleFx.setDepth(value);
       else if (subId == 2)
         mTapeWobbleFx.setSaturation(value);
-      else if (subId == 3)
+      else if (subId == 3) {
         mTapeWobbleFx.setMix(value);
+        mFxMixLevels[4] = value;
+      }
       break;
-
-    case 7: // Slicer (570-579)
+    case 7: // Slicer
       if (subId == 0)
         mSlicerFx.setRate1(value);
       else if (subId == 1)
@@ -772,11 +623,12 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         mSlicerFx.setActive2(value > 0.5f);
       else if (subId == 5)
         mSlicerFx.setActive3(value > 0.5f);
-      else if (subId == 6)
+      else if (subId == 6) {
         mSlicerFx.setDepth(value);
+        mFxMixLevels[7] = value;
+      }
       break;
-
-    case 8: // Compressor (580-589)
+    case 8: // Compressor
       if (subId == 0)
         mCompressorFx.setThreshold(value);
       else if (subId == 1)
@@ -792,8 +644,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       else if (subId == 6)
         mSidechainSourceDrumIdx = static_cast<int>(value);
       break;
-
-    case 9: // HP LFO (590-599)
+    case 9: // HP LFO
       if (subId == 0)
         mHpLfoFx.setRate(value);
       else if (subId == 1)
@@ -806,12 +657,22 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         mHpLfoFx.setResonance(value);
       break;
     }
-  } else if (parameterId >= 800 && parameterId < 810) {
+  }
+  // Analog Drum (600-699)
+  else if (parameterId >= 600 && parameterId < 700) {
+    int drumIdx = (parameterId - 600) / 10;
+    int subId = (parameterId - 600) % 10;
+    track.analogDrumEngine.setParameter(drumIdx, subId, value);
+  }
+  // Midi Channels (800-809)
+  else if (parameterId >= 800 && parameterId < 810) {
     if (parameterId == 800)
       track.midiInChannel = static_cast<int>(value);
     else if (parameterId == 801)
       track.midiOutChannel = static_cast<int>(value);
-  } else if (parameterId >= 1500 && parameterId < 1600) {
+  }
+  // Extra Global FX (1500-1599)
+  else if (parameterId >= 1500 && parameterId < 1600) {
     int fxId = (parameterId - 1500) / 10;
     int subId = parameterId % 10;
     switch (fxId) {
@@ -820,9 +681,10 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         mFlangerFx.setRate(value);
       else if (subId == 1)
         mFlangerFx.setDepth(value);
-      else if (subId == 2)
+      else if (subId == 2) {
         mFlangerFx.setMix(value);
-      else if (subId == 3)
+        mFxMixLevels[11] = value;
+      } else if (subId == 3)
         mFlangerFx.setFeedback(value);
       else if (subId == 4)
         mFlangerFx.setDelay(value * 0.02f);
@@ -832,9 +694,10 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         mTapeEchoFx.setDelayTime(value * 1.0f);
       else if (subId == 1)
         mTapeEchoFx.setFeedback(value);
-      else if (subId == 2)
+      else if (subId == 2) {
         mTapeEchoFx.setMix(value);
-      else if (subId == 3)
+        mFxMixLevels[13] = value;
+      } else if (subId == 3)
         mTapeEchoFx.setDrive(value);
       else if (subId == 4)
         mTapeEchoFx.setWow(value);
@@ -848,13 +711,16 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         mStereoSpreadFx.setRate(value);
       else if (subId == 2)
         mStereoSpreadFx.setDepth(value);
-      else if (subId == 3)
+      else if (subId == 3) {
         mStereoSpreadFx.setMix(value);
+        mFxMixLevels[12] = value;
+      }
       break;
     case 3: // Octaver
-      if (subId == 0)
+      if (subId == 0) {
         mOctaverFx.setMix(value);
-      else if (subId == 1)
+        mFxMixLevels[14] = value;
+      } else if (subId == 1)
         mOctaverFx.setMode(value);
       else if (subId == 2)
         mOctaverFx.setUnison(value);
@@ -862,18 +728,6 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         mOctaverFx.setDetune(value);
       break;
     }
-  } else if (parameterId >= 490 && parameterId < 500) {
-    int subId = parameterId % 10;
-    if (subId == 0)
-      mLpLfoFx.setRate(value);
-    else if (subId == 1)
-      mLpLfoFx.setDepth(value);
-    else if (subId == 2)
-      mLpLfoFx.setShape(value);
-    else if (subId == 3)
-      mLpLfoFx.setCutoff(value);
-    else if (subId == 4)
-      mLpLfoFx.setResonance(value);
   }
 }
 
@@ -1964,8 +1818,21 @@ void AudioEngine::setTrackVolume(int trackIndex, float volume) {
 
 void AudioEngine::onErrorAfterClose(oboe::AudioStream *audioStream,
                                     oboe::Result result) {
-  if (result == oboe::Result::ErrorDisconnected) {
+  LOGD("AudioEngine::onErrorAfterClose() called. Result: %d",
+       static_cast<int>(result));
+  if (result == oboe::Result::ErrorDisconnected ||
+      result == oboe::Result::ErrorInvalidState ||
+      result == oboe::Result::ErrorUnavailable) {
+    LOGD("Restarting audio stream...");
     start();
+  }
+}
+
+void AudioEngine::setFilterMode(int trackIndex, int mode) {
+  if (trackIndex >= 0 && trackIndex < 8) {
+    if (mTracks[trackIndex].engineType == 0) { // Subtractive
+      mTracks[trackIndex].subtractiveEngine.setFilterMode(mode);
+    }
   }
 }
 
@@ -1987,6 +1854,22 @@ void AudioEngine::enqueueMidiEvent(int type, int channel, int data1,
   msg.data1 = data1;
   msg.data2 = data2;
   mMidiQueue.push_back(msg);
+}
+
+void AudioEngine::restorePresets() {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  for (auto &track : mTracks) {
+    track.volume = 0.8f;
+    track.subtractiveEngine.resetToDefaults();
+    track.fmEngine.resetToDefaults();
+    track.fmDrumEngine.resetToDefaults();
+    track.analogDrumEngine.resetToDefaults();
+    track.samplerEngine.resetToDefaults();
+    track.granularEngine.resetToDefaults();
+    track.wavetableEngine.resetToDefaults();
+    // Also reset common params that might be stored in the track/sequencer
+    // state if applicable.
+  }
 }
 
 int AudioEngine::fetchMidiEvents(int *outBuffer, int maxEvents) {
@@ -2053,45 +1936,9 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       }
     }
   }
-
-  // Auto-Release logic once per block
+  // Reset gain reduction per track at start of block
   for (int t = 0; t < (int)mTracks.size(); ++t) {
-    Track &track = mTracks[t];
-    track.gainReduction = 1.0f; // Reset gain reduction per block
-
-    for (int n = 0; n < Track::MAX_POLYPHONY; ++n) {
-      if (track.mActiveNotes[n].active &&
-          track.mActiveNotes[n].durationRemaining < 999990.0f) {
-        track.mActiveNotes[n].durationRemaining -= (float)numFrames;
-        if (track.mActiveNotes[n].durationRemaining <= 0.0f) {
-          switch (track.engineType) {
-          case 0:
-            track.subtractiveEngine.releaseNote(track.mActiveNotes[n].note);
-            break;
-          case 1:
-            track.fmEngine.releaseNote(track.mActiveNotes[n].note);
-            break;
-          case 2:
-            track.samplerEngine.releaseNote(track.mActiveNotes[n].note);
-            break;
-          case 3:
-            track.granularEngine.releaseNote(track.mActiveNotes[n].note);
-            break;
-          case 4:
-            track.wavetableEngine.releaseNote(track.mActiveNotes[n].note);
-            break;
-          case 5:
-            track.fmDrumEngine.releaseNote(track.mActiveNotes[n].note);
-            break;
-          case 6:
-            track.analogDrumEngine.releaseNote(track.mActiveNotes[n].note);
-            break;
-          } // End switch
-          track.mActiveNotes[n].active = false;
-          track.mActiveNotes[n].durationRemaining = 9999998.0f;
-        }
-      }
-    }
+    mTracks[t].gainReduction = 1.0f;
   }
 
   if (mStream) {
@@ -2189,18 +2036,12 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
 
       // Punch (Drum Compression) Logic
       if (track.mPunchCounter > 0) {
-        float x =
-            trackOutput *
-            1.6f; // Reduced from 2.25x (3.375x total) to 1.6x (2.4x total)
-        float x2 = x * x;
-        // More aggressive saturation formula for "Drive +100%"
-        // trackOutput = x * (27.0f + x2) / (27.0f + 9.0f * x2); // original
-        trackOutput =
-            std::tanh(x * 1.5f); // Real tanh with extra drive, scaled by gain
+        float x = trackOutput * 1.6f;
+        trackOutput = fast_tanh(x * 1.5f);
         track.mPunchCounter--;
       }
 
-      trackOutput = std::tanh(trackOutput);
+      trackOutput = fast_tanh(trackOutput);
       // HEADROOM SCALING: Scale down internal engine output by 0.35x
       // This prevents the mix bus from clipping when multiple tracks are
       // active. Master Volume can boost this back up if needed.
@@ -2246,37 +2087,31 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
 
     auto routeFx = [&](int index, float val) {
       int dest = mFxChainDest[index];
-      if (dest >= 0 && dest < 15)
-        fxBuses[dest] += val;
-      else
+      if (dest >= 0 && dest < 15) {
+        // Apply level scaling when forwarding to next pedal in chain
+        fxBuses[dest] += val * mFxMixLevels[index];
+      } else {
         wetSample += val;
+      }
     };
 
     const float kSilence = 0.00001f;
-    if (std::abs(fxBuses[0]) > kSilence)
-      routeFx(0, mOverdriveFx.process(fxBuses[0]));
-    if (std::abs(fxBuses[1]) > kSilence)
-      routeFx(1, mBitcrusherFx.process(fxBuses[1]));
-    if (std::abs(fxBuses[9]) > kSilence)
-      routeFx(9, mHpLfoFx.process(fxBuses[9], sampleRate));
-
-    if (std::abs(fxBuses[10]) > kSilence)
-      routeFx(10, mLpLfoFx.process(fxBuses[10], sampleRate));
-    if (std::abs(fxBuses[2]) > kSilence)
-      routeFx(2, mChorusFx.process(fxBuses[2], sampleRate));
-    if (std::abs(fxBuses[3]) > kSilence)
-      routeFx(3, mPhaserFx.process(fxBuses[3], sampleRate));
-    if (std::abs(fxBuses[4]) > kSilence)
-      routeFx(4, mTapeWobbleFx.process(fxBuses[4], sampleRate));
+    routeFx(0, mOverdriveFx.process(fxBuses[0]));
+    routeFx(1, mBitcrusherFx.process(fxBuses[1]));
+    routeFx(9, mHpLfoFx.process(fxBuses[9], sampleRate));
+    routeFx(10, mLpLfoFx.process(fxBuses[10], sampleRate));
+    routeFx(2, mChorusFx.process(fxBuses[2], sampleRate));
+    routeFx(3, mPhaserFx.process(fxBuses[3], sampleRate));
+    routeFx(4, mTapeWobbleFx.process(fxBuses[4], sampleRate));
 
     // Delay (Bus 5)
-    if (std::abs(fxBuses[5]) > kSilence) {
+    {
       float dL = 0, dR = 0;
       mDelayFx.processStereo(fxBuses[5], fxBuses[5], dL, dR);
 
       int dest = mFxChainDest[5];
       if (dest >= 0 && dest < 15) {
-        fxBuses[dest] += (dL + dR) * 0.5f;
+        fxBuses[dest] += ((dL + dR) * 0.5f) * mFxMixLevels[5];
       } else {
         spreadL += dL;
         spreadR += dR;
@@ -2284,14 +2119,14 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     }
 
     // Reverb (Bus 6)
-    if (std::abs(fxBuses[6]) > kSilence) {
+    {
       float rL = 0.0f, rR = 0.0f;
       // Reverb is a SEND effect. We only want the WET tail.
       mReverbFx.processStereoWet(fxBuses[6], fxBuses[6], rL, rR);
 
       int dest = mFxChainDest[6];
       if (dest >= 0 && dest < 15) {
-        fxBuses[dest] += (rL + rR) * 0.5f;
+        fxBuses[dest] += ((rL + rR) * 0.5f) * mFxMixLevels[6];
       } else {
         // These are added to the FINAL output
         spreadL += rL;
@@ -2299,35 +2134,29 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       }
     }
 
-    if (std::abs(fxBuses[7]) > kSilence)
-      routeFx(7, mSlicerFx.process(fxBuses[7], mSampleCount, mSamplesPerStep));
+    routeFx(7,
+            mSlicerFx.process(fxBuses[7], mSampleCount + i, mSamplesPerStep));
 
     // Compressor (Bus 8)
-    if (std::abs(fxBuses[8]) > kSilence)
-      routeFx(8, mCompressorFx.process(fxBuses[8], sidechainSignal));
+    routeFx(8, mCompressorFx.process(fxBuses[8], sidechainSignal));
 
-    if (std::abs(fxBuses[11]) > kSilence)
-      routeFx(11, mFlangerFx.process(fxBuses[11], sampleRate));
+    routeFx(11, mFlangerFx.process(fxBuses[11], sampleRate));
 
-    if (std::abs(fxBuses[12]) > kSilence) {
+    {
       float sL = 0, sR = 0;
       mStereoSpreadFx.process(fxBuses[12], sL, sR, sampleRate);
-      // Ensure Spread adds to the mix, but also preserve some center (Dry is
-      // usually implicitly in mixedSample, but for FX bus routing we need to be
-      // careful)
+
       int dest = mFxChainDest[12];
       if (dest >= 0 && dest < 15)
-        fxBuses[dest] += (sL + sR) * 0.5f;
+        fxBuses[dest] += ((sL + sR) * 0.5f) * mFxMixLevels[12];
       else {
         spreadL += sL;
         spreadR += sR;
       }
     }
 
-    if (std::abs(fxBuses[13]) > kSilence)
-      routeFx(13, mTapeEchoFx.process(fxBuses[13], sampleRate));
-    if (std::abs(fxBuses[14]) > kSilence)
-      routeFx(14, mOctaverFx.process(fxBuses[14], sampleRate));
+    routeFx(13, mTapeEchoFx.process(fxBuses[13], sampleRate));
+    routeFx(14, mOctaverFx.process(fxBuses[14], sampleRate));
 
     // LP/HP LFO Pedals (Final utility filters)
     currentSampleL = mLpLfoFx.process(currentSampleL, sampleRate);

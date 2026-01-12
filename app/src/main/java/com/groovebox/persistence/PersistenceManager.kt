@@ -46,6 +46,37 @@ object PersistenceManager {
         return dir.listFiles { _, name -> name.endsWith(".gbx") }?.map { it.name } ?: emptyList()
     }
 
+    fun deleteProject(context: Context, fileName: String): Boolean {
+        val file = File(getProjectsDir(context), fileName)
+        return if (file.exists()) file.delete() else false
+    }
+
+    fun copyProject(context: Context, fileName: String): Boolean {
+        try {
+            val sourceFile = File(getProjectsDir(context), fileName)
+            if (!sourceFile.exists()) return false
+            
+            val newName = "${fileName.removeSuffix(".gbx")}_copy.gbx"
+            val destFile = File(getProjectsDir(context), newName)
+            
+            sourceFile.copyTo(destFile, overwrite = true)
+            return true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
+    }
+    
+    fun renameProject(context: Context, oldName: String, newName: String): Boolean {
+        val sourceFile = File(getProjectsDir(context), oldName)
+        val safeNewName = if (newName.endsWith(".gbx")) newName else "$newName.gbx"
+        val destFile = File(getProjectsDir(context), safeNewName)
+        
+        return if (sourceFile.exists() && !destFile.exists()) {
+            sourceFile.renameTo(destFile)
+        } else false
+    }
+
     fun saveAssignments(context: Context, stripAssignments: Map<EngineType, List<StripRouting>>, knobAssignments: Map<EngineType, List<StripRouting>>) {
         val root = JSONObject()
         

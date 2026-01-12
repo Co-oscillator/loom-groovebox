@@ -15,14 +15,23 @@ public:
   void setMix(float v) { mMix = v; }
 
   float process(float input) {
+    // Parameter Smoothing
+    mSmoothedBits += 0.01f * (mBits - mSmoothedBits);
+    mSmoothedRate += 0.01f * (mDownsample - mSmoothedRate);
+
     // Sample rate reduction
-    if (mCounter++ % mDownsample != 0) {
+    int effectiveRate = (int)mSmoothedRate;
+    if (effectiveRate < 1)
+      effectiveRate = 1;
+
+    if (mCounter++ % effectiveRate != 0) {
       return mLastOutput;
     }
 
     // Bit depth reduction
-    float step = powf(2.0f, mBits - 1);
-    float crushed = floorf(input * step) / step;
+    // Use symmetric rounding to prevent DC offset/crackle on silent signals
+    float step = powf(2.0f, mSmoothedBits - 1.0f);
+    float crushed = roundf(input * step) / step;
 
     mLastOutput = crushed;
     return crushed * mMix;
@@ -30,7 +39,9 @@ public:
 
 private:
   float mBits = 8.0f;
+  float mSmoothedBits = 8.0f; // Smoothed
   int mDownsample = 4;
+  float mSmoothedRate = 4.0f; // Smoothed
   int mCounter = 0;
   float mLastOutput = 0.0f;
   float mMix = 1.0f;

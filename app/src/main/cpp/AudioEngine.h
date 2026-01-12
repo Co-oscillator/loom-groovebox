@@ -117,6 +117,7 @@ public:
   void panic();
   void loadFmPreset(int trackIndex, int presetId);
   void setClockMultiplier(int trackIndex, float multiplier);
+  void setFilterMode(int trackIndex, int mode);
   void setArpTriplet(int trackIndex, bool isTriplet);
   void setArpRate(int trackIndex, float rate, int divisionMode);
   float getCpuLoad();
@@ -137,6 +138,8 @@ public:
     int data1;   // Note
     int data2;   // Velocity
   };
+
+  void restorePresets();
 
   // Returns flat array: [type, ch, d1, d2, type, ch, d1, d2...]
   int fetchMidiEvents(int *outBuffer, int maxEvents);
@@ -310,6 +313,9 @@ public:
   int mSidechainSourceTrack = -1;
   int mSidechainSourceDrumIdx = -1;
   float mMasterVolume = 0.8f;
+  float mFxMixLevels[15] = {
+      1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0
   std::string mAppDataDir = "";
 };
 

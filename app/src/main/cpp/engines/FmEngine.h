@@ -56,6 +56,24 @@ public:
     mOpRelease.assign(6, 0.5f);
 
     // Initial operator setup for all voices
+    resetToDefaults();
+  }
+
+  void resetToDefaults() {
+    setAlgorithm(0);
+    mFeedback = 0.0f;
+    mBrightness = 1.0f;
+    mDetune = 0.0f;
+    mFeedbackDrive = 0.0f;
+    for (int i = 0; i < 6; ++i) {
+      mOpLevels[i] = (i == 0) ? 0.8f : 0.0f;
+      mOpRatios[i] = 1.0f;
+      mOpAttack[i] = 0.01f;
+      mOpDecay[i] = 0.2f;
+      mOpSustain[i] = 0.7f;
+      mOpRelease[i] = 0.3f;
+    }
+    // Update operators in all voices
     for (auto &v : mVoices) {
       for (int i = 0; i < 6; ++i) {
         v.operators[i].setLevel(mOpLevels[i]);
@@ -525,7 +543,6 @@ public:
       mBrightness = value * 2.0f;
     else if (id == 6) {
       mDetune = value;
-      // Re-apply to active voices
       for (auto &v : mVoices) {
         if (v.active) {
           for (int i = 0; i < 6; ++i) {
@@ -536,28 +553,115 @@ public:
       }
     } else if (id == 7)
       mFeedbackDrive = value;
+
+    // UI Standard IDs (150-199)
+    else if (id == 150)
+      setAlgorithm((int)(value * 8));
+    else if (id == 151)
+      setFilter(value);
+    else if (id == 152)
+      setResonance(value);
+    else if (id == 153)
+      setCarrierMask((int)value);
+    else if (id == 154)
+      setFeedback(value);
+    else if (id == 155)
+      setActiveMask((int)value);
+    else if (id == 156)
+      mVelSens = value; // Check UI binding if needed
+    else if (id == 157)
+      mBrightness = value * 2.0f;
+    else if (id == 158) { // Detune Duplicate
+      mDetune = value;
+      for (auto &v : mVoices) {
+        if (v.active) {
+          for (int i = 0; i < 6; ++i) {
+            float ratio = mOpRatios[i] + (i * mDetune * 0.05f);
+            v.operators[i].setFrequency(v.frequency, ratio, mSampleRate);
+          }
+        }
+      }
+    } else if (id == 159)
+      mFeedbackDrive = value;
+
+    // Operator Params (UI IDs 160+)
+    else if (id >= 160) {
+      int opIdx = (id - 160) / 6;
+      int subId = (id - 160) % 6;
+      if (opIdx >= 0 && opIdx < 6) {
+        switch (subId) {
+        case 0:
+          setOpLevel(opIdx, value);
+          break;
+        case 1:
+          setOpADSR(opIdx, 0.001f + (value * value * value), mOpDecay[opIdx],
+                    mOpSustain[opIdx], mOpRelease[opIdx]);
+          break;
+        case 2:
+          setOpADSR(opIdx, mOpAttack[opIdx],
+                    0.001f + (value * value * value * 5.0f), mOpSustain[opIdx],
+                    mOpRelease[opIdx]);
+          break;
+        case 3:
+          setOpADSR(opIdx, mOpAttack[opIdx], mOpDecay[opIdx], value,
+                    mOpRelease[opIdx]);
+          break;
+        case 4:
+          setOpADSR(opIdx, mOpAttack[opIdx], mOpDecay[opIdx], mOpSustain[opIdx],
+                    0.001f + (value * value * value * 5.0f));
+          break;
+        case 5: {
+          float raw = value * 16.0f;
+          float nearest = round(raw);
+          float dist = fabs(raw - nearest);
+          float finalRatio = (dist < 0.15f) ? std::max(0.5f, nearest) : raw;
+          setOpRatio(opIdx, finalRatio);
+          break;
+        }
+        }
+      }
+    }
+
+    // Legacy / Internal 10-69 logic kept for compatibility if needed
     else if (id >= 10 && id < 70) {
       int op = (id - 10) / 10;
       int sub = (id - 10) % 10;
       if (sub == 0)
-        setOpLevel(op, value * value);
-      else if (sub == 1) {
-        float t = 0.001f + (value * value * value);
-        setOpADSR(op, t, mOpDecay[op], mOpSustain[op], mOpRelease[op]);
-      } else if (sub == 2) {
-        float t = 0.001f + (value * value * value * 5.0f);
-        setOpADSR(op, mOpAttack[op], t, mOpSustain[op], mOpRelease[op]);
-      } else if (sub == 3) {
+        setOpLevel(op, value);
+      else if (sub == 1)
+        setOpADSR(op, 0.001f + (value * value * value), mOpDecay[op],
+                  mOpSustain[op], mOpRelease[op]);
+      else if (sub == 2)
+        setOpADSR(op, mOpAttack[op], 0.001f + (value * value * value * 5.0f),
+                  mOpSustain[op], mOpRelease[op]);
+      else if (sub == 3)
         setOpADSR(op, mOpAttack[op], mOpDecay[op], value, mOpRelease[op]);
-      } else if (sub == 4) {
-        float t = 0.001f + (value * value * value * 5.0f);
-        setOpADSR(op, mOpAttack[op], mOpDecay[op], mOpSustain[op], t);
-      } else if (sub == 5) {
+      else if (sub == 4)
+        setOpADSR(op, mOpAttack[op], mOpDecay[op], mOpSustain[op],
+                  0.001f + (value * value * value * 5.0f));
+      else if (sub == 5) {
         float raw = value * 16.0f;
         float nearest = round(raw);
         float dist = fabs(raw - nearest);
         float finalRatio = (dist < 0.15f) ? std::max(0.5f, nearest) : raw;
         setOpRatio(op, finalRatio);
+      }
+    }
+
+    else if (id >= 100 && id <= 103) {
+      // Global ADSR Control
+      for (int i = 0; i < 6; ++i) {
+        if (id == 100)
+          setOpADSR(i, 0.001f + (value * value * value), mOpDecay[i],
+                    mOpSustain[i], mOpRelease[i]);
+        else if (id == 101)
+          setOpADSR(i, mOpAttack[i], 0.001f + (value * value * value * 5.0f),
+                    mOpSustain[i], mOpRelease[i]);
+        else if (id == 102)
+          setOpADSR(i, mOpAttack[i], mOpDecay[i], value, mOpRelease[i]);
+        else if (id == 103)
+          setOpADSR(i, mOpAttack[i], mOpDecay[i], mOpSustain[i],
+                    0.001f + (value * value * value * 5.0f));
       }
     }
   }
@@ -613,6 +717,14 @@ public:
 
       // Algo logic
       switch (mAlgorithm) {
+      case 0: // SERIAL (Default)
+        o5 = v.operators[5].nextSample(fbIn, pitchMod) * velModScale;
+        o4 = v.operators[4].nextSample(o5 * modScale, pitchMod) * velModScale;
+        o3 = v.operators[3].nextSample(o4 * modScale, pitchMod) * velModScale;
+        o2 = v.operators[2].nextSample(o3 * modScale, pitchMod) * velModScale;
+        o1 = v.operators[1].nextSample(o2 * modScale, pitchMod) * velModScale;
+        o0 = v.operators[0].nextSample(o1 * modScale, pitchMod);
+        break;
       case 1: // PIANO
         o5 = v.operators[5].nextSample(fbIn, pitchMod) * velModScale;
         o4 = v.operators[4].nextSample(o5 * modScale, pitchMod) * velModScale;
@@ -620,7 +732,6 @@ public:
         o2 = v.operators[2].nextSample(0.0f, pitchMod) * velModScale;
         o1 = v.operators[1].nextSample(o2 * modScale, pitchMod) * velModScale;
         o0 = v.operators[0].nextSample(o1 * modScale, pitchMod);
-        out = (o3 + o0) * 0.5f;
         break;
       case 2: // ORGAN
         o5 = v.operators[5].nextSample(fbIn, pitchMod) * velModScale;
@@ -629,7 +740,6 @@ public:
         o2 = v.operators[2].nextSample(o3 * modScale, pitchMod);
         o1 = v.operators[1].nextSample(0.0f, pitchMod) * velModScale;
         o0 = v.operators[0].nextSample(o1 * modScale, pitchMod);
-        out = (o4 + o2 + o0) * 0.33f;
         break;
       case 3: // BRASS
         o5 = v.operators[5].nextSample(fbIn, pitchMod) * velModScale;
@@ -638,18 +748,31 @@ public:
         o2 = v.operators[2].nextSample(o5 * modScale, pitchMod);
         o1 = v.operators[1].nextSample(o5 * modScale, pitchMod);
         o0 = v.operators[0].nextSample(o5 * modScale, pitchMod);
-        out = (o4 + o3 + o2 + o1 + o0) * 0.2f;
         break;
-      default: // SERIAL
+      default: // ALL PARALLEL
         o5 = v.operators[5].nextSample(fbIn, pitchMod) * velModScale;
-        o4 = v.operators[4].nextSample(o5 * modScale, pitchMod) * velModScale;
-        o3 = v.operators[3].nextSample(o4 * modScale, pitchMod) * velModScale;
-        o2 = v.operators[2].nextSample(o3 * modScale, pitchMod) * velModScale;
-        o1 = v.operators[1].nextSample(o2 * modScale, pitchMod) * velModScale;
-        o0 = v.operators[0].nextSample(o1 * modScale, pitchMod);
-        out = o0;
+        o4 = v.operators[4].nextSample(0.0f, pitchMod) * velModScale;
+        o3 = v.operators[3].nextSample(0.0f, pitchMod) * velModScale;
+        o2 = v.operators[2].nextSample(0.0f, pitchMod) * velModScale;
+        o1 = v.operators[1].nextSample(0.0f, pitchMod) * velModScale;
+        o0 = v.operators[0].nextSample(0.0f, pitchMod) * velModScale;
         break;
       }
+
+      // Respect Carrier Mask for Output summing
+      float finalOut = 0.0f;
+      int carrierCount = 0;
+      float ops[6] = {o0, o1, o2, o3, o4, o5};
+      for (int i = 0; i < 6; ++i) {
+        if (mCarrierMask & (1 << i)) {
+          finalOut += ops[i];
+          carrierCount++;
+        }
+      }
+      if (carrierCount > 0)
+        out = finalOut / sqrtf((float)carrierCount);
+      else
+        out = o0; // Fallback to Op 0 if mask is empty for some reason
 
       v.op5FeedbackHistory = v.lastOp5Out;
       v.lastOp5Out = o5;

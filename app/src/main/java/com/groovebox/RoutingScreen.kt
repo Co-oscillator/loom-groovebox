@@ -68,10 +68,15 @@ fun RoutingScreen(
                     },
                     onToggleLearn = {
                          if (state.lfoLearnActive && state.lfoLearnLfoIndex == index) {
-                             onStateChange(state.copy(lfoLearnActive = false, lfoLearnLfoIndex = -1))
+                             // Tapping a second time: Cancel learn AND reset to None
+                             val newLfos = state.lfos.toMutableList()
+                             newLfos[index] = newLfos[index].copy(targetType = 0, targetId = -1, targetLabel = "None")
+                             onStateChange(state.copy(lfos = newLfos, lfoLearnActive = false, lfoLearnLfoIndex = -1))
+                             // Also update native routing for this source to None
+                             // LFO1=2, LFO2=3... LFO5=6
+                             nativeLib.setRouting(state.selectedTrackIndex, -1, 2 + index, 5, 0.0f, -1)
                          } else {
                              onStateChange(state.copy(lfoLearnActive = true, lfoLearnLfoIndex = index))
-                             // User stays on screen to decide where to go, or picks local target if any.
                          }
                     },
                     appState = state,

@@ -47,6 +47,29 @@ public:
     mVoices.resize(6);
     for (auto &v : mVoices)
       v.reset();
+    resetToDefaults();
+  }
+
+  void resetToDefaults() {
+    mMorphPos = 0.0f;
+    mUnisonDetune = 0.01f;
+    mUnisonSpread = 0.5f;
+    mUnisonVoices = 1;
+    mAttack = 0.01f;
+    mDecay = 0.1f;
+    mSustain = 0.8f;
+    mRelease = 0.5f;
+    mFilterAttack = 0.01f;
+    mFilterDecay = 0.1f;
+    mFilterSustain = 0.0f;
+    mFilterRelease = 0.5f;
+    mCutoff = 0.5f;
+    mResonance = 0.0f;
+    mFilterEnvAmount = 0.0f;
+    mWarpAmount = 0.0f;
+    mCrushAmount = 0.0f;
+    mDriveAmount = 1.0f;
+    updateLiveEnvelopes();
   }
 
   void setWavetable(const std::vector<std::vector<float>> &table) {

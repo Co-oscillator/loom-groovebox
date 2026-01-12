@@ -1,6 +1,7 @@
 #ifndef TAPE_ECHO_FX_H
 #define TAPE_ECHO_FX_H
 
+#include "../Utils.h"
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -8,13 +9,16 @@
 class TapeEchoFx {
 public:
   TapeEchoFx() {
-    mBuffer.resize(96000, 0.0f); // 2 sec at 48k
+    mBuffer.resize(192000, 0.0f); // 4 sec at 48k
   }
 
   void clear() {
     std::fill(mBuffer.begin(), mBuffer.end(), 0.0f);
     mWritePos = 0;
     mFilterState = 0.0f;
+    mSmoothedFeedback = mFeedback;
+    mSmoothedSaturation = mSaturation;
+    mSmoothedMix = mMix;
   }
 
   float process(float input, float sampleRate) {
@@ -65,29 +69,32 @@ public:
 
     float echo = ((a * frac + b) * frac + c) * frac + d;
 
-    // Tape Saturation (Soft Clip)
-    if (mSaturation > 0.0f) {
-      echo = std::tanh(echo * (1.0f + mSaturation * 4.0f));
+    // Smooth Parameters
+    mSmoothedFeedback += 0.001f * (mFeedback - mSmoothedFeedback);
+    mSmoothedSaturation += 0.001f * (mSaturation - mSmoothedSaturation);
+    mSmoothedMix += 0.001f * (mMix - mSmoothedMix);
+
+    // Tape Saturation
+    if (mSmoothedSaturation > 0.0f) {
+      echo = fast_tanh(echo * (1.0f + mSmoothedSaturation * 4.0f));
     }
 
-    // Filter Processing
-    float feedbackSig = echo * mFeedback;
+    float feedbackSig = echo * mSmoothedFeedback;
     // Low-pass to simulate tape head wear
     mFilterState += 0.1f * (feedbackSig - mFilterState); // Smoother
-    if (std::abs(mFilterState) < 1.0e-15f)
+    if (std::abs(mFilterState) < 1.0e-12f)
       mFilterState = 0.0f;
     feedbackSig = mFilterState;
 
     float toWrite = input + feedbackSig;
-    toWrite =
-        std::max(-2.5f, std::min(2.5f, toWrite)); // Slightly tighter clamp
+    toWrite = fast_tanh(toWrite);
 
-    if (std::abs(toWrite) < 1.0e-15f)
+    if (std::abs(toWrite) < 1.0e-12f)
       toWrite = 0.0f;
     mBuffer[mWritePos] = toWrite;
     mWritePos = (mWritePos + 1) % mBuffer.size();
 
-    return echo * mMix;
+    return (echo * mSmoothedMix);
   }
 
   void setParameters(float time, float feedback, float saturation, float mix) {
@@ -97,14 +104,15 @@ public:
     setMix(mix);
     mWowAmount = 0.002f;
     mFlutterAmount = 0.0005f;
+    // Sync on load
+    mSmoothedFeedback = mFeedback;
+    mSmoothedSaturation = mSaturation;
+    mSmoothedMix = mMix;
   }
 
-  void setDelayTime(float v) { mTime = 0.05f + (v * v) * 1.95f; }
+  void setDelayTime(float v) { mTime = 0.05f + (v * v) * 3.95f; } // Up to 4s
 
-  void setFeedback(float v) {
-    // Reduced scale for stability: 0.85 instead of 0.98
-    mFeedback = v * 0.85f;
-  }
+  void setFeedback(float v) { mFeedback = v * 0.85f; }
   void setWow(float v) { mWowAmount = v * 0.006f; }
   void setFlutter(float v) { mFlutterAmount = v * 0.003f; }
   void setDrive(float v) { mSaturation = v; }
@@ -120,8 +128,11 @@ private:
 
   float mTime = 0.3f;
   float mFeedback = 0.4f;
+  float mSmoothedFeedback = 0.4f;
   float mSaturation = 0.0f;
+  float mSmoothedSaturation = 0.0f;
   float mMix = 0.3f;
+  float mSmoothedMix = 0.3f;
 
   float mWowAmount = 0.002f;
   float mFlutterAmount = 0.0005f;

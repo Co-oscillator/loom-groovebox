@@ -60,6 +60,40 @@ public:
     }
   }
 
+  void resetToDefaults() {
+    mCutoff = 0.45f;
+    mResonance = 0.0f;
+    mAttack = 0.01f;
+    mDecay = 0.1f;
+    mSustain = 0.8f;
+    mRelease = 0.5f;
+    mF_Atk = 0.01f;
+    mF_Dcy = 0.1f;
+    mF_Sus = 0.0f;
+    mF_Rel = 0.5f;
+    mF_Amt = 0.0f;
+    mDetune = 0.0f;
+    mNoiseLevel = 0.0f;
+    mOscSync = false;
+    mRingMod = false;
+    mFilterMode = 0;
+    mFmAmt = 0.0f;
+    mOscPitch[0] = 1.0f;
+    mOscPitch[1] = 1.0f;
+    mOscPitch[2] = 0.5f;
+    mOscPitch[3] = 1.0f;
+    mOscVolumes[0] = 0.6f;
+    mOscVolumes[1] = 0.4f;
+    mOscVolumes[2] = 0.0f;
+    mOscVolumes[3] = 0.0f;
+    mOscDrive[0] = mOscDrive[1] = mOscDrive[2] = mOscDrive[3] = 1.0f;
+    mOscFold[0] = mOscFold[1] = mOscFold[2] = mOscFold[3] = 0.0f;
+    mOscPW[0] = mOscPW[1] = mOscPW[2] = mOscPW[3] = 0.5f;
+    mOscWaveforms[0] = Waveform::Sawtooth;
+    mOscWaveforms[1] = Waveform::Square;
+    updateLiveEnvelopes();
+  }
+
   void setSampleRate(float sr) {
     mSampleRate = sr;
     for (auto &v : mVoices) {
@@ -216,6 +250,8 @@ public:
     }
   }
 
+  void setFilterMode(int mode) { mFilterMode = mode; }
+
   float render() {
     float mixedOutput = 0.0f;
     int activeCount = 0;
@@ -293,7 +329,21 @@ public:
       v.svf_B = v.f * v.svf_H + v.svf_B;
       v.svf_L = v.f * v.svf_B + v.svf_L;
 
-      float res = (mCutoff < 0.5f) ? v.svf_L : v.svf_H;
+      float res = 0.0f;
+      switch (mFilterMode) {
+      case 0:
+        res = v.svf_L;
+        break;
+      case 1:
+        res = v.svf_H;
+        break;
+      case 2:
+        res = v.svf_B;
+        break;
+      default:
+        res = v.svf_L;
+        break;
+      }
 
       // Soft Clip
       if (res < -3.0f)
@@ -344,6 +394,7 @@ private:
   // Modulation State
   bool mOscSync = false;
   bool mRingMod = false;
+  int mFilterMode = 0; // 0=LP, 1=HP, 2=BP
   float mFmAmt = 0.0f;
   float mOscPitch[4] = {1.0f, 1.0f, 0.5f, 1.0f}; // Ratio
   float mOscDrive[4] = {1.0f, 1.0f, 1.0f, 1.0f};

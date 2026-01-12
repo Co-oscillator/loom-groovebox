@@ -137,6 +137,38 @@ public:
 
     mDensity = 0.5;
     mGrainSize = 0.2;
+    resetToDefaults();
+  }
+
+  void resetToDefaults() {
+    mPosition = 0.5f;
+    mSpeed = 1.0f;
+    mGrainSize = 0.2f;
+    mDensity = 0.5f;
+    mPitch = 1.0f;
+    mSpray = 0.0f;
+    mDetune = 0.0f;
+    mRandomTiming = 0.0f;
+    mMaxGrains = 40;
+    mWidth = 0.5f;
+    mReverseProb = 0.0f;
+    mMainAttack = 0.01f;
+    mMainDecay = 0.1f;
+    mMainSustain = 1.0f;
+    mMainRelease = 0.2f;
+    mGain = 1.0f;
+    for (int i = 0; i < 3; ++i) {
+      mLFOS[i].phase = 0.0f;
+      mLFOS[i].rate = 0.1f;
+      mLFOS[i].depth = 0.0f;
+      mLFOS[i].shape = 0.0f;
+      mLFOS[i].target = 0;
+    }
+    for (auto &v : mVoices) {
+      if (v.active)
+        v.envelope.setParameters(mMainAttack, mMainDecay, mMainSustain,
+                                 mMainRelease);
+    }
   }
 
   void setSource(const std::vector<float> &source) {

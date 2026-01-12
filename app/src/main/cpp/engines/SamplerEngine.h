@@ -49,6 +49,26 @@ public:
       v.reset();
   }
 
+  void resetToDefaults() {
+    mPitch = 0.0f;
+    mStretch = 1.0f;
+    mSpeed = 1.0f;
+    mAttack = 0.01f;
+    mDecay = 0.1f;
+    mSustain = 1.0f;
+    mRelease = 0.2f;
+    mFilterCutoff = 1.0f;
+    mFilterResonance = 0.0f;
+    mFilterEnvAmount = 0.0f;
+    mPlayMode = OneShot;
+    mUseEnvelope = true;
+    mReverse = false;
+    for (auto &v : mVoices) {
+      if (v.active)
+        v.envelope.setParameters(mAttack, mDecay, mSustain, mRelease);
+    }
+  }
+
   void setSample(const std::vector<float> &data) {
     std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     mBuffer = data;

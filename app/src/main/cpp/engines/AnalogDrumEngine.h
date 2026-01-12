@@ -30,17 +30,18 @@ public:
 
   AnalogDrumEngine() {
     setSampleRate(44100.0f);
+    resetToDefaults();
+  }
 
-    // Defaults
-    // Params: Decay, Tone, Tune, P3(Punch/Snap), P4(Char/Metal)
+  void resetToDefaults() {
     setParams(0, 0.5f, 0.3f, 0.2f, 0.8f, 0.0f); // Kick
     setParams(1, 0.2f, 0.5f, 0.5f, 0.7f, 0.0f); // Snare
     setParams(2, 0.3f, 0.5f, 0.5f, 0.5f, 0.2f); // Clap
     setParams(3, 0.1f, 0.8f, 0.5f, 0.0f, 0.1f); // CH
     setParams(4, 0.4f, 0.8f, 0.5f, 0.0f, 0.1f); // OH
-    setParams(5, 0.8f, 0.7f, 0.5f, 0.0f, 0.6f); // Cymbal (Mapped to OH logic)
-    setParams(6, 0.1f, 0.5f, 0.8f, 0.5f, 0.0f); // Perc (Mapped to Kick logic)
-    setParams(7, 0.3f, 0.9f, 0.5f, 0.2f, 0.8f); // Noise (Mapped to Snare logic)
+    setParams(5, 0.8f, 0.7f, 0.5f, 0.0f, 0.6f); // Cymbal
+    setParams(6, 0.1f, 0.5f, 0.8f, 0.5f, 0.0f); // Perc
+    setParams(7, 0.3f, 0.9f, 0.5f, 0.2f, 0.8f); // Noise
   }
 
   void setSampleRate(float sr) {

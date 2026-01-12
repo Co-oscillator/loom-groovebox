@@ -9,6 +9,15 @@
 #define LOG_TAG "Groovebox"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
+static inline float fast_tanh(float x) {
+  if (x < -3.0f)
+    return -1.0f;
+  if (x > 3.0f)
+    return 1.0f;
+  float x2 = x * x;
+  return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+}
+
 // Fast Sine Approximation using Look-Up Table
 struct FastSine {
   static const int TABLE_SIZE = 2048;

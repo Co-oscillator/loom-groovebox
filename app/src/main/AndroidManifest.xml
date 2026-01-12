@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.midi" android:required="true" />
     <uses-feature android:name="android.hardware.audio.low_latency" android:required="true" />
+    <uses-feature android:name="android.hardware.usb.host" />
 
     <application
         android:allowBackup="true"

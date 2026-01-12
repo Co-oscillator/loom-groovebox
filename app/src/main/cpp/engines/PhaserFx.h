@@ -37,19 +37,18 @@ public:
 
     float x = input + mFeedback * mLastOutput;
 
-    // 4 stages of all-pass filters
     for (int i = 0; i < 4; ++i) {
       float y = a1 * x + mStageZ[i];
       mStageZ[i] = x - a1 * y;
-      if (std::abs(mStageZ[i]) < 1.0e-15f)
-        mStageZ[i] = 0.0f;
       x = y;
     }
 
+    // Denormal protection on phaser output
     if (std::abs(x) < 1.0e-15f)
       x = 0.0f;
+
     mLastOutput = x;
-    return x * 0.5f * mMix;
+    return (input + x * mMix) * 0.5f;
   }
 
 private:

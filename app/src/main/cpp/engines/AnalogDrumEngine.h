@@ -149,12 +149,8 @@ public:
       }
     }
     // Boost and soft limit to prevent harsh "growly" distortion
-    out *= 1.2f;
-    if (out > 1.0f)
-      out = 1.0f - expf(-out + 1.0f);
-    else if (out < -1.0f)
-      out = -1.0f + expf(out + 1.0f);
-    return out;
+    // Cleaner soft limiting for analog drums
+    return std::tanh(out * 0.9f);
   }
 
   bool isActive() const {
@@ -202,7 +198,7 @@ private:
     float tone = 0.5f;   // Brightness/Filter
     float paramA = 0.5f; // "Punch" or "Snappy"
     float paramB = 0.0f; // "Metal"
-    float gain = 0.8f;
+    float gain = 0.65f;
 
     float velocity = 0.0f;
 
@@ -250,15 +246,18 @@ private:
 
         float sine = FastSine::getInstance().sin(phase * 6.28318f);
         if (tone > 0.5f) {
-          float x = sine * (1.0f + tone);
-          if (x < -3.0f)
-            sine = -1.0f;
-          else if (x > 3.0f)
-            sine = 1.0f;
-          else {
-            float x2 = x * x;
-            sine = x * (27.0f + x2) / (27.0f + 9.0f * x2);
-          }
+          float x = sine; // Original 'x' from the snippet
+          // Apply characterful boost and soft-clipping similar to FM drum
+          float boost = 1.4f; // 40% boost
+          x = x * boost;      // Apply boost to 'x'
+          // Soft clipping / saturation
+          if (x > 1.0f)
+            x = 1.0f - expf(1.0f - x);
+          else if (x < -1.0f)
+            x = -1.0f + expf(1.0f + x);
+
+          float x2 = x * x;
+          sine = x * (27.0f + x2) / (27.0f + 9.0f * x2);
         }
         out = sine * env;
         break;

@@ -24,6 +24,37 @@ public:
 
   void setBpm(float bpm) { mBpm = bpm; }
 
+  void advance(float sampleRate) {
+    float effectiveFreq = mFrequency;
+    float phaseInc = effectiveFreq / sampleRate;
+    mPhase += phaseInc;
+    if (mPhase >= 1.0f) {
+      mPhase = fmodf(mPhase, 1.0f);
+      updateRandom();
+    }
+
+    float out = 0.0f;
+    switch (mShape) {
+    case LfoShape::Sine:
+      out = std::sin(mPhase * 2.0f * 3.14159265f);
+      break;
+    case LfoShape::Triangle:
+      out = (mPhase < 0.5f) ? (4.0f * mPhase - 1.0f) : (3.0f - 4.0f * mPhase);
+      break;
+    case LfoShape::Square:
+      out = (mPhase < 0.5f) ? 1.0f : -1.0f;
+      break;
+    case LfoShape::Saw:
+      out = 2.0f * mPhase - 1.0f;
+      break;
+    case LfoShape::Random:
+      out = mRandomValue;
+      break;
+    }
+
+    mLastOutput = out * mDepth;
+  }
+
   float process(float sampleRate, int numFrames = 1) {
     float effectiveFreq = mFrequency;
 

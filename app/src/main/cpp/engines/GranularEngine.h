@@ -129,7 +129,7 @@ public:
   GranularEngine() {
     mLFOS.resize(3);
     mGrains.resize(100);
-    mVoices.resize(6);
+    mVoices.resize(16);
     for (auto &g : mGrains)
       g.isActive = false;
     for (auto &v : mVoices)
@@ -215,7 +215,7 @@ public:
   void triggerNote(int note, int velocity) {
     // Alloc Voice
     int idx = -1;
-    for (int i = 0; i < mVoices.size(); ++i) {
+    for (int i = 0; i < 16; ++i) {
       if (!mVoices[i].active) {
         idx = i;
         break;
@@ -365,8 +365,7 @@ public:
     float lfoOffsets[3] = {mLFOS[0].nextValue(), mLFOS[1].nextValue(),
                            mLFOS[2].nextValue()};
 
-    // 1. Process Voice Envelopes & Spawn
-    for (int i = 0; i < mVoices.size(); ++i) {
+    for (int i = 0; i < 16; ++i) {
       Voice &v = mVoices[i];
       if (!v.active)
         continue;
@@ -399,7 +398,7 @@ public:
 
         // Multiplier from parent voice (ADSR + Velocity)
         float masterGain = 0.0f;
-        if (g.voiceIdx >= 0 && g.voiceIdx < mVoices.size()) {
+        if (g.voiceIdx >= 0 && g.voiceIdx < 16) {
           masterGain = mVoices[g.voiceIdx].envelope.getValue() *
                        mVoices[g.voiceIdx].amplitude;
         }
@@ -432,7 +431,7 @@ public:
         // VISIBILITY FIX: Multiply grain envelope by voice envelope so it fades
         // correctly
         float voiceEnv = 0.0f;
-        if (g.voiceIdx >= 0 && g.voiceIdx < mVoices.size()) {
+        if (g.voiceIdx >= 0 && g.voiceIdx < 16) {
           voiceEnv = mVoices[g.voiceIdx].envelope.getValue();
         }
 

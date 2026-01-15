@@ -61,14 +61,16 @@ public:
   }
 
   void setSwing(float swing) { mSwing = swing; }
-  void setPlaybackDirection(int direction) { mDirection = direction; }
+  void setPlaybackDirection(int direction) {
+    mDirection = direction;
+  } // 0: Fwd, 1: Rev, 2: Ping-Pong
   void setIsRandomOrder(bool isRandom) { mIsRandom = isRandom; }
   void setIsJumpMode(bool isJump) { mIsJumpMode = isJump; }
 
   void jumpToStep(int step) {
-    if (step >= 0 && step < mSteps.size()) {
+    if (step >= 0 && step < (int)mSteps.size()) {
       mNextStep = step;
-      mCurrentStep = step; // Immediate update
+      mCurrentStep = step;
     }
   }
 
@@ -99,13 +101,33 @@ public:
 
     mCurrentStep = mNextStep;
 
+    if (mIsJumpMode) {
+      // In Jump Mode, we stay on the current step (Repeat)
+      mNextStep = mCurrentStep;
+      return;
+    }
+
     if (mIsRandom) {
       mNextStep = rand() % totalSteps;
     } else {
       if (mDirection == 0) { // Forward
         mNextStep = (mCurrentStep + 1) % totalSteps;
-      } else { // Backward
+      } else if (mDirection == 1) { // Backward
         mNextStep = (mCurrentStep - 1 + totalSteps) % totalSteps;
+      } else if (mDirection == 2) { // Ping-Pong
+        if (mPingPongForward) {
+          mNextStep = mCurrentStep + 1;
+          if (mNextStep >= totalSteps) {
+            mNextStep = std::max(0, totalSteps - 2);
+            mPingPongForward = false;
+          }
+        } else {
+          mNextStep = mCurrentStep - 1;
+          if (mNextStep < 0) {
+            mNextStep = std::min(totalSteps - 1, 1);
+            mPingPongForward = true;
+          }
+        }
       }
     }
   }
@@ -127,9 +149,10 @@ private:
   int mStepsPerPage = 16;
 
   float mSwing = 0.0f;
-  int mDirection = 0; // 0: Forward, 1: Backward
+  int mDirection = 0; // 0: Forward, 1: Backward, 2: Ping-Pong
   bool mIsRandom = false;
   bool mIsJumpMode = false;
+  bool mPingPongForward = true;
 };
 
 #endif // SEQUENCER_H

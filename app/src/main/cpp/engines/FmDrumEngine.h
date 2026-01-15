@@ -38,6 +38,7 @@ public:
       e.setOpADSR(1, 0.001f, 0.05f, 0.0f, 0.05f); // Super short "thwack"
       e.setFeedback(0.0f);
       e.setFrequency(45.0f, 44100.0f); // Deep base
+      e.setPitchSweep(2.5f);           // Initial snap
       break;
 
     case DrumType::Snare:
@@ -164,7 +165,7 @@ public:
   void resetToDefaults() {
     for (int i = 0; i < 8; ++i) {
       initEngine(i, static_cast<DrumType>(i));
-      mGains[i] = 0.8f;
+      mGains[i] = 0.65f;
     }
   }
 
@@ -237,14 +238,10 @@ public:
       e.setOpADSR(0, 0.001f, carrierDecay, 0.0f, carrierDecay * 0.5f);
       e.setOpADSR(1, 0.001f, modDecay, 0.0f, modDecay * 0.5f);
 
-    } else if (id == 3) { // REPLACES "MOD" -> "TONE"
-      float minLevel = 0.0f;
-      float maxLevel = 1.0f;
-
-      if (type == DrumType::Kick)
-        maxLevel = 0.8f;
-
-      e.setOpLevel(1, minLevel + (v * (maxLevel - minLevel)));
+    } else if (id ==
+               4) { // PUNCH / OVERDRIVE (Adds harmonics for small speakers)
+      e.setFeedback(v * 0.4f);
+      e.setOpLevel(1, std::max(e.getOpLevel(1), v * 0.7f));
     } else if (id == 5) { // GAIN
       setVoiceGain(drumIdx, v);
     } else {
@@ -264,7 +261,7 @@ public:
       mLastRenders[i] = mEngines[i].render() * mGains[i];
       mixed += mLastRenders[i];
     }
-    return fast_tanh(mixed * 1.35f); // Boosted + Saturated
+    return std::tanh(mixed * 1.1f); // Reduced boost + cleaner saturation
   }
 
   void setVoiceGain(int index, float gain) {
@@ -290,7 +287,7 @@ public:
 private:
   FmEngine mEngines[8];
   float mLastRenders[8] = {0.0f};
-  float mGains[8] = {0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f};
+  float mGains[8] = {0.65f, 0.65f, 0.65f, 0.65f, 0.65f, 0.65f, 0.65f, 0.65f};
 };
 
 #endif // FM_DRUM_ENGINE_H

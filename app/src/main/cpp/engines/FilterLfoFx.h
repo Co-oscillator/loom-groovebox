@@ -1,6 +1,7 @@
 #ifndef FILTER_LFO_FX_H
 #define FILTER_LFO_FX_H
 
+#include "../Utils.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -17,6 +18,13 @@ public:
   void setCutoff(float v) { mCutoff = v; }
   void setResonance(float v) { mResonance = v; }
 
+  void syncFrom(const FilterLfoFx &other) {
+    mPhase = other.mPhase;
+    mNoiseSeed = other.mNoiseSeed;
+    mNoiseSample = other.mNoiseSample;
+    mControlCounter = other.mControlCounter;
+  }
+
   void setParameters(float rate, float depth, float shape, float cutoff,
                      float resonance) {
     mRate = rate;
@@ -30,41 +38,35 @@ public:
     // Control rate update (every 16 samples)
     if (mControlCounter++ % 16 == 0) {
       // 1. LFO Calculation (Control Rate)
-      // Allow extremely slow rates (0.01Hz) as requested
       float rateHz = 0.01f + (mRate * mRate) * 19.99f;
-      // Increment phase by 16 samples worth of time
       mPhase += (rateHz * 16.0f) / sampleRate;
       if (mPhase >= 1.0f) {
         mPhase -= floorf(mPhase);
         mNoiseSeed = (mNoiseSeed * 1103515245 + 12345);
         mNoiseSample =
-            (static_cast<float>(mNoiseSeed) / 4294967296.0f) * 2.0f - 1.0f;
+            (static_cast<float>(mNoiseSeed & 0x7FFFFFFF) / 2147483648.0f) *
+                2.0f -
+            1.0f;
       }
 
       float lfoValue = 0.0f;
       int shapeIdx = static_cast<int>(mShape * 4.99f);
       switch (shapeIdx) {
-      case 0: {
-        // Approximate sine for LFO to save CPU
-        float x = mPhase * 6.283185f;
-        if (x < 3.141593f)
-          lfoValue = 1.273239f * x - 0.4052847f * x * x;
-        else
-          lfoValue = -1.273239f * (x - 3.141593f) +
-                     0.4052847f * (x - 3.141593f) * (x - 3.141593f);
+      case 0: { // Sine
+        lfoValue = sinf(mPhase * 2.0f * (float)M_PI);
         break;
       }
-      case 1:
+      case 1: // Triangle
         lfoValue =
             (mPhase < 0.5f) ? (4.0f * mPhase - 1.0f) : (3.0f - 4.0f * mPhase);
         break;
-      case 2:
+      case 2: // Square
         lfoValue = (mPhase < 0.5f) ? 1.0f : -1.0f;
         break;
-      case 3:
+      case 3: // Saw
         lfoValue = 2.0f * mPhase - 1.0f;
         break;
-      case 4:
+      case 4: // Random
         lfoValue = mNoiseSample;
         break;
       }
@@ -76,45 +78,24 @@ public:
       mSmoothedCutoff += 0.04f * (currentCutoff - mSmoothedCutoff);
       mSmoothedRes += 0.04f * (mResonance - mSmoothedRes);
 
-      // Exponential mapping is expensive, done at control rate
       float targetFreq = 10.0f * powf(2000.0f, mSmoothedCutoff);
-      if (targetFreq > sampleRate * 0.45f)
-        targetFreq = sampleRate * 0.45f;
+      targetFreq = std::min(targetFreq, sampleRate * 0.45f);
 
-      mG = tanf((float)M_PI * targetFreq / sampleRate);
-      mK = 2.0f - (1.9f * mSmoothedRes);
-      mA1 = 1.0f / (1.0f + mG * (mG + mK));
-      mA2 = mG * mA1;
-      mA3 = mG * mA2;
+      mSvf.setParams(targetFreq, std::max(0.1f, mSmoothedRes * 4.0f),
+                     sampleRate);
     }
 
-    // 2. Filter Processing (Per Sample - Optimized)
-    float v3 = input - mSvfZ2;
-    float v1 = mA1 * mSvfZ1 + mA2 * v3;
-    float v2 = mSvfZ2 + mA2 * mSvfZ1 + mA3 * v3;
-
-    mSvfZ1 = 2.0f * v1 - mSvfZ1;
-    mSvfZ2 = 2.0f * v2 - mSvfZ2;
-
-    // Flush to zero for denormals
-    if (std::abs(mSvfZ1) < 1.0e-15f)
-      mSvfZ1 = 0.0f;
-    if (std::abs(mSvfZ2) < 1.0e-15f)
-      mSvfZ2 = 0.0f;
-
-    if (mMode == FilterLfoMode::LowPass)
-      return v2;
-    else
-      return input - mK * v1 - v2;
+    TSvf::Type type =
+        (mMode == FilterLfoMode::LowPass) ? TSvf::LowPass : TSvf::HighPass;
+    return mSvf.process(input, type);
   }
 
   void reset(float sampleRate) {
     mPhase = 0.0f;
-    mSvfZ1 = 0.0f;
-    mSvfZ2 = 0.0f;
     mSmoothedCutoff = mCutoff;
     mSmoothedRes = mResonance;
     mControlCounter = 0;
+    mSvf.setParams(1000.0f, 0.7f, sampleRate);
   }
 
 private:
@@ -129,14 +110,10 @@ private:
   unsigned int mNoiseSeed = 12345;
   float mNoiseSample = 0.0f;
 
-  float mSvfZ1 = 0.0f;
-  float mSvfZ2 = 0.0f;
+  TSvf mSvf;
   float mSmoothedCutoff = 0.5f;
   float mSmoothedRes = 0.0f;
   uint32_t mControlCounter = 0;
-
-  float mG = 0.0f, mK = 0.0f;
-  float mA1 = 0.0f, mA2 = 0.0f, mA3 = 0.0f;
 };
 
 #endif // FILTER_LFO_FX_H

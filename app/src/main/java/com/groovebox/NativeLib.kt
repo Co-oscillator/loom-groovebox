@@ -73,4 +73,5 @@ class NativeLib {
     external fun getAllTrackParameters(trackIndex: Int): FloatArray
     external fun getAllStepActiveStates(trackIndex: Int): BooleanArray
     external fun restorePresets()
+    external fun setInputDevice(deviceId: Int)
 }

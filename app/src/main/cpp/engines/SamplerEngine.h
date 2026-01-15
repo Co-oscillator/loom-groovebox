@@ -27,7 +27,7 @@ public:
     float baseVelocity = 1.0f;
     float pitchRatio = 1.0f;
     Adsr envelope;
-    Svf filter;
+    TSvf filter;
 
     // Simple Granular state
     uint32_t grainTimer = 0;
@@ -44,7 +44,7 @@ public:
   };
 
   SamplerEngine() {
-    mVoices.resize(6);
+    mVoices.resize(16);
     for (auto &v : mVoices)
       v.reset();
   }
@@ -173,7 +173,7 @@ public:
       }
     }
     if (voiceIdx == -1) {
-      for (int i = 0; i < (int)mVoices.size(); ++i) {
+      for (int i = 0; i < 16; ++i) {
         if (!mVoices[i].active) {
           voiceIdx = i;
           break;
@@ -251,13 +251,13 @@ public:
     case 2: // Resonance
       setFilterResonance(value);
       break;
-    case 300: // Pitch (semitones)
+    case 300: // PITCH: changes the pitch but keeps playback time constant
       mPitch = (value - 0.5f) * 48.0f;
       break;
-    case 301: // Stretch (time)
+    case 301: // STRETCH: changes playback time but keeps pitch constant
       mStretch = value * 4.0f;
       break;
-    case 302: // Speed (classic)
+    case 302: // SPEED: changes both pitch and playback time together
       mSpeed = value * 2.0f;
       break;
     case 303: // Filter Cutoff
@@ -341,19 +341,27 @@ public:
       }
       activeCount++;
 
-      // User Logic:
-      // Speed: Classic resampling (affects pitch and time)
-      // Pitch: Pitch change, time stay same
-      // Stretch: Time change, pitch stay same
+      /*
+       * SAMPLER PARAMETER LOGIC (DO NOT CHANGE):
+       * 1. SPEED: Resampling rate. Affects BOTH traversal (time) and read
+       * (pitch).
+       * 2. STRETCH: Affects traverseRate ONLY (divides speed). Pitch stays
+       * constant.
+       * 3. PITCH: Affects readRate ONLY (via v.pitchRatio). Time stays
+       * constant.
+       */
 
-      // Resampling combined rate
+      // Resampling combined rate (Speed)
       float classicRate = mSpeed * (mReverse ? -1.0f : 1.0f);
 
-      // Granular Travseral Rate (affects Time)
+      // Granular Traversal Rate (Time): Affected by Speed / Stretch.
+      // Pitch remains constant because readRate isn't affected by mStretch.
       float stretchFactor = std::max(0.01f, mStretch);
       float traverseRate = classicRate / stretchFactor;
 
-      // Grain Read Rate (affects Pitch)
+      // Grain Read Rate (Pitch): Affected by Speed * PitchShift.
+      // Time remains constant because traverseRate isn't affected by
+      // v.pitchRatio.
       float readRate = classicRate * v.pitchRatio;
 
       bool useGranular =
@@ -420,7 +428,7 @@ public:
       cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
 
       v.filter.setParams(cutoff, 0.7f + mFilterResonance * 5.0f, 44100.0f);
-      voiceOutput = v.filter.process(voiceOutput, Svf::LowPass);
+      voiceOutput = v.filter.process(voiceOutput, TSvf::LowPass);
 
       mixedOutput += voiceOutput * env * v.baseVelocity;
     }

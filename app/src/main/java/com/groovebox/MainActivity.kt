@@ -312,6 +312,7 @@ fun getEngineColor(type: EngineType): Color = when (type) {
     EngineType.FM_DRUM -> Color.Red
     EngineType.ANALOG_DRUM -> Color(0xFFCDDC39) // Lime
     EngineType.MIDI -> Color(0xFF00E676) // Bright Green
+    EngineType.AUDIO_IN -> Color(0xFF4B0082) // Eggplant
     else -> Color.White
 }
 
@@ -1115,6 +1116,30 @@ fun SidebarMixer(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit,
                             nativeLib.setTrackVolume(i, newVal)
                         }
                     )
+
+                    // Pan Knob (NEW)
+                    Knob(
+                        label = "PAN",
+                        initialValue = 0.5f,
+                        parameterId = 9, // Native ID for Track Pan
+                        state = state,
+                        onStateChange = onStateChange,
+                        nativeLib = nativeLib,
+                        knobSize = 30.dp,
+                        overrideValue = track.pan,
+                        overrideColor = engineColor,
+                        isBold = true,
+                        showValue = false,
+                        onValueChangeOverride = { newVal ->
+                            val newTracks = latestState.tracks.toMutableList()
+                            newTracks[i] = newTracks[i].copy(pan = newVal)
+                            latestOnStateChange(latestState.copy(
+                                tracks = newTracks,
+                                focusedValue = "CH ${i+1} PAN: ${if(newVal < 0.45f) "L" else if(newVal > 0.55f) "R" else "C"} ${(newVal * 100).toInt()}"
+                            ))
+                            nativeLib.setParameter(i, 9, newVal)
+                        }
+                    )
                 }
                 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -1573,7 +1598,7 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                     // Immediately reset current routings to default
                     stripRoutings = List(4) { i -> StripRouting(stripIndex = i) },
                     knobRoutings = List(4) { i -> StripRouting(stripIndex = i + 4, parameterName = "KNOB ${i + 1}") },
-                    lfos = List(5) { LfoState() },
+                    lfos = List(6) { LfoState() },
                     macros = List(6) { i -> MacroState(label="Macro ${i+1}") },
                     routingConnections = emptyList(),
                     fxChainSlots = List(5) { -1 }
@@ -1727,6 +1752,29 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TestTriggerButton(trackIndex, nativeLib, engineColor, state)
                     RandomizeButton(trackIndex, state, onStateChange, nativeLib, engineColor)
+                    
+                    // PATCH RESTORE (Global)
+                    Button(
+                        onClick = {
+                            nativeLib.restorePresets()
+                            // Re-sync parameter states from native to UI
+                            val current = state
+                            val updatedTracks = current.tracks.mapIndexed { idx, track ->
+                                val nativeParamsArray = nativeLib.getAllTrackParameters(idx)
+                                val updatedParams = track.parameters.toMutableMap()
+                                nativeParamsArray.forEachIndexed { pIdx, v -> updatedParams[pIdx] = v }
+                                track.copy(parameters = updatedParams)
+                            }
+                            onStateChange(current.copy(tracks = updatedTracks))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = engineColor.copy(alpha = 0.2f)),
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, engineColor.copy(alpha = 0.5f))
+                    ) {
+                        Text("RESTORE PATCH", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = engineColor)
+                    }
                 }
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1771,6 +1819,7 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
             EngineType.WAVETABLE -> WavetableParameters(state, trackIndex, onStateChange, nativeLib)
             EngineType.ANALOG_DRUM -> AnalogDrumParameters(state, trackIndex, onStateChange, nativeLib)
             EngineType.MIDI -> MidiParameters(state, trackIndex, onStateChange, nativeLib)
+            EngineType.AUDIO_IN -> AudioInParameters(state, trackIndex, onStateChange, nativeLib)
             else -> Text("Engine under development")
         }
     }
@@ -2038,6 +2087,225 @@ fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
     }
 }
 
+@Composable
+fun AudioInParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+    val track = state.tracks[trackIndex]
+    
+    Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+        Text("AUDIO IN ENGINE", style = MaterialTheme.typography.titleMedium, color = getEngineColor(EngineType.AUDIO_IN))
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Input Source Selection
+        InputSourceSelector(nativeLib = nativeLib)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Knob(label = "GAIN", initialValue = 0.8f, parameterId = 121, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "FOLD", initialValue = 0.0f, parameterId = 122, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            
+            // Filter Mode Toggle
+            val currentMode = (track.parameters[123] ?: 0.0f).toInt().coerceIn(0, 2)
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("FILTER", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(
+                    onClick = { 
+                        val nextMode = (currentMode + 1) % 3
+                        val newVal = nextMode.toFloat()
+                        nativeLib.setParameter(trackIndex, 123, newVal)
+                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { i, t -> if (i == trackIndex) t.copy(parameters = t.parameters + (123 to newVal)) else t }))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                    modifier = Modifier.height(36.dp).fillMaxWidth(),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(when(currentMode) { 0 -> "LP"; 1 -> "HP"; else -> "BP" }, fontSize = 10.sp, color = Color.White)
+                }
+            }
+
+            // TOGGLE: GATED vs OPEN
+            val isGated = (track.parameters[120] ?: 1.0f) > 0.5f
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("MODE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(
+                    onClick = { 
+                        val newVal = if (isGated) 0.0f else 1.0f
+                        nativeLib.setParameter(trackIndex, 120, newVal)
+                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { i, t -> if (i == trackIndex) t.copy(parameters = t.parameters + (120 to newVal)) else t }))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isGated) getEngineColor(EngineType.AUDIO_IN) else Color.DarkGray),
+                    modifier = Modifier.height(36.dp).fillMaxWidth()
+                ) {
+                    Text(if (isGated) "GATED" else "OPEN", fontSize = 10.sp, color = if (isGated) Color.Black else Color.White)
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Knob(label = "CUTOFF", initialValue = 0.5f, parameterId = 112, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "RESON", initialValue = 0.0f, parameterId = 113, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "ENV AMT", initialValue = 0.0f, parameterId = 118, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Spacer(modifier = Modifier.weight(1f))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("AMP ENVELOPE", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Knob(label = "A", initialValue = 0.1f, parameterId = 100, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "D", initialValue = 0.5f, parameterId = 101, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "S", initialValue = 0.8f, parameterId = 102, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "R", initialValue = 0.2f, parameterId = 103, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("FILTER ENVELOPE", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Knob(label = "A", initialValue = 0.01f, parameterId = 114, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "D", initialValue = 0.1f, parameterId = 115, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "S", initialValue = 0.0f, parameterId = 116, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "R", initialValue = 0.5f, parameterId = 117, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+        }
+    }
+}
+
+@Composable
+fun InputSourceSelector(nativeLib: NativeLib) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val audioManager = remember { context.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager }
+    
+    var devices by remember { mutableStateOf<Array<android.media.AudioDeviceInfo>>(emptyArray()) }
+    var selectedDeviceId by remember { mutableStateOf(0) } // 0: Auto/Default
+
+    LaunchedEffect(audioManager) {
+        audioManager?.let {
+            try {
+                devices = it.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS)
+            } catch (e: Exception) {
+                android.util.Log.e("AudioDevice", "Failed to get devices: ${e.message}")
+            }
+        }
+    }
+
+    fun getDeviceLabel(device: android.media.AudioDeviceInfo): String {
+        val typeLabel = when (device.type) {
+            android.media.AudioDeviceInfo.TYPE_BUILTIN_MIC -> "INT MIC"
+            android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET -> "HEADSET"
+            android.media.AudioDeviceInfo.TYPE_USB_DEVICE -> "USB"
+            android.media.AudioDeviceInfo.TYPE_USB_HEADSET -> "USB HEADSET"
+            android.media.AudioDeviceInfo.TYPE_LINE_ANALOG -> "LINE IN"
+            android.media.AudioDeviceInfo.TYPE_LINE_DIGITAL -> "DIGITAL IN"
+            android.media.AudioDeviceInfo.TYPE_BUS -> "BUS"
+            else -> "OTHER (${device.type})"
+        }
+        return "$typeLabel [${device.id}]"
+    }
+
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("HARDWARE INPUT", style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.weight(1f))
+            Button(
+                onClick = { 
+                    audioManager?.let {
+                        try {
+                            devices = it.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS)
+                            android.util.Log.d("AudioDevice", "Rescanned. Found ${devices.size} inputs.")
+                            android.widget.Toast.makeText(context, "Scanned: ${devices.size} input(s) found", android.widget.Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            android.util.Log.e("AudioDevice", "Failed to get devices on scan: ${e.message}")
+                            android.widget.Toast.makeText(context, "Scan failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                modifier = Modifier.height(24.dp),
+                shape = RoundedCornerShape(4.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+            ) { Text("SCAN", fontSize = 8.sp, color = Color.White) }
+        }
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        androidx.compose.foundation.lazy.LazyRow(
+            modifier = Modifier.fillMaxWidth().height(44.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            item {
+                Button(
+                    onClick = { 
+                        selectedDeviceId = 0
+                        nativeLib.setInputDevice(0)
+                    },
+                    modifier = Modifier.height(40.dp),
+                    shape = RoundedCornerShape(4.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (selectedDeviceId == 0) Color.Cyan else Color.DarkGray)
+                ) { Text("DEFAULT", fontSize = 9.sp, color = if (selectedDeviceId == 0) Color.Black else Color.White) }
+            }
+            items(devices) { device ->
+                Button(
+                    onClick = { 
+                        selectedDeviceId = device.id
+                        nativeLib.setInputDevice(device.id)
+                    },
+                    modifier = Modifier.height(40.dp),
+                    shape = RoundedCornerShape(4.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (selectedDeviceId == device.id) Color.Cyan else Color.DarkGray)
+                ) {
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                        Text(getDeviceLabel(device), fontSize = 9.sp, color = if (selectedDeviceId == device.id) Color.Black else Color.White)
+                        val name = device.productName
+                        if (name != null && name.isNotEmpty() && name.toString() != "TB351FU") {
+                            Text(name.toString().take(10), fontSize = 7.sp, color = if (selectedDeviceId == device.id) Color.DarkGray else Color.Gray)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AutoPannerParameters(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+    Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+        Text("AUTO-PANNER FX", style = MaterialTheme.typography.titleMedium, color = Color.Yellow)
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Knob(label = "PAN", initialValue = 0.5f, parameterId = 2100, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "RATE", initialValue = 0.5f, parameterId = 2101, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "DEPTH", initialValue = 0.5f, parameterId = 2102, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "MIX", initialValue = 0.5f, parameterId = 2104, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        val shapes = listOf("SINE", "TRI", "SQR")
+        val currentShapeValue = state.globalParameters[2103] ?: 0.0f
+        val currentShapeIdx = (currentShapeValue * 2.0f + 0.5f).toInt().coerceIn(0, 2)
+        
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("LFO SHAPE", style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.width(80.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                shapes.forEachIndexed { i, label ->
+                    Button(
+                        onClick = {
+                            val newVal = i / 2.0f
+                            nativeLib.setParameter(-1, 2103, newVal) // -1 for global
+                            onStateChange(state.copy(globalParameters = state.globalParameters + (2103 to newVal)))
+                        },
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (currentShapeIdx == i) Color.Yellow else Color.DarkGray)
+                    ) {
+                        Text(label, fontSize = 10.sp, color = if (currentShapeIdx == i) Color.Black else Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
@@ -2518,6 +2786,7 @@ val fmPresets = listOf(
 
 @Composable
 fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+    val track = state.tracks[trackIndex]
     var showPresetDrawer by remember { mutableStateOf(false) }
 
     if (showPresetDrawer) {
@@ -2629,17 +2898,43 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                 }
             }
             
-            ParameterGroup("Filter & Unison", modifier = Modifier.weight(1.5f), titleSize = 10) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("L / H", 0.5f, 151, state, onStateChange, nativeLib, knobSize = 42.dp)
+            ParameterGroup("Filter & Unison", modifier = Modifier.weight(2f), titleSize = 10) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("MODE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val currentMode = (track.parameters[156] ?: 0.0f).toInt().coerceIn(0, 2)
+                        Button(
+                            onClick = { 
+                                val nextMode = (currentMode + 1) % 3
+                                val newVal = nextMode.toFloat()
+                                nativeLib.setParameter(trackIndex, 156, newVal)
+                                onStateChange(state.copy(tracks = state.tracks.mapIndexed { i, t -> if (i == trackIndex) t.copy(parameters = t.parameters + (156 to newVal)) else t }))
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                            modifier = Modifier.height(32.dp).width(44.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(when(currentMode) { 0 -> "LP"; 1 -> "HP"; else -> "BP" }, fontSize = 10.sp, color = Color.White)
+                        }
+                    }
+                    Knob("FILT", 0.5f, 151, state, onStateChange, nativeLib, knobSize = 42.dp)
                     Knob("RES", 0.0f, 152, state, onStateChange, nativeLib, knobSize = 42.dp)
                     Knob("DET", 0.0f, 158, state, onStateChange, nativeLib, knobSize = 42.dp)
                 }
             }
+            
+            ParameterGroup("Amp Envelope", modifier = Modifier.weight(2f), titleSize = 10) {
+                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                     Knob("A", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 42.dp)
+                     Knob("D", 0.1f, 101, state, onStateChange, nativeLib, knobSize = 42.dp)
+                     Knob("S", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 42.dp)
+                     Knob("R", 0.5f, 103, state, onStateChange, nativeLib, knobSize = 42.dp)
+                 }
+            }
         }
 
         // 6-Operator Grid
-        val track = state.tracks[trackIndex]
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -3083,35 +3378,29 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
             Button(
                 onClick = { 
                     val current = latestState
-                    val nextDir = if (current.playbackDirection == 1) -1 else 1
+                    val nextDir = if (current.playbackDirection == 1) 0 else 1
                     latestOnStateChange(current.copy(playbackDirection = nextDir))
                     nativeLib.setPlaybackDirection(current.selectedTrackIndex, nextDir)
                 },
                 modifier = buttonModifier,
                 contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = if (latestState.playbackDirection == -1) Color.Red else unselectedColor),
+                colors = ButtonDefaults.buttonColors(containerColor = if (latestState.playbackDirection == 1) Color.Red else unselectedColor),
                 shape = buttonShape
             ) { Text("REV", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White) }
 
-            // RESTORE
+            // PING-PONG
             Button(
                 onClick = { 
-                    nativeLib.restorePresets()
-                    // Re-sync parameter states from native to UI
                     val current = latestState
-                    val updatedTracks = current.tracks.mapIndexed { idx, track ->
-                        val nativeParamsArray = nativeLib.getAllTrackParameters(idx)
-                        val updatedParams = track.parameters.toMutableMap()
-                        nativeParamsArray.forEachIndexed { pIdx, v -> updatedParams[pIdx] = v }
-                        track.copy(parameters = updatedParams)
-                    }
-                    latestOnStateChange(current.copy(tracks = updatedTracks))
+                    val nextDir = if (current.playbackDirection == 2) 0 else 2
+                    latestOnStateChange(current.copy(playbackDirection = nextDir))
+                    nativeLib.setPlaybackDirection(current.selectedTrackIndex, nextDir)
                 },
                 modifier = buttonModifier,
                 contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Magenta.copy(alpha = 0.6f)),
+                colors = ButtonDefaults.buttonColors(containerColor = if (latestState.playbackDirection == 2) Color.Cyan else unselectedColor),
                 shape = buttonShape
-            ) { Text("RESTR", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White) }
+            ) { Text("PNG", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White) }
 
             // RANDOM
             Button(
@@ -3133,6 +3422,8 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                     val current = latestState
                     val nextJumpWaiting = !current.jumpModeWaitingForTap
                     latestOnStateChange(current.copy(jumpModeWaitingForTap = nextJumpWaiting))
+                    // Also trigger native jump mode immediately if we want it to repeat CURRENT step
+                    nativeLib.setIsJumpMode(current.selectedTrackIndex, nextJumpWaiting)
                 },
                 modifier = buttonModifier,
                 contentPadding = PaddingValues(0.dp),
@@ -3355,7 +3646,14 @@ fun Knob(
                                     lastY = event.changes.first().position.y
                                     
                                     val sensitivity = 0.005f
-                                    val nextValue = (value + dragAmount * sensitivity).coerceIn(0f, 1f)
+                                    var rawNextValue = (value + dragAmount * sensitivity)
+                                    
+                                    // Snap to center (0.5) for Pan knobs (approx 10% deadzone)
+                                    val nextValue = if (label.uppercase() == "PAN" || label.uppercase() == "P") {
+                                        if (rawNextValue in 0.45f..0.55f) 0.5f else rawNextValue.coerceIn(0f, 1f)
+                                    } else {
+                                        rawNextValue.coerceIn(0f, 1f)
+                                    }
                                     
                                     if (nextValue != value) {
                                         value = nextValue
@@ -3600,11 +3898,11 @@ fun SequencingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
     
                 Row(modifier = Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     // Bank Selection
-                    Row(modifier = Modifier.height(40.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(modifier = Modifier.height(40.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                         listOf("A", "B", "C", "D").forEachIndexed { i, label ->
                             Button(
                                 onClick = { latestOnStateChange(latestState.copy(currentSequencerBank = i)) },
-                                modifier = Modifier.width(50.dp),
+                                modifier = Modifier.width(42.dp),
                                 contentPadding = PaddingValues(0.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (latestState.currentSequencerBank == i) getEngineColor(track.engineType) 
@@ -3616,8 +3914,65 @@ fun SequencingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
                                         else -> Color.DarkGray
                                     }
                                 )
-                            ) { Text(label, color = if (latestState.currentSequencerBank == i) Color.Black else Color.White) }
+                            ) { Text(label, color = if (latestState.currentSequencerBank == i) Color.Black else Color.White, fontSize = 12.sp) }
                         }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // COPY
+                        val currentContext = androidx.compose.ui.platform.LocalContext.current
+                        Button(
+                            onClick = {
+                                val bankStart = latestState.currentSequencerBank * 16
+                                if (isMultiTrack) {
+                                    val currentSteps = track.drumSteps.map { it.subList(bankStart, bankStart + 16) }
+                                    latestOnStateChange(latestState.copy(copiedDrumSteps = currentSteps, copiedSteps = null))
+                                } else {
+                                    val currentSteps = track.steps.subList(bankStart, bankStart + 16)
+                                    latestOnStateChange(latestState.copy(copiedSteps = currentSteps, copiedDrumSteps = null))
+                                }
+                                android.widget.Toast.makeText(currentContext, "Page Copied", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.width(55.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f))
+                        ) { Text("COPY", fontSize = 10.sp, color = Color.White) }
+
+                        // PASTE
+                        Button(
+                            onClick = {
+                                val bankStart = latestState.currentSequencerBank * 16
+                                val copiedDrumSteps = latestState.copiedDrumSteps
+                                if (isMultiTrack && copiedDrumSteps != null) {
+                                    val newDrumSteps = track.drumSteps.mapIndexed { di, dsteps ->
+                                        val copied = copiedDrumSteps.getOrNull(di)
+                                        if (copied != null) {
+                                            dsteps.toMutableList().apply {
+                                                for (idx in 0 until 16) {
+                                                    this[bankStart + idx] = copied[idx]
+                                                    val s = copied[idx]
+                                                    nativeLib.setStep(selectedTrackIndex, bankStart + idx, s.active, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate)
+                                                }
+                                            }
+                                        } else dsteps
+                                    }
+                                    latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { i, t -> if (i == selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
+                                } else if (!isMultiTrack && latestState.copiedSteps != null) {
+                                    val newSteps = track.steps.toMutableList().apply {
+                                        for (idx in 0 until 16) {
+                                            this[bankStart + idx] = latestState.copiedSteps!![idx]
+                                            val s = latestState.copiedSteps!![idx]
+                                            nativeLib.setStep(selectedTrackIndex, bankStart + idx, s.active, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate)
+                                        }
+                                    }
+                                    latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { i, t -> if (i == selectedTrackIndex) t.copy(steps = newSteps) else t }))
+                                }
+                            },
+                            modifier = Modifier.width(55.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            enabled = (isMultiTrack && latestState.copiedDrumSteps != null) || (!isMultiTrack && latestState.copiedSteps != null),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f))
+                        ) { Text("PASTE", fontSize = 10.sp, color = Color.White) }
                     }
                     
                     // Engine Label and Clock Divider
@@ -4520,8 +4875,26 @@ fun EngineIcon(type: EngineType, modifier: Modifier = Modifier, color: Color = C
             type == EngineType.FM_DRUM && drumType != null -> {
                 when (drumType) {
                     "KICK" -> {
-                        drawCircle(color, radius = size.minDimension * 0.4f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
-                        drawCircle(color, radius = size.minDimension * 0.1f, center = center)
+                        // Jagged Ring (Star-like or ZigZag circle)
+                        val center = Offset(size.width / 2f, size.height / 2f)
+                        val radiusOuter = size.minDimension * 0.45f
+                        val radiusInner = size.minDimension * 0.35f
+                        val points = 16
+                        
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            for (i in 0 until points * 2) {
+                                val angle = (Math.PI * 2 * i) / (points * 2)
+                                val r = if (i % 2 == 0) radiusOuter else radiusInner
+                                val x = center.x + r * Math.cos(angle).toFloat()
+                                val y = center.y + r * Math.sin(angle).toFloat()
+                                if (i == 0) moveTo(x, y) else lineTo(x, y)
+                            }
+                            close()
+                        }
+                        drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
+                        
+                        // Inner solid circle
+                        drawCircle(color, radius = size.minDimension * 0.15f, center = center)
                     }
                     "SNARE" -> {
                         drawRect(color, size = Size(size.width, size.height * 0.4f), topLeft = Offset(0f, size.height * 0.3f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
@@ -4571,7 +4944,7 @@ fun EngineIcon(type: EngineType, modifier: Modifier = Modifier, color: Color = C
                 drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
             }
             type == EngineType.FM -> {
-                // Overlapping Sine waves
+                // Overlapping Sine waves (Reverted)
                 for (offset in listOf(0f, size.height * 0.2f)) {
                     val path = androidx.compose.ui.graphics.Path()
                     for (i in 0..60) {
@@ -4581,6 +4954,31 @@ fun EngineIcon(type: EngineType, modifier: Modifier = Modifier, color: Color = C
                     }
                     drawPath(path, color.copy(alpha = if (offset == 0f) 1f else 0.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
                 }
+            }
+            type == EngineType.FM_DRUM && drumType == null -> {
+                // Analog Drum style (Kick, Snare, Hihat) but with Jagged Ring for Kick
+                val centerKick = Offset(size.width * 0.3f, size.height * 0.7f)
+                val radiusOuter = size.minDimension * 0.22f
+                val radiusInner = size.minDimension * 0.16f
+                val points = 12
+
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    for (i in 0 until points * 2) {
+                        val angle = (Math.PI * 2 * i) / (points * 2)
+                        val r = if (i % 2 == 0) radiusOuter else radiusInner
+                        val x = centerKick.x + r * Math.cos(angle).toFloat()
+                        val y = centerKick.y + r * Math.sin(angle).toFloat()
+                        if (i == 0) moveTo(x, y) else lineTo(x, y)
+                    }
+                    close()
+                }
+                drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
+
+                // Snare (Analog style)
+                drawRect(color, size = Size(size.width * 0.3f, size.height * 0.15f), topLeft = Offset(size.width * 0.6f, size.height * 0.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
+                // HiHat (Analog style)
+                drawLine(color, start = Offset(size.width * 0.2f, size.height * 0.3f), end = Offset(size.width * 0.5f, size.height * 0.3f), strokeWidth = strokeWidth)
+                drawLine(color, start = Offset(size.width * 0.35f, size.height * 0.3f), end = Offset(size.width * 0.35f, size.height * 0.5f), strokeWidth = strokeWidth)
             }
             type == EngineType.SAMPLER -> {
                 // Waveform snippet
@@ -4835,34 +5233,27 @@ fun PadOptionPopup(onDismiss: () -> Unit, stepState: StepState, onApply: (Int, B
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Quantized Gate Selection
-                Text("Gate Length", style = MaterialTheme.typography.labelMedium)
-                val gateValues = listOf(
-                    "1/64" to 0.25f, "1/32" to 0.5f, "1/16" to 1.0f, 
-                    "1/8" to 2.0f, "1/4" to 4.0f, "3/8" to 6.0f, 
-                    "1/2" to 8.0f, "3/4" to 12.0f, "4/4" to 16.0f
+                // Gate Selection
+                Text("Gate Length: ${(stepState.gate * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+                Slider(
+                    value = stepState.gate.coerceIn(0.01f, 1.0f),
+                    onValueChange = { onApply(stepState.ratchet, stepState.punch, stepState.probability, it, stepState.notes, stepState.velocity) },
+                    valueRange = 0.01f..1.0f,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 
-                // Display current gate roughly
-                Text("Current: ${String.format("%.2f steps", stepState.gate)}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    modifier = Modifier.height(120.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(gateValues.size) { i ->
-                        val (label, value) = gateValues[i]
-                        val isSelected = kotlin.math.abs(stepState.gate - value) < 0.1f
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(0.25f, 0.5f, 0.75f, 1.0f).forEach { value ->
+                        val isSelected = kotlin.math.abs(stepState.gate - value) < 0.05f
                         Box(
                             modifier = Modifier
+                                .weight(1f)
                                 .height(32.dp)
                                 .background(if (isSelected) Color.Cyan else Color.DarkGray, RoundedCornerShape(4.dp))
                                 .clickable { onApply(stepState.ratchet, stepState.punch, stepState.probability, value, stepState.notes, stepState.velocity) },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(label, style = MaterialTheme.typography.labelSmall, color = if (isSelected) Color.Black else Color.White)
+                            Text("${(value * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = if (isSelected) Color.Black else Color.White)
                         }
                     }
                 }
@@ -5703,15 +6094,23 @@ fun EffectsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 }
             }
             item {
-                Pedal("SPREAD", Color(0xFFE91E63), state, 12, onStateChange, nativeLib) {
+                Pedal("AUTOPAN", Color(0xFFE91E63), state, 12, onStateChange, nativeLib) { // Moved to 12 to avoid LP LFO (10) collision
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        GlobalKnob("WID", 0.5f, 1520, state, onStateChange, nativeLib)
-                        GlobalKnob("RATE", 0.2f, 1521, state, onStateChange, nativeLib)
+                        GlobalKnob("PAN", 0.5f, 2100, state, onStateChange, nativeLib)
+                        GlobalKnob("RATE", 0.2f, 2101, state, onStateChange, nativeLib)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        GlobalKnob("DPTH", 0.5f, 1522, state, onStateChange, nativeLib)
-                        GlobalKnob("MIX", 1.0f, 1523, state, onStateChange, nativeLib)
+                        GlobalKnob("DPTH", 0.5f, 2102, state, onStateChange, nativeLib)
+                        GlobalKnob("MIX", 1.0f, 2104, state, onStateChange, nativeLib)
                     }
+                    // SHAPE selector as a small row or knob
+                    GlobalKnob("SHAPE", 0.0f, 2103, state, onStateChange, nativeLib, valueFormatter = { v ->
+                        when {
+                            v < 0.33f -> "SINE"
+                            v < 0.66f -> "TRI"
+                            else -> "SQR"
+                        }
+                    })
                 }
             }
             item {

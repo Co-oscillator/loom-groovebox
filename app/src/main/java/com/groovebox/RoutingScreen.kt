@@ -43,49 +43,49 @@ fun RoutingScreen(
     nativeLib: NativeLib
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Section 1: Modulation Bank (5 LFOs)
-        Text("MODULATION BANK (LFOs)", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        LazyRow(
+        // Section 1: Modulation Bank (6 LFOs)
+        Text("MODULATION BANK (6 LFOs)", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Row(
             modifier = Modifier.fillMaxWidth().height(160.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            items(5) { index ->
-                LfoModule(
-                    index = index,
-                    lfoState = state.lfos[index],
-                    isLearning = state.lfoLearnActive && state.lfoLearnLfoIndex == index,
-                    onUpdate = { newState ->
-                        val newLfos = state.lfos.toMutableList()
-                        newLfos[index] = newState
-                        onStateChange(state.copy(lfos = newLfos))
-                        
-                        // Native updates
-                        nativeLib.setGenericLfoParam(index, 0, newState.rate)
-                        nativeLib.setGenericLfoParam(index, 1, newState.depth)
-                        nativeLib.setGenericLfoParam(index, 2, newState.shape.toFloat())
-                        // Sync handled by UI param mapping? Or just passed as 1.0 logic
-                        nativeLib.setGenericLfoParam(index, 3, if (newState.sync) 1.0f else 0.0f)
-                    },
-                    onToggleLearn = {
-                         if (state.lfoLearnActive && state.lfoLearnLfoIndex == index) {
-                             // Tapping a second time: Cancel learn AND reset to None
-                             val newLfos = state.lfos.toMutableList()
-                             newLfos[index] = newLfos[index].copy(targetType = 0, targetId = -1, targetLabel = "None")
-                             onStateChange(state.copy(lfos = newLfos, lfoLearnActive = false, lfoLearnLfoIndex = -1))
-                             // Also update native routing for this source to None
-                             // LFO1=2, LFO2=3... LFO5=6
-                             nativeLib.setRouting(state.selectedTrackIndex, -1, 2 + index, 5, 0.0f, -1)
-                         } else {
-                             onStateChange(state.copy(lfoLearnActive = true, lfoLearnLfoIndex = index))
-                         }
-                    },
-                    appState = state,
-                    onStateChange = onStateChange,
-                    nativeLib = nativeLib
-                )
+            (0 until 6).forEach { index ->
+                Box(modifier = Modifier.weight(1f)) {
+                    LfoModule(
+                        index = index,
+                        lfoState = state.lfos[index],
+                        isLearning = state.lfoLearnActive && state.lfoLearnLfoIndex == index,
+                        onUpdate = { newState ->
+                            val newLfos = state.lfos.toMutableList()
+                            newLfos[index] = newState
+                            onStateChange(state.copy(lfos = newLfos))
+                            
+                            // Native updates
+                            nativeLib.setGenericLfoParam(index, 0, newState.rate)
+                            nativeLib.setGenericLfoParam(index, 1, newState.depth)
+                            nativeLib.setGenericLfoParam(index, 2, newState.shape.toFloat())
+                            nativeLib.setGenericLfoParam(index, 3, if (newState.sync) 1.0f else 0.0f)
+                        },
+                        onToggleLearn = {
+                             if (state.lfoLearnActive && state.lfoLearnLfoIndex == index) {
+                                 onStateChange(state.copy(lfoLearnActive = false, lfoLearnLfoIndex = -1))
+                             } else if (state.lfos[index].targetId != -1) {
+                                 // Clear target (un-assign)
+                                 val newLfos = state.lfos.toMutableList()
+                                 newLfos[index] = state.lfos[index].copy(targetId = -1, targetLabel = "None", targetType = 0)
+                                 onStateChange(state.copy(lfos = newLfos))
+                             } else {
+                                 onStateChange(state.copy(lfoLearnActive = true, lfoLearnLfoIndex = index))
+                             }
+                        },
+                        appState = state,
+                        onStateChange = onStateChange,
+                        nativeLib = nativeLib
+                    )
+                }
             }
         }
-        
+    
         Spacer(modifier = Modifier.height(16.dp))
         
         // Section 2: Patch Bay (Macros)
@@ -176,7 +176,7 @@ fun LfoModule(
     Card(
         colors = CardDefaults.cardColors(containerColor = if (isLearning) Color(0xFF444400) else Color(0xFF222222)),
         border = if (isLearning) BorderStroke(2.dp, Color.Yellow) else null,
-        modifier = Modifier.width(160.dp).fillMaxHeight()
+        modifier = Modifier.fillMaxWidth().fillMaxHeight()
     ) {
         Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             // Header
@@ -280,7 +280,7 @@ fun MacroUnit(
                         val options = listOf("None") + 
                                       (1..4).map { "Strip $it" } + 
                                       (1..4).map { "Knob $it" } + 
-                                      (1..5).map { "LFO $it" }
+                                      (1..6).map { "LFO $it" }
                         
                         options.forEachIndexed { i, label ->
                             DropdownMenuItem(
@@ -375,7 +375,7 @@ fun FxChainEditor(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
     val fxNames = listOf(
         0 to "Overdrive", 1 to "Bitcrush", 2 to "Chorus", 3 to "Phaser", 4 to "Wobble",
         5 to "Delay", 6 to "Reverb", 7 to "Slicer", 8 to "Compressor",
-        9 to "HP LFO", 10 to "LP LFO", 11 to "Flanger", 12 to "Spread", 13 to "TapeEcho", 14 to "Octaver"
+        9 to "HP LFO", 10 to "LP LFO", 11 to "Flanger", 12 to "Auto-Pan", 13 to "TapeEcho", 14 to "Octaver"
     )
 
     // Serial Chain: Slot 0 -> Slot 1 -> Slot 2 -> Slot 3 -> Slot 4
@@ -408,7 +408,7 @@ fun FxChainEditor(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 9 -> Color(0xFF00BFFF) // HP LFO (Deep Sky Blue)
                 10 -> Color(0xFFFF4500) // LP LFO (Orange Red)
                 11 -> Color(0xFF9C27B0) // Flanger (Purple)
-                12 -> Color(0xFF009688) // Spread (Teal)
+                12 -> Color(0xFF009688) // Auto-Pan (Teal)
                 13 -> Color(0xFFB8860B) // TapeEcho (Dark Goldenrod)
                 14 -> Color(0xFF3F51B5) // Octaver (Indigo)
                 else -> Color.White

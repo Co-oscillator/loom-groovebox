@@ -64,78 +64,58 @@ struct FastSine {
   }
 };
 
-// State Variable Filter (SVF)
-class Svf {
+// T-SVF (Zero-Delay Feedback State Variable Filter)
+// Based on Andrew Simper's Trapezoidal integration method.
+// Extremely stable even at high frequencies and high resonance.
+class TSvf {
 public:
-  enum Type { LowPass, HighPass, BandPass, Notch };
+  enum Type { LowPass, HighPass, BandPass, Notch, Peak };
 
   void setParams(float cutoff, float resonance, float sampleRate) {
-    float f = 2.0f * sinf(M_PI * cutoff / sampleRate);
-    mF = std::max(0.0f, std::min(1.0f, f));
-    mQ = 1.0f / std::max(0.1f, resonance);
+    float f = tanf(M_PI * cutoff / sampleRate);
+    float k = 1.0f / std::max(0.1f, resonance);
+    mA1 = 1.0f / (1.0f + f * (f + k));
+    mA2 = f * mA1;
+    mA3 = f * mA2;
+    mF = f;
+    mK = k;
   }
 
   float process(float input, Type type) {
-    float notepad = input - mR1 * mQ - mLow;
-    float h = notepad;
-    float b = mF * h + mR1;
-    float l = mF * b + mLow;
+    float v3 = input - mSvfZ2;
+    float v1 = mA1 * mSvfZ1 + mA2 * v3;
+    float v2 = mSvfZ2 + mA2 * mSvfZ1 + mA3 * v3;
 
-    mR1 = b;
-    mLow = l;
+    mSvfZ1 = 2.0f * v1 - mSvfZ1;
+    mSvfZ2 = 2.0f * v2 - mSvfZ2;
 
-    // Anti-denormal
-    if (std::abs(mR1) < 1.0e-15f)
-      mR1 = 0.0f;
-    if (std::abs(mLow) < 1.0e-15f)
-      mLow = 0.0f;
+    // Denormal snapping
+    if (std::abs(mSvfZ1) < 1e-9f)
+      mSvfZ1 = 0.0f;
+    if (std::abs(mSvfZ2) < 1e-9f)
+      mSvfZ2 = 0.0f;
 
     switch (type) {
     case LowPass:
-      return l;
+      return v2;
     case HighPass:
-      return h;
+      return input - mK * v1 - v2;
     case BandPass:
-      return b;
+      return v1;
     case Notch:
-      return h + l;
+      return input - mK * v1;
+    case Peak:
+      return input - mK * v1 - 2.0f * v2;
     default:
-      return l;
-    }
-  }
-
-  // Bipolar Filter: -1.0 (LP) to 0.0 (None) to 1.0 (HP)
-  float processBipolar(float input, float morph) {
-    float notepad = input - mR1 * mQ - mLow;
-    float h = notepad;
-    float b = mF * h + mR1;
-    float l = mF * b + mLow;
-
-    mR1 = b;
-    mLow = l;
-
-    // Anti-denormal
-    if (std::abs(mR1) < 1.0e-15f)
-      mR1 = 0.0f;
-    if (std::abs(mLow) < 1.0e-15f)
-      mLow = 0.0f;
-
-    if (morph < 0.0f) {
-      // Morph from bypassed (0.0) to LP (-1.0)
-      float t = -morph;
-      return input * (1.0f - t) + l * t;
-    } else {
-      // Morph from bypassed (0.0) to HP (1.0)
-      float t = morph;
-      return input * (1.0f - t) + h * t;
+      return v2;
     }
   }
 
 private:
-  float mLow = 0.0f;
-  float mR1 = 0.0f;
-  float mF = 0.1f;
-  float mQ = 1.0f;
+  float mSvfZ1 = 0.0f;
+  float mSvfZ2 = 0.0f;
+  float mA1 = 0.0f, mA2 = 0.0f, mA3 = 0.0f;
+  float mF = 0.0f, mK = 0.0f;
 };
 
 #endif // UTILS_H

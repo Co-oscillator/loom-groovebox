@@ -1,7 +1,7 @@
 package com.groovebox
 
 enum class EngineType {
-    SUBTRACTIVE, FM, SAMPLER, GRANULAR, WAVETABLE, FM_DRUM, ANALOG_DRUM, MIDI
+    SUBTRACTIVE, FM, SAMPLER, GRANULAR, WAVETABLE, FM_DRUM, ANALOG_DRUM, MIDI, AUDIO_IN
 }
 
 enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM }
@@ -28,34 +28,45 @@ data class ArpConfig(
 
 data class TrackState(
     val id: Int,
-    val volume: Float = 0.8f,
-    val pan: Float = 0.0f,
+    val volume: Float = 0.7f,
+    val pan: Float = 0.5f,
     val engineType: EngineType = EngineType.SUBTRACTIVE,
     val isActive: Boolean = true,
     val isMuted: Boolean = false,
     val steps: List<StepState> = List(64) { StepState() },
-    val drumSteps: List<List<StepState>> = List(16) { List(64) { StepState() } }, // Support up to 16 drum instruments / slices
+    val drumSteps: List<List<StepState>> = List(16) { List(64) { StepState() } },
     val numPages: Int = 1,
     val stepsPerPage: Int = 16,
-    val selectedFmDrumInstrument: Int = 0, // For FM Drum track selection
+    val selectedFmDrumInstrument: Int = 0,
     val arpConfig: ArpConfig = ArpConfig(),
-    val mutatedNotes: Map<Int, Int> = emptyMap(), // originalNote -> mutatedNote
-    val fmCarrierMask: Int = 1, // Bitmask for FM operators: 1=Carrier, 0=Modulator
-    val fmActiveMask: Int = 63, // Bitmask for active operators: 1=Active, 0=Off. Default all on.
-    val useEnvelope: Boolean = true, // Playback toggle: ADSR vs Gate
-    val fxSends: List<Float> = List(15) { 0.0f }, // Per-track sends to global FX
-    val parameters: Map<Int, Float> = emptyMap(), // parameterId -> value
-    val midiInChannel: Int = 17, // 1-16, 17=ALL, 0=NONE
-    val midiOutChannel: Int = 1,  // 1-16
+    val mutatedNotes: Map<Int, Int> = emptyMap(),
+    val fmCarrierMask: Int = 1,
+    val fmActiveMask: Int = 63,
+    val useEnvelope: Boolean = true,
+    val fxSends: List<Float> = List(15) { 0.0f },
+    val midiInChannel: Int = 17,
+    val midiOutChannel: Int = 1,
     val lastSamplePath: String = "",
     val activeWavetableName: String = "Basic",
-    val filterMode: Int = 0, // 0=LP, 1=HP, 2=BP
-    val clockMultiplier: Float = 1.0f
+    val filterMode: Int = 0,
+    val clockMultiplier: Float = 1.0f,
+    val parameters: Map<Int, Float> = mapOf(
+        112 to 1.0f,  // Cutoff
+        113 to 0.0f,  // Resonance
+        100 to 0.01f, // Attack
+        101 to 0.1f,  // Decay
+        102 to 0.8f,  // Sustain
+        103 to 0.5f,  // Release
+        151 to 0.5f,  // FM Filter
+        157 to 0.5f,  // FM Brightness
+        9 to 0.5f     // Pan (Center)
+    )
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L
     }
 }
+
 
 data class StepState(
     val active: Boolean = false,
@@ -182,7 +193,7 @@ data class GrooveboxState(
 
     // Transport & Sequencing Logic
     val swing: Float = 0f, // -0.23f to +0.23f
-    val playbackDirection: Int = 1, // 1=Forward, -1=Reverse
+    val playbackDirection: Int = 0, // 0=Forward, 1=Reverse, 2=Ping-Pong
     val isRandomOrder: Boolean = false,
     val isJumpMode: Boolean = false,
     val isJumpHold: Boolean = false,
@@ -202,7 +213,7 @@ data class GrooveboxState(
     val engineTypeKnobAssignments: Map<EngineType, List<StripRouting>> = emptyMap(),
     
     // Routing Screen State
-    val lfos: List<LfoState> = List(5) { LfoState() },
+    val lfos: List<LfoState> = List(6) { LfoState() },
     val macros: List<MacroState> = List(6) { i -> MacroState(label="Macro ${i+1}") },
     val routingConnections: List<RoutingConnection> = emptyList(),
     val fxChain: Map<Int, Int> = emptyMap(), // Legacy map, keeping for safety but moving to slots
@@ -221,7 +232,11 @@ data class GrooveboxState(
     
     // MIDI UI Feedback
     val lastMidiNote: Int = -1,
-    val lastMidiVelocity: Int = 0
+    val lastMidiVelocity: Int = 0,
+    
+    // Copy/Paste State
+    val copiedSteps: List<StepState>? = null,
+    val copiedDrumSteps: List<List<StepState>>? = null
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L

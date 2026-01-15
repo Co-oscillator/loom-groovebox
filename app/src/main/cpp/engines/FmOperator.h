@@ -49,6 +49,7 @@ public:
   void setRatio(float ratio) { mRatio = ratio; }
   void setUseEnvelope(bool use) { mUseEnvelope = use; }
   bool isActive() const { return mIsNoteHeld || mEnv.isActive(); }
+  bool isNoteHeld() const { return mIsNoteHeld; }
 
 private:
   Oscillator mOscillator;

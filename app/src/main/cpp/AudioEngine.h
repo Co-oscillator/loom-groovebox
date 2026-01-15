@@ -6,6 +6,8 @@
 #include "RoutingMatrix.h"
 #include "Sequencer.h"
 #include "engines/AnalogDrumEngine.h"
+#include "engines/AudioInEngine.h"
+#include "engines/AutoPannerFx.h"
 #include "engines/BitcrusherFx.h"
 #include "engines/ChorusFx.h"
 #include "engines/CompressorFx.h"
@@ -14,7 +16,6 @@
 #include "engines/FlangerFx.h"
 #include "engines/FmDrumEngine.h"
 #include "engines/FmEngine.h"
-// #include "engines/HallReverbFx.h" // Unused, GalacticReverb is active
 #include "engines/GalacticReverb.h"
 #include "engines/GranularEngine.h"
 #include "engines/LfoEngine.h"
@@ -23,7 +24,6 @@
 #include "engines/PhaserFx.h"
 #include "engines/SamplerEngine.h"
 #include "engines/SlicerFx.h"
-#include "engines/StereoSpreadFx.h"
 #include "engines/SubtractiveEngine.h"
 #include "engines/TapeEchoFx.h"
 #include "engines/TapeWobbleFx.h"
@@ -87,6 +87,8 @@ public:
   void jumpToStep(int stepIndex);
   void setParameterLock(int trackIndex, int stepIndex, int parameterId,
                         float value);
+  void setOpLevel(int trackIndex, int op, float l);
+  float getOpLevel(int trackIndex, int op) const;
   void clearParameterLocks(int trackIndex, int stepIndex);
   void setIsRecording(bool isRecording);
   void setResampling(bool isResampling); // New: Resampling Mode Setter
@@ -121,6 +123,7 @@ public:
   void setArpTriplet(int trackIndex, bool isTriplet);
   void setArpRate(int trackIndex, float rate, int divisionMode);
   float getCpuLoad();
+  void setInputDevice(int deviceId);
 
   // Audio Export
   void renderToWav(int numCycles, const std::string &path);
@@ -172,6 +175,8 @@ private:
   struct Track {
     float volume = 0.8f;
     float smoothedVolume = 0.8f;
+    float pan = 0.5f;
+    float smoothedPan = 0.5f;
     int engineType = 0; // 0=Subtractive, 1=FM, 2=Sampler, etc.
     int selectedFmDrumInstrument = 0;
     SubtractiveEngine subtractiveEngine;
@@ -181,6 +186,7 @@ private:
     GranularEngine granularEngine;
     WavetableEngine wavetableEngine;
     AnalogDrumEngine analogDrumEngine;
+    AudioInEngine audioInEngine;
 
     float parameters[2500] = {0.0f};
     float appliedParameters[2500] = {0.0f}; // Values after P-locks and Mods
@@ -233,6 +239,8 @@ private:
     };
     static const int MAX_POLYPHONY = 16;
     ActiveNote mActiveNotes[MAX_POLYPHONY];
+    float panL = 0.707f;
+    float panR = 0.707f;
 
     int mPunchCounter = 0; // Frames remaining for punch compression
 
@@ -282,12 +290,12 @@ private:
 
   // New Effects
   FlangerFx mFlangerFx;
-  StereoSpreadFx mStereoSpreadFx;
+  AutoPannerFx mAutoPannerFx;
   TapeEchoFx mTapeEchoFx;
   OctaverFx mOctaverFx;
 
   // Generic LFOs for Routing
-  LfoEngine mLfos[5];
+  LfoEngine mLfos[6];
 
   // Macros (Patch Points)
   struct MacroModule {
@@ -306,9 +314,11 @@ public:
   // Maps SourceFX Index -> DestinationFX Index. -1 means Master Mix.
   int mFxChainDest[15];
 
-  // New Filter LFO Effects
-  FilterLfoFx mHpLfoFx{FilterLfoMode::HighPass};
-  FilterLfoFx mLpLfoFx{FilterLfoMode::LowPass};
+  // FX Split Filter LFO Effects (Slots 9/10)
+  FilterLfoFx mHpLfoL{FilterLfoMode::HighPass};
+  FilterLfoFx mHpLfoR{FilterLfoMode::HighPass};
+  FilterLfoFx mLpLfoL{FilterLfoMode::LowPass};
+  FilterLfoFx mLpLfoR{FilterLfoMode::LowPass};
 
   int mSidechainSourceTrack = -1;
   int mSidechainSourceDrumIdx = -1;
@@ -316,6 +326,10 @@ public:
   float mFxMixLevels[15] = {
       1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
       1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0
+  float mInputRingBuffer[8192] = {0.0f};
+  std::atomic<uint32_t> mInputWritePtr{0};
+  uint32_t mInputReadPtr = 0;
+  std::atomic<int> mGlobalVoiceCount{0};
   std::string mAppDataDir = "";
 };
 

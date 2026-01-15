@@ -13,7 +13,7 @@ Actual: DefaultDaemonContext[uid=36b5a213-155f-4354-875d-45beb2348b35,javaHome=/
 
   Looking for a different daemon...
 The client will now receive all logging from the daemon (pid: 91665). The daemon log file: /Users/danielmiller/.gradle/daemon/8.13/daemon-91665.out.log
-Starting 13th build in daemon [uptime: 11 hrs 14 mins 35.834 secs, performance: 97%, GC rate: 0.00/s, heap usage: 4% of 2 GiB]
+Starting 15th build in daemon [uptime: 11 hrs 16 mins 59.507 secs, performance: 97%, GC rate: 0.00/s, heap usage: 4% of 2 GiB]
 Using 8 worker leases.
 Now considering [/Users/danielmiller/Documents/Code Projects/ancient-halley] as hierarchies to watch
 Watching the file system is configured to be enabled if available
@@ -132,7 +132,7 @@ C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/c
 Resolve mutations for :app:buildCMakeDebug[arm64-v8a] (Thread[Execution worker,5,main]) started.
 :app:buildCMakeDebug[arm64-v8a] (Thread[Execution worker,5,main]) started.
 
-> Task :app:buildCMakeDebug[arm64-v8a]
+> Task :app:buildCMakeDebug[arm64-v8a] FAILED
 Caching disabled for task ':app:buildCMakeDebug[arm64-v8a]' because:
   Build cache is disabled
   Caching has been disabled for the task
@@ -156,31 +156,14 @@ Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/
 Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
 C/C++: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a'
 C/C++: /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp'
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:717:23: error: no member named 'setPan' in 'AutoPannerFx'
-C/C++:   717 |         mAutoPannerFx.setPan(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:719:23: error: no member named 'setRate' in 'AutoPannerFx'
-C/C++:   719 |         mAutoPannerFx.setRate(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:721:23: error: no member named 'setDepth' in 'AutoPannerFx'
-C/C++:   721 |         mAutoPannerFx.setDepth(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:723:23: error: no member named 'setMix' in 'AutoPannerFx'
-C/C++:   723 |         mAutoPannerFx.setMix(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:726:23: error: no member named 'setShape' in 'AutoPannerFx'
-C/C++:   726 |         mAutoPannerFx.setShape(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1937:16: error: no member named 'advance' in 'LfoEngine'
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1937:24: error: too few arguments to function call, single argument 'sampleRate' was not specified
 C/C++:  1937 |       mLfos[l].advance();
-C/C++:       |       ~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:2157:1: error: extraneous closing brace ('}')
-C/C++:  2157 | }
-C/C++:       | ^
-C/C++: 7 errors generated.
+C/C++:       |       ~~~~~~~~~~~~~~~~ ^
+C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/LfoEngine.h:27:8: note: 'advance' declared here
+C/C++:    27 |   void advance(float sampleRate) {
+C/C++:       |        ^       ~~~~~~~~~~~~~~~~
+C/C++: 1 error generated.
 C/C++: Received process result: 1
-
-> Task :app:buildCMakeDebug[arm64-v8a] FAILED
 
 [Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/build/reports/problems/problems-report.html
 
@@ -192,28 +175,13 @@ Execution failed for task ':app:buildCMakeDebug[arm64-v8a]'.
   [1/2] Building CXX object CMakeFiles/native-lib.dir/AudioEngine.cpp.o
   FAILED: CMakeFiles/native-lib.dir/AudioEngine.cpp.o 
   /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp'
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:717:23: error: no member named 'setPan' in 'AutoPannerFx'
-    717 |         mAutoPannerFx.setPan(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:719:23: error: no member named 'setRate' in 'AutoPannerFx'
-    719 |         mAutoPannerFx.setRate(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:721:23: error: no member named 'setDepth' in 'AutoPannerFx'
-    721 |         mAutoPannerFx.setDepth(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:723:23: error: no member named 'setMix' in 'AutoPannerFx'
-    723 |         mAutoPannerFx.setMix(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:726:23: error: no member named 'setShape' in 'AutoPannerFx'
-    726 |         mAutoPannerFx.setShape(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1937:16: error: no member named 'advance' in 'LfoEngine'
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1937:24: error: too few arguments to function call, single argument 'sampleRate' was not specified
    1937 |       mLfos[l].advance();
-        |       ~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:2157:1: error: extraneous closing brace ('}')
-   2157 | }
-        | ^
-  7 errors generated.
+        |       ~~~~~~~~~~~~~~~~ ^
+  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/engines/LfoEngine.h:27:8: note: 'advance' declared here
+     27 |   void advance(float sampleRate) {
+        |        ^       ~~~~~~~~~~~~~~~~
+  1 error generated.
   ninja: build stopped: subcommand failed.
   
   C++ build system [build] failed while executing:
@@ -235,6 +203,6 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD FAILED in 4s
+BUILD FAILED in 5s
 2 actionable tasks: 2 executed
 Watched directory hierarchies: [/Users/danielmiller/Documents/Code Projects/ancient-halley]

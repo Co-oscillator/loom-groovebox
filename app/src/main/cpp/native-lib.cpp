@@ -541,3 +541,8 @@ Java_com_groovebox_NativeLib_restorePresets(JNIEnv *env, jobject thiz) {
   if (engine)
     engine->restorePresets();
 }
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setInputDevice(
+    JNIEnv *env, jobject thiz, jint device_id) {
+  if (engine)
+    engine->setInputDevice(device_id);
+}

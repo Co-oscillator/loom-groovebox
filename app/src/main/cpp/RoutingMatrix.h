@@ -14,6 +14,7 @@ enum class ModSource {
   LFO3,
   LFO4,
   LFO5,
+  LFO6,
   Envelope,
   SidechainFollower,
   Macro1,

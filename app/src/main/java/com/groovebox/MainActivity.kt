@@ -1718,6 +1718,21 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
     val track = state.tracks[trackIndex]
     val engineColor = getEngineColor(track.engineType)
     
+    var refreshTrigger by remember { mutableStateOf(0) }
+    
+    // Sync UI with Native Engine state when screen loads or refresh requested
+    androidx.compose.runtime.LaunchedEffect(trackIndex, refreshTrigger) {
+        val nativeParams = nativeLib.getAllTrackParameters(trackIndex)
+        val updatedParams = track.parameters.toMutableMap()
+        nativeParams.forEachIndexed { idx, value ->
+            updatedParams[idx] = value
+        }
+        val currentTrack = state.tracks[trackIndex]
+        val updatedTrack = currentTrack.copy(parameters = updatedParams)
+        val updatedTracks = state.tracks.toMutableList()
+        updatedTracks[trackIndex] = updatedTrack
+        onStateChange(state.copy(tracks = updatedTracks))
+    }
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         // Redesigned Header Area
         Box(
@@ -1812,11 +1827,11 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
 
         when (track.engineType) {
             EngineType.SUBTRACTIVE -> SubtractiveParameters(state, trackIndex, onStateChange, nativeLib)
-            EngineType.FM -> FmParameters(state, trackIndex, onStateChange, nativeLib)
+            EngineType.FM -> FmParameters(state, trackIndex, onStateChange, nativeLib, onRefresh = { refreshTrigger++ })
             EngineType.FM_DRUM -> FmDrumParameters(state, trackIndex, onStateChange, nativeLib)
             EngineType.SAMPLER -> SamplerParameters(state, trackIndex, onStateChange, nativeLib)
             EngineType.GRANULAR -> GranularParameters(state, trackIndex, onStateChange, nativeLib)
-            EngineType.WAVETABLE -> WavetableParameters(state, trackIndex, onStateChange, nativeLib)
+            EngineType.WAVETABLE -> WavetableParameters(state, trackIndex, onStateChange, nativeLib, onRefresh = { refreshTrigger++ })
             EngineType.ANALOG_DRUM -> AnalogDrumParameters(state, trackIndex, onStateChange, nativeLib)
             EngineType.MIDI -> MidiParameters(state, trackIndex, onStateChange, nativeLib)
             EngineType.AUDIO_IN -> AudioInParameters(state, trackIndex, onStateChange, nativeLib)
@@ -1976,25 +1991,37 @@ fun AnalogDrumColumn(
 }
 
 @Composable
-fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, onRefresh: () -> Unit) {
     var showLoadDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val track = state.tracks[trackIndex]
 
+    val wavetablesDir = File(context.filesDir, "wavetables")
+    if (!wavetablesDir.exists()) wavetablesDir.mkdirs()
+
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.openInputStream(it)?.use { input ->
+                val fileName = "imported_${System.currentTimeMillis()}.wav"
+                val dest = File(wavetablesDir, fileName)
+                dest.outputStream().use { output -> input.copyTo(output) }
+                nativeLib.loadWavetable(trackIndex, dest.absolutePath)
+                onRefresh()
+            }
+        }
+    }
+
     if (showLoadDialog) {
-        val wavetablesDir = File(context.filesDir, "wavetables")
-        if (!wavetablesDir.exists()) wavetablesDir.mkdirs()
-        
         NativeFileDialog(
             directory = wavetablesDir,
             onDismiss = { showLoadDialog = false },
             onFileSelected = { path ->
                 if (path == "DEFAULT") {
                     nativeLib.loadDefaultWavetable(trackIndex)
-                     val newTracks = state.tracks.mapIndexed { i, t ->
-                        if (i == trackIndex) t.copy(activeWavetableName = "Basic") else t
-                    }
-                    onStateChange(state.copy(tracks = newTracks))
+                } else if (path == "IMPORT") {
+                    launcher.launch("audio/*")
                 } else {
                     nativeLib.loadWavetable(trackIndex, path)
                     val filename = File(path).name
@@ -2004,13 +2031,14 @@ fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
                     }
                     onStateChange(state.copy(tracks = newTracks))
                 }
+                onRefresh()
             },
             isSave = false,
-            extraOptions = listOf("Default (Basic)" to "DEFAULT")
+            extraOptions = listOf("Default (Basic)" to "DEFAULT", "Import from Device..." to "IMPORT")
         )
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         
         // Header with Load Button
         Row(
@@ -2033,56 +2061,85 @@ fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
              }
          }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            // CHARACTER (New Square Cluster)
-            ParameterGroup("Character", modifier = Modifier.weight(1f)) {
-                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                         Knob("Morph", 0.0f, 450, state, onStateChange, nativeLib, knobSize = 48.dp)
-                         Knob("Drive", 0.0f, 467, state, onStateChange, nativeLib, knobSize = 48.dp) // ID 467
-                     }
-                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                         Knob("Warp", 0.0f, 465, state, onStateChange, nativeLib, knobSize = 48.dp) // ID 465
-                         Knob("Crush", 0.0f, 466, state, onStateChange, nativeLib, knobSize = 48.dp) // ID 466
-                     }
-                 }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // CHARACTER
+            ParameterGroup("Character", modifier = Modifier.weight(1f), titleSize = 11) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Knob("Morph", 0.0f, 450, state, onStateChange, nativeLib, knobSize = 44.dp)
+                        Knob("Warp", 0.0f, 465, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Knob("Crush", 0.0f, 466, state, onStateChange, nativeLib, knobSize = 44.dp)
+                        Knob("Drive", 0.0f, 467, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    }
+                }
             }
 
-            // FILTER & ENVELOPE (Combined Cluster)
-            ParameterGroup("Filter & Envelope", modifier = Modifier.weight(1f)) {
-                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                         Knob("Cutoff", 0.5f, 458, state, onStateChange, nativeLib, knobSize = 48.dp)
-                         Knob("Reso", 0.0f, 459, state, onStateChange, nativeLib, knobSize = 48.dp)
-                     }
-                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                         Knob("F.Amt", 0.0f, 464, state, onStateChange, nativeLib, knobSize = 48.dp)
-                         Knob("F.Dcy", 0.1f, 461, state, onStateChange, nativeLib, knobSize = 48.dp)
-                     }
-                 }
+            // FILTER
+            ParameterGroup("Filter", modifier = Modifier.weight(1f), titleSize = 11) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("MODE", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 9.sp)
+                            val currentMode = (track.parameters[470] ?: 0.0f).toInt().coerceIn(0, 3)
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 32.dp, height = 24.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.DarkGray)
+                                    .clickable {
+                                        val nextMode = (currentMode + 1) % 4
+                                        val newVal = nextMode.toFloat()
+                                        nativeLib.setParameter(trackIndex, 470, newVal)
+                                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { i, t -> if (i == trackIndex) t.copy(parameters = t.parameters + (470 to newVal)) else t }))
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(when(currentMode) { 0 -> "LP"; 1 -> "HP"; 2 -> "BP"; else -> "NT" }, fontSize = 9.sp, color = Color.White)
+                            }
+                        }
+                        Knob("Cutoff", 0.5f, 458, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Knob("Reso", 0.0f, 459, state, onStateChange, nativeLib, knobSize = 44.dp)
+                        Knob("F.Amt", 0.0f, 464, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    }
+                }
             }
         }
-        
-        // AMP ENVELOPE & UNISON (Bottom Row)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-             ParameterGroup("Amp Envelope", modifier = Modifier.weight(1f)) {
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // FILTER ENVELOPE
+            ParameterGroup("Filter Env", modifier = Modifier.weight(1f), titleSize = 10) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("Atk", 0.01f, 454, state, onStateChange, nativeLib, knobSize = 40.dp)
-                    Knob("Dcy", 0.1f, 455, state, onStateChange, nativeLib, knobSize = 40.dp)
-                    Knob("Sus", 0.8f, 456, state, onStateChange, nativeLib, knobSize = 40.dp)
-                    Knob("Rel", 0.5f, 457, state, onStateChange, nativeLib, knobSize = 40.dp)
+                    Knob("Atk", 0.01f, 471, state, onStateChange, nativeLib, knobSize = 38.dp)
+                    Knob("Dcy", 0.1f, 461, state, onStateChange, nativeLib, knobSize = 38.dp)
+                    Knob("Sus", 0.0f, 473, state, onStateChange, nativeLib, knobSize = 38.dp)
+                    Knob("Rel", 0.5f, 474, state, onStateChange, nativeLib, knobSize = 38.dp)
                 }
-             }
-             
-             ParameterGroup("Unison", modifier = Modifier.weight(1f)) {
-                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            }
+            
+            // AMP ENVELOPE
+            ParameterGroup("Amp Env", modifier = Modifier.weight(1f), titleSize = 10) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("Atk", 0.01f, 454, state, onStateChange, nativeLib, knobSize = 38.dp)
+                    Knob("Dcy", 0.1f, 455, state, onStateChange, nativeLib, knobSize = 38.dp)
+                    Knob("Sus", 0.8f, 456, state, onStateChange, nativeLib, knobSize = 38.dp)
+                    Knob("Rel", 0.5f, 457, state, onStateChange, nativeLib, knobSize = 38.dp)
+                }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // UNISON & LO-FI
+            ParameterGroup("Unison & Lo-Fi", modifier = Modifier.weight(1f), titleSize = 11) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Knob("Detune", 0.0f, 451, state, onStateChange, nativeLib, knobSize = 40.dp)
-                    Knob("BITS", 0.5f, 530, state, onStateChange, nativeLib, knobSize = 40.dp,
-                        valueFormatter = { v -> "${((v * 15.0f) + 1).toInt()} bits" })
-                    Knob("SRATE", 0.0f, 531, state, onStateChange, nativeLib, knobSize = 40.dp,
-                        valueFormatter = { v -> "${((v * 31.0f) + 1).toInt()}x" })
-                 }
-             }
+                    Knob("Bits", 1.0f, 475, state, onStateChange, nativeLib, knobSize = 40.dp)
+                    Knob("Srate", 0.0f, 476, state, onStateChange, nativeLib, knobSize = 40.dp)
+                }
+            }
         }
     }
 }
@@ -2190,6 +2247,10 @@ fun InputSourceSelector(nativeLib: NativeLib) {
     }
 
     fun getDeviceLabel(device: android.media.AudioDeviceInfo): String {
+        // Special overrides for requested labels
+        if (device.id == 18) return "both mics in mono"
+        if (device.id == 12 || device.id == 13) return "right microphone"
+
         val typeLabel = when (device.type) {
             android.media.AudioDeviceInfo.TYPE_BUILTIN_MIC -> "INT MIC"
             android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET -> "HEADSET"
@@ -2785,7 +2846,7 @@ val fmPresets = listOf(
 )
 
 @Composable
-fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, onRefresh: () -> Unit) {
     val track = state.tracks[trackIndex]
     var showPresetDrawer by remember { mutableStateOf(false) }
 
@@ -2813,32 +2874,8 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                     .background(Color.DarkGray)
                                     .clickable {
                                         nativeLib.loadFmPreset(trackIndex, preset.id)
-                                        // Update state to trigger recomposition if needed, 
-                                        // though parameters update via separate flow or need explicit refresh.
-                                        // Ideally we assume the engine params update and we might want to refresh Parameter views.
-                                        // The current architecture seems to rely on state.tracks[i].parameters map for knobs,
-                                        // but knobs also read directly if they have IDs?
-                                        // Actually Knob composable reads from 'state' AND 'nativeLib' but mainly state.
-                                        // We might need to force a refresh of parameters from native if the state doesn't track them granularly.
-                                        // For now, let's just trigger the native call. 
-                                        // If proper syncing is needed, we'd need to fetch all params back.
-                                        // given the "Knob" implementation: `val value = overrideValue ?: state.tracks...parameters[parameterId] ?: initialValue`
-                                        // We need to update the Kotlin state parameters map so the UI updates.
-                                        
-                                        // Since we don't have an easy "getAllParams" and 24 presets set MANY params,
-                                        // we'll rely on the user hearing the change, or we trigger a "reload" if possible.
-                                        // But wait, if knobs don't update, the user will see wrong values.
-                                        // We should try to update at least the macros in state if we can.
-                                        // Or better: The Knob implementation sends changes to native. Does it READ from native?
-                                        // No, it reads from State. 
-                                        // So we MUST update the State to match the Preset.
-                                        // This is tricky without duplicating the logic or fetching from C++.
-                                        // For now, I will just close the drawer. The sound will change.
-                                        // FIX: We really should update the UI. 
-                                        // I'll add a TODO or implemented a basic manual update for the known macros if possible, 
-                                        // but C++ side logic is complex.
-                                        // Let's rely on the fact that sound changes is primary.
                                         showPresetDrawer = false
+                                        onRefresh()
                                     }
                                     .padding(8.dp),
                                 contentAlignment = Alignment.Center

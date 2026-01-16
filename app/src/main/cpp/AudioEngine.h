@@ -1,6 +1,11 @@
 #ifndef AUDIO_ENGINE_H
 #define AUDIO_ENGINE_H
 
+#include <memory>
+#include <mutex>
+#include <oboe/Oboe.h>
+#include <vector>
+
 #include "Arpeggiator.h"
 #include "EnvelopeFollower.h"
 #include "RoutingMatrix.h"
@@ -28,11 +33,6 @@
 #include "engines/TapeEchoFx.h"
 #include "engines/TapeWobbleFx.h"
 #include "engines/WavetableEngine.h"
-
-#include <memory>
-#include <mutex>
-#include <oboe/Oboe.h>
-#include <vector>
 
 class AudioEngine : public oboe::AudioStreamCallback {
 public:

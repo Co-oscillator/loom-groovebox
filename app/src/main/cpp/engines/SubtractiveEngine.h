@@ -6,6 +6,8 @@
 #include "Oscillator.h"
 #include <android/log.h>
 #include <cmath>
+#include <memory>
+#include <oboe/Oboe.h>
 #include <vector>
 
 class SubtractiveEngine {
@@ -208,10 +210,18 @@ public:
       setSustain(value);
     else if (id == 103)
       setRelease(value);
+    else if (id == 150)
+      mOscSync = (value > 0.5f);
+    else if (id == 151)
+      mRingMod = (value > 0.5f);
+    else if (id == 152)
+      mFmAmt = value;
     else if (id >= 160 && id <= 163)
       mOscPitch[id - 160] = value * 4.0f;
     else if (id >= 170 && id <= 173)
       mOscDrive[id - 170] = 1.0f + value * 10.0f;
+    else if (id >= 180 && id <= 183)
+      mOscFold[id - 180] = value;
     else if (id >= 190 && id <= 193) {
       mOscPW[id - 190] = value;
       for (auto &v : mVoices)
@@ -250,8 +260,7 @@ public:
       if (!v.active)
         continue;
       float envVal = mUseEnvelope ? v.ampEnv.nextValue() : 1.0f;
-      if (envVal < 0.0001f && mUseEnvelope && !v.ampEnv.isActive() &&
-          !v.isNoteHeld) {
+      if (envVal < 0.0001f && mUseEnvelope && !v.ampEnv.isActive()) {
         v.active = false;
         continue;
       }
@@ -260,27 +269,35 @@ public:
 
       float osc1Pitch = mOscPitch[0];
       float osc2Pitch = mOscPitch[1] * (1.0f + mDetune * 0.05f);
-      if (mOscSync && v.oscillators[0].hasWrapped())
+      float osc3Pitch = mOscPitch[2];
+      float osc4Pitch = mOscPitch[3];
+
+      if (mOscSync && v.oscillators[0].hasWrapped()) {
         v.oscillators[1].resetPhase();
+      }
 
       float osc1Val = v.oscillators[0].nextSample(0.0f, osc1Pitch, mOscFold[0]);
       float osc2Val = v.oscillators[1].nextSample(0.0f, osc2Pitch, mOscFold[1]);
-      float osc3Val =
-          v.oscillators[2].nextSample(0.0f, mOscPitch[2], mOscFold[2]);
+      float osc3Val = v.oscillators[2].nextSample(0.0f, osc3Pitch, mOscFold[2]);
+      float osc4Val = v.oscillators[3].nextSample(0.0f, osc4Pitch, mOscFold[3]);
 
-      float subOutput = (mRingMod)
-                            ? (osc1Val * mOscVolumes[0] * mOscDrive[0]) *
-                                  (osc2Val * mOscVolumes[1] * mOscDrive[1])
-                            : (osc1Val * mOscVolumes[0] * mOscDrive[0]) +
-                                  (osc2Val * mOscVolumes[1] * mOscDrive[1]);
+      float subOutput = 0.0f;
+      if (mRingMod) {
+        subOutput = (osc1Val * mOscVolumes[0] * mOscDrive[0]) *
+                    (osc2Val * mOscVolumes[1] * mOscDrive[1]);
+      } else {
+        subOutput = (osc1Val * mOscVolumes[0] * mOscDrive[0]) +
+                    (osc2Val * mOscVolumes[1] * mOscDrive[1]);
+      }
       subOutput += (osc3Val * mOscVolumes[2] * mOscDrive[2]);
+      subOutput += (osc4Val * mOscVolumes[3] * mOscDrive[3]);
 
       mNoiseSeed = mNoiseSeed * 1103515245 + 12345;
       subOutput +=
           (((float)(mNoiseSeed & 0x7fffffff) / (float)0x7fffffff) * 2.0f -
            1.0f) *
           mNoiseLevel;
-      float output = subOutput * 0.4f * v.amplitude * envVal;
+      float output = subOutput * 1.0f * v.amplitude * envVal;
 
       if (v.controlCounter++ % 16 == 0) {
         float modCutoff = std::max(
@@ -331,6 +348,7 @@ private:
   float mSampleRate = 44100.0f;
   bool mUseEnvelope = true, mOscSync = false, mRingMod = false,
        mIgnoreNoteFrequency = false;
+  float mFmAmt = 0.0f;
   int mFilterMode = 0;
   float mOscPitch[4] = {1.0f, 1.0f, 0.5f, 1.0f},
         mOscDrive[4] = {1.0f, 1.0f, 1.0f, 1.0f},

@@ -2,11 +2,14 @@
 #define WAVETABLE_ENGINE_H
 
 #include "../Utils.h"
+#include "../WavFileUtils.h"
 #include "Adsr.h"
 #include <algorithm>
+#include <android/log.h>
 #include <cmath>
 #include <memory>
 #include <mutex>
+#include <oboe/Oboe.h>
 #include <string>
 #include <vector>
 
@@ -19,14 +22,20 @@ public:
     float frequency = 440.0f;
     float amplitude = 1.0f;
     Adsr envelope;
+    Adsr filterEnv;
     TSvf svf;
+    float lastSample = 0.0f;
+    float srateCounter = 0.0f;
 
     void reset() {
       active = false;
       note = -1;
       phase = 0.0;
       envelope.reset();
+      filterEnv.reset();
       svf.setParams(1000.0f, 0.7f, 44100.0f);
+      lastSample = 0.0f;
+      srateCounter = 0.0f;
     }
   };
 
@@ -49,19 +58,33 @@ public:
     mCutoff = 1.0f;
     mResonance = 0.0f;
     mPosition = 0.0f;
-    mMorph = 0.0f;
+    mDetune = 0.0f;
+    mF_Atk = 0.01f;
+    mF_Dcy = 0.1f;
+    mF_Sus = 0.0f;
+    mF_Rel = 0.5f;
+    mF_Amt = 0.0f;
+    mWarp = 0.0f;
+    mCrush = 0.0f;
+    mDrive = 0.0f;
+    mBits = 1.0f;
+    mSrate = 0.0f;
+    mFilterMode = 0;
   }
 
   void setSampleRate(float sr) {
     mSampleRate = sr;
-    for (auto &v : mVoices)
+    for (auto &v : mVoices) {
       v.envelope.setSampleRate(sr);
+      v.filterEnv.setSampleRate(sr);
+    }
   }
 
   void allNotesOff() {
     for (auto &v : mVoices) {
       v.active = false;
       v.envelope.reset();
+      v.filterEnv.reset();
     }
   }
 
@@ -70,15 +93,19 @@ public:
     mFrequency = freq;
   }
 
-  // Overload to support both vector and path (AudioEngine calls path)
   void loadWavetable(const std::vector<float> &data) {
     std::lock_guard<std::mutex> lock(*mMutex);
     mTable = data;
+    mNumFrames = (mTable.size() > 2048) ? (int)(mTable.size() / 2048) : 1;
   }
 
   void loadWavetable(const std::string &path) {
-    // This will be handled by AudioEngine which calls WavFileUtils usually
-    // But we need a stub to satisfy compile
+    std::vector<float> data;
+    int sr, channels;
+    std::vector<float> slices;
+    if (WavFileUtils::loadWav(path, data, sr, channels, slices)) {
+      loadWavetable(data);
+    }
   }
 
   void loadDefaultWavetable() {
@@ -86,6 +113,7 @@ public:
     mTable.assign(2048, 0.0f);
     for (int i = 0; i < 2048; ++i)
       mTable[i] = sinf(i * 6.283185f / 2048.0f);
+    mNumFrames = 1;
   }
 
   void triggerNote(int note, int velocity) {
@@ -108,12 +136,18 @@ public:
     v.envelope.setSampleRate(mSampleRate);
     v.envelope.setParameters(mAttack, mDecay, mSustain, mRelease);
     v.envelope.trigger();
+
+    v.filterEnv.setSampleRate(mSampleRate);
+    v.filterEnv.setParameters(mF_Atk, mF_Dcy, mF_Sus, mF_Rel);
+    v.filterEnv.trigger();
   }
 
   void releaseNote(int note) {
     for (auto &v : mVoices)
-      if (v.active && v.note == note)
+      if (v.active && v.note == note) {
         v.envelope.release();
+        v.filterEnv.release();
+      }
   }
 
   void setAttack(float v) { mAttack = v; }
@@ -129,25 +163,43 @@ public:
       mPosition = value;
       break;
     case 1:
-      mMorph = value;
+      mDetune = value;
       break;
     case 10:
       setFilterCutoff(value);
       break;
     case 11:
-      setResonance(value);
+      mF_Dcy = value;
       break;
     case 14:
-      setAttack(value);
+      mF_Amt = value * 2.0f - 1.0f;
       break;
     case 15:
-      setDecay(value);
+      mWarp = value;
       break;
     case 16:
-      setSustain(value);
+      mCrush = value;
       break;
     case 17:
-      setRelease(value);
+      mDrive = value;
+      break;
+    case 20: // Filter Mode
+      mFilterMode = (int)(value * 3.99f);
+      break;
+    case 21: // Filter Atk
+      mF_Atk = value;
+      break;
+    case 23: // Filter Sus
+      mF_Sus = value;
+      break;
+    case 24: // Filter Rel
+      mF_Rel = value;
+      break;
+    case 30:                          // Bits
+      mBits = 1.0f - (value * 0.95f); // 1.0 is full, 0.05 is 1 bit
+      break;
+    case 31: // Srate
+      mSrate = value;
       break;
     }
   }
@@ -169,23 +221,75 @@ public:
       }
       activeCount++;
 
-      double delta = v.frequency / mSampleRate;
+      float voiceDetune = 1.0f + (mDetune * 0.02f);
+      double delta = (v.frequency * voiceDetune) / mSampleRate;
       v.phase += delta;
-      if (v.phase >= 1.0)
+      while (v.phase >= 1.0)
         v.phase -= 1.0;
 
-      // Linear Interpolation
-      double tablePos = v.phase * (mTable.size() - 1);
-      int idx1 = static_cast<int>(tablePos);
-      int idx2 = (idx1 + 1) % mTable.size();
-      float frac = static_cast<float>(tablePos - idx1);
-      float sample = (1.0f - frac) * mTable[idx1] + frac * mTable[idx2];
+      // Sample Rate Reduction (Decimation)
+      bool skipSample = false;
+      if (mSrate > 0.05f) {
+        float period = 1.0f + mSrate * 64.0f;
+        v.srateCounter += 1.0f;
+        if (v.srateCounter < period) {
+          skipSample = true;
+        } else {
+          v.srateCounter -= period;
+        }
+      }
 
+      if (!skipSample) {
+        double wPhase = v.phase;
+        if (mWarp > 0.05f) {
+          float p = 1.0f + mWarp * 3.0f;
+          wPhase = pow(wPhase, p);
+        } else if (mWarp < -0.05f) {
+          float p = 1.0f - mWarp * 3.0f;
+          wPhase = 1.0 - pow(1.0 - wPhase, p);
+        }
+
+        float pos = mPosition * (float)(mNumFrames - 1);
+        int frame1 = (int)pos;
+        int frame2 = std::min(mNumFrames - 1, frame1 + 1);
+        float posFrac = pos - (float)frame1;
+
+        auto getSample = [&](int frame, double phase) -> float {
+          int offset = frame * 2048;
+          double tablePos = phase * 2047.0;
+          int i1 = (int)tablePos;
+          int i2 = (i1 + 1) % 2048;
+          float f = (float)(tablePos - i1);
+          return (1.0f - f) * mTable[offset + i1] + f * mTable[offset + i2];
+        };
+
+        float sample = (1.0f - posFrac) * getSample(frame1, wPhase) +
+                       posFrac * getSample(frame2, wPhase);
+
+        // Bit Reduction
+        if (mBits < 0.99f) {
+          float steps = powf(2.0f, mBits * 16.0f);
+          sample = roundf(sample * steps) / steps;
+        }
+
+        if (mCrush > 0.05f) {
+          float st = 2.0f + (1.0f - mCrush) * 32.0f;
+          sample = roundf(sample * st) / st;
+        }
+        if (mDrive > 0.05f) {
+          sample = fast_tanh(sample * (1.0f + mDrive * 4.0f));
+        }
+        v.lastSample = sample;
+      }
+
+      float fEnv = v.filterEnv.nextValue();
       float cutoff = 20.0f + mCutoff * mCutoff * 18000.0f;
-      v.svf.setParams(cutoff, 0.7f + mResonance * 5.0f, mSampleRate);
-      float out = v.svf.process(sample, TSvf::LowPass);
+      cutoff += fEnv * mF_Amt * 12000.0f;
+      cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
 
-      mixedOutput += out * env * v.amplitude;
+      v.svf.setParams(cutoff, 0.7f + mResonance * 5.0f, mSampleRate);
+      mixedOutput += v.svf.process(v.lastSample, (TSvf::Type)mFilterMode) *
+                     env * v.amplitude;
     }
 
     if (activeCount > 1)
@@ -203,11 +307,16 @@ public:
 private:
   std::vector<Voice> mVoices;
   std::vector<float> mTable;
+  int mNumFrames = 1;
   float mSampleRate = 44100.0f, mFrequency = 440.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
-  float mCutoff = 1.0f, mResonance = 0.0f, mPosition = 0.0f, mMorph = 0.0f;
-  std::shared_ptr<std::mutex>
-      mMutex; // Use shared_ptr to allow Track move/copy in vector
+  float mF_Atk = 0.01f, mF_Dcy = 0.1f, mF_Sus = 0.0f, mF_Rel = 0.5f,
+        mF_Amt = 0.0f;
+  float mCutoff = 1.0f, mResonance = 0.0f, mPosition = 0.0f, mDetune = 0.0f;
+  float mWarp = 0.0f, mCrush = 0.0f, mDrive = 0.0f;
+  float mBits = 1.0f, mSrate = 0.0f;
+  int mFilterMode = 0;
+  std::shared_ptr<std::mutex> mMutex;
 };
 
 #endif

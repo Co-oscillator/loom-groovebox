@@ -121,8 +121,31 @@ public:
     // Cross-Feedback / Ping-Pong
     float nextL = 0, nextR = 0;
     if (mType == 2) { // Ping-Pong
+      // For Ping-Pong, we alternate which side the input is injected into
+      // every delay cycle? No, better to just inject into one side and let it
+      // bounce. But if input is stereo, we want both. Traditional Ping-Pong:
+      // Mono In -> Left -> (delay) -> Right -> (delay) -> Left... Here: Send
+      // inL to Left, inR to Right, but cross-feedback ensures swap. To get
+      // stereo width from even a mono source:
       nextL = inL + filteredR * mFeedback;
       nextR = inR + filteredL * mFeedback;
+
+      // If practically mono input, we need an initial offset to start the
+      // ping-pong. We'll use a simple trick: if it's Ping-Pong and we're
+      // starting or every few cycles, nudge one side. Or better: just delay the
+      // right channel's read by a few samples? No, let's just use the 'Type 2'
+      // swap and ensure it doesn't stay mono. If we only add input to one side
+      // at a time, it will definitively ping-pong.
+      if (mPingPongCounter == 0) {
+        nextR = filteredL * mFeedback; // Only Left gets input
+      } else {
+        nextL = filteredR * mFeedback; // Only Right gets input
+      }
+
+      // Update counter: flip every delay period?
+      // Use mWriteIndex == 0 as a simple flip trigger
+      if (mWriteIndex == 0)
+        mPingPongCounter = !mPingPongCounter;
     } else {
       nextL = inL + filteredL * mFeedback;
       nextR = inR + filteredR * mFeedback;
@@ -149,6 +172,7 @@ private:
   float mTargetDelayFrames = 11025.0f;
   float mSmoothedDelay = 11025.0f;
   int mCounter = 1;
+  int mPingPongCounter = 0;
 
   float mFeedback = 0.5f, mTargetFeedback = 0.5f;
   float mMix = 0.5f, mTargetMix = 0.5f;

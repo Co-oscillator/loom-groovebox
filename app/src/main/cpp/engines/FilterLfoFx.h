@@ -25,6 +25,8 @@ public:
     mControlCounter = other.mControlCounter;
   }
 
+  float getPhase() const { return mPhase; }
+
   void setParameters(float rate, float depth, float shape, float cutoff,
                      float resonance) {
     mRate = rate;

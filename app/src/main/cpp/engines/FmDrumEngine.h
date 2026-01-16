@@ -58,15 +58,7 @@ public:
       // GOAL: Tubby resonance
       e.setOpRatio(0, 1.0f);
       e.setOpLevel(0, 0.9f);
-      e.setOpLevel(0, 0.9f);
       e.setOpADSR(0, 0.001f, 0.4f, 0.0f, 0.2f);
-      e.setOpRatio(1, 0.75f); // Lower ratio = thicker, deeper sound
-      e.setOpLevel(1, 0.4f);
-      e.setOpADSR(1, 0.001f, 0.15f, 0.0f, 0.1f);
-      e.setFeedback(0.0f);
-      e.setFrequency(90.0f, 44100.0f);
-      break;
-
       e.setOpRatio(1, 0.75f); // Lower ratio = thicker, deeper sound
       e.setOpLevel(1, 0.4f);
       e.setOpADSR(1, 0.001f, 0.15f, 0.0f, 0.1f);

@@ -8,6 +8,8 @@ class AutoPannerFx {
 public:
   AutoPannerFx() {}
 
+  void setPhase(float phase) { mPhase = phase; }
+
   void process(float input, float &outL, float &outR, float sampleRate) {
     if (mMix <= 0.001f) {
       outL = input;

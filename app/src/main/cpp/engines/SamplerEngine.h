@@ -4,8 +4,11 @@
 #include "../Utils.h"
 #include "Adsr.h"
 #include <algorithm>
+#include <android/log.h>
 #include <cmath>
+#include <memory>
 #include <mutex>
+#include <oboe/Oboe.h>
 #include <vector>
 
 class SamplerEngine {
@@ -342,34 +345,31 @@ public:
       activeCount++;
 
       /*
-       * SAMPLER PARAMETER LOGIC (DO NOT CHANGE):
-       * 1. SPEED: Resampling rate. Affects BOTH traversal (time) and read
-       * (pitch).
-       * 2. STRETCH: Affects traverseRate ONLY (divides speed). Pitch stays
-       * constant.
-       * 3. PITCH: Affects readRate ONLY (via v.pitchRatio). Time stays
-       * constant.
+       * SAMPLER PARAMETER LOGIC:
+       * 1. SPEED (mSpeed): Global playback rate. Affects BOTH traversal (time)
+       * and read (pitch).
+       * 2. STRETCH (mStretch): Decouples time from pitch. Affects traverseRate
+       * ONLY.
+       * 3. PITCH (mPitch): Decouples pitch from time. Affects readRate ONLY.
        */
 
-      // Resampling combined rate (Speed)
-      float classicRate = mSpeed * (mReverse ? -1.0f : 1.0f);
+      // Base Resampling Rate: Affected by Speed AND Pitch knob (Classic
+      // behavior)
+      float pitchFactor = v.pitchRatio; // includes mPitch and Note shift
+      float baseResampleRate = mSpeed * pitchFactor * (mReverse ? -1.0f : 1.0f);
 
-      // Granular Traversal Rate (Time): Affected by Speed / Stretch.
-      // Pitch remains constant because readRate isn't affected by mStretch.
-      float stretchFactor = std::max(0.01f, mStretch);
-      float traverseRate = classicRate / stretchFactor;
+      // Decoupled Rates for Granular (only used if mStretch != 1.0)
+      float traverseRate = baseResampleRate / std::max(0.01f, mStretch);
+      float readRate =
+          baseResampleRate; // The pitch is already in baseResampleRate
 
-      // Grain Read Rate (Pitch): Affected by Speed * PitchShift.
-      // Time remains constant because traverseRate isn't affected by
-      // v.pitchRatio.
-      float readRate = classicRate * v.pitchRatio;
-
-      bool useGranular =
-          (std::abs(mStretch - 1.0f) > 0.01f || std::abs(mPitch) > 0.01f);
+      // ONLY use Granular if actively stretching time (mStretch != 1.0)
+      bool useGranular = (std::abs(mStretch - 1.0f) > 0.02f);
 
       float voiceOutput = 0.0f;
       if (!useGranular) {
-        v.position += classicRate * v.pitchRatio;
+        // Classic mode: Resampling (Pitch and Time are linked)
+        v.position += baseResampleRate;
         if (v.position >= v.end || v.position < v.start) {
           if (mPlayMode == Sustain) {
             v.position = mReverse ? (double)v.end - 1.0 : (double)v.start;
@@ -377,27 +377,25 @@ public:
             v.envelope.release();
           }
         }
-        v.grainPosition = v.position;
-        int idx = static_cast<int>(v.grainPosition);
+        int idx = static_cast<int>(v.position);
         if (idx >= 0 && idx < (int)mBuffer.size()) {
           voiceOutput = mBuffer[idx];
         }
       } else {
-        // Dual-Grain Cross-fading for Smoothness
+        // Granular mode: Time-stretching (Decouples traversal from read rate)
         v.position += traverseRate;
         v.grainTimer++;
 
         // Grain 1
-        double gp1 = v.position + (v.grainTimer * readRate);
+        double gp1 = v.position + (v.grainTimer * (readRate - traverseRate));
         int idx1 = static_cast<int>(gp1);
 
-        // Grain 2 (Offset by half grain size)
+        // Grain 2
         uint32_t timer2 =
             (v.grainTimer + (Voice::GRAIN_SIZE / 2)) % Voice::GRAIN_SIZE;
-        double gp2 = v.position + (timer2 * readRate);
+        double gp2 = v.position + (timer2 * (readRate - traverseRate));
         int idx2 = static_cast<int>(gp2);
 
-        // Simple Triangle Window for Cross-fade
         float phase = (float)v.grainTimer / (float)Voice::GRAIN_SIZE;
         float w1 = 1.0f - std::abs(phase * 2.0f - 1.0f);
 

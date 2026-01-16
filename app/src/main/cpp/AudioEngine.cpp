@@ -95,10 +95,10 @@ bool AudioEngine::start() {
 
   // Fix for startup choppiness:
   // Exclusive mode often defaults to 1 burst, which is too aggressive during
-  // app initialization jitter. We explicitly set it to 2 bursts (Double
+  // app initialization jitter. We explicitly set it to 4 bursts (Quad
   // Buffering) for stability.
   int burstFrames = mStream->getFramesPerBurst();
-  mStream->setBufferSizeInFrames(burstFrames * 2);
+  mStream->setBufferSizeInFrames(burstFrames * 4);
 
   mReverbFx.setSampleRate(mStream->getSampleRate());
   mSampleRate = mStream->getSampleRate();
@@ -350,6 +350,16 @@ void AudioEngine::setParameter(int trackIndex, int parameterId, float value) {
 
 void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
                                         float value) {
+  // Global Parameters (trackIndex = -1)
+  if (trackIndex == -1) {
+    if (parameterId == 2103) {
+      mLpLfoL.setShape(value);
+      mLpLfoR.setShape(value);
+    }
+    // Add other global parameters here if needed
+    return;
+  }
+
   if (trackIndex < 0 || trackIndex >= mTracks.size())
     return;
   if (parameterId < 0 || parameterId >= 2500)
@@ -358,6 +368,10 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
 
   // Specific Logic for Global / Sends
   if (parameterId >= 2000) {
+    // If it's 2103 but targeted at a track, we treat it as global for now
+    // or ignore if it should only be truly global.
+    // Given the UI sends -1 for 2103, the top block handles it.
+
     int fxIndex = (parameterId - 2000) / 10;
     if (fxIndex >= 0 && fxIndex < 15) {
       track.fxSends[fxIndex] = value;
@@ -415,6 +429,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
     case 123: // Audio In Filter Mode
       track.audioInEngine.setParameter(123, value);
       break;
+    case 100:
       track.subtractiveEngine.setAttack(value);
       track.samplerEngine.setAttack(value);
       track.granularEngine.setAttack(value);
@@ -422,6 +437,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.fmEngine.setParameter(100, value);
       track.audioInEngine.setParameter(100, value);
       break;
+    case 101:
       track.subtractiveEngine.setDecay(value);
       track.samplerEngine.setDecay(value);
       track.granularEngine.setDecay(value);
@@ -569,6 +585,20 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.wavetableEngine.setParameter(16, value);
     else if (parameterId == 467)
       track.wavetableEngine.setParameter(17, value);
+    else if (parameterId == 470) // Filter Mode (Added)
+      track.wavetableEngine.setParameter(20, value);
+    else if (parameterId == 471) // Filter Atk (Added)
+      track.wavetableEngine.setParameter(21, value);
+    else if (parameterId == 472) // Filter Dcy (Shared handle)
+      track.wavetableEngine.setParameter(11, value);
+    else if (parameterId == 473) // Filter Sus (Added)
+      track.wavetableEngine.setParameter(23, value);
+    else if (parameterId == 474) // Filter Rel (Added)
+      track.wavetableEngine.setParameter(24, value);
+    else if (parameterId == 475) // Bits (Moved from 530)
+      track.wavetableEngine.setParameter(30, value);
+    else if (parameterId == 476) // Srate (Moved from 531)
+      track.wavetableEngine.setParameter(31, value);
   }
   // LP LFO (Pedal 10)
   else if (parameterId >= 490 && parameterId < 500) {
@@ -1710,6 +1740,8 @@ void AudioEngine::loadSample(int trackIndex, const std::string &path) {
       track.samplerEngine.setSlicePoints(slices);
     } else if (track.engineType == 3) { // Granular (Standardized to 3)
       track.granularEngine.setSource(data);
+    } else if (track.engineType == 4) { // Wavetable
+      track.wavetableEngine.loadWavetable(data);
     }
     track.lastSamplePath = path;
     saveAppState();
@@ -1979,8 +2011,38 @@ void AudioEngine::restorePresets() {
     track.samplerEngine.resetToDefaults();
     track.granularEngine.resetToDefaults();
     track.wavetableEngine.resetToDefaults();
-    // Also reset common params that might be stored in the track/sequencer
-    // state if applicable.
+
+    // CRITICAL: Also clear the parameter buffers so UI and Engine stay in sync
+    // We set meaningful defaults so the UI knobs show the correct initial
+    // values
+    std::fill(std::begin(track.parameters), std::end(track.parameters), 0.0f);
+    std::fill(std::begin(track.appliedParameters),
+              std::end(track.appliedParameters), 0.0f);
+
+    // Common EG Defaults
+    track.parameters[100] = 0.01f; // Attack
+    track.parameters[101] = 0.1f;  // Decay
+    track.parameters[102] = 0.8f;  // Sustain
+    track.parameters[103] = 0.5f;  // Release
+
+    // Common Filter Defaults
+    track.parameters[112] = 0.5f; // Cutoff
+    track.parameters[113] = 0.0f; // Resonance
+
+    // FM Specific Defaults
+    track.parameters[150] = 0.0f;  // Algorithm 0
+    track.parameters[153] = 1.0f;  // Carrier Mask (Op 1)
+    track.parameters[155] = 63.0f; // Active Mask (All 6 Ops)
+    track.parameters[157] = 0.5f;  // Brightness (1.0 in engine)
+
+    // Sampler Defaults
+    track.parameters[302] = 0.5f; // Speed 1.0x
+    track.parameters[320] = 0.0f; // OneShot mode
+    track.parameters[340] = 0.0f; // 2 slices
+
+    // Wavetable Defaults
+    track.parameters[450] = 0.0f; // Position
+    track.parameters[451] = 0.0f; // Morph
   }
 }
 
@@ -2276,6 +2338,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       // Auto-Panner typically takes mono and generates stereo.
       // We use the sum of the FX bus for input.
       // Moved to index 12 to avoid LP LFO (index 10) collision.
+      mAutoPannerFx.setPhase(mLpLfoL.getPhase()); // SYNC WITH LP LFO
       mAutoPannerFx.process((fxBusesL[12] + fxBusesR[12]) * 0.5f, sL, sR,
                             sampleRate);
       int dest = mFxChainDest[12];

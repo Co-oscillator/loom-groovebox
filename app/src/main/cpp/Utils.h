@@ -62,6 +62,17 @@ struct FastSine {
     static FastSine instance;
     return instance;
   }
+
+  // Static helper for 0..1 phase input
+  static inline float get(float phase) {
+    // Wrap phase to [0..1]
+    if (phase < 0.0f)
+      phase -= floorf(phase);
+    else if (phase >= 1.0f)
+      phase -= floorf(phase);
+
+    return getInstance().sin(phase * 2.0f * (float)M_PI);
+  }
 };
 
 // T-SVF (Zero-Delay Feedback State Variable Filter)

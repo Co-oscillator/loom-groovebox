@@ -10,9 +10,9 @@ Welcome to Loom Groovebox, a powerful mobile synthesizer and sequencer designed 
 The hub for live performance. Toggle between Melodic and Drum Kit layouts depending on your track type.
 
 ````carousel
-![Melodic Play Screen](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Play Screen (Melodic).png)
+![Melodic Play Screen](Loom Screenshots/Play Screen (Melodic).png)
 <!-- slide -->
-![Drum Kit Play Screen](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Play Screen (Drum Kit).png)
+![Drum Kit Play Screen](Loom Screenshots/Play Screen (Drum Kit).png)
 ````
 
 - **Arpeggiator Menu**: Long-press the **ARP** button to open the advanced Arpeggiator configuration.
@@ -26,16 +26,24 @@ The hub for live performance. Toggle between Melodic and Drum Kit layouts depend
 Create and edit patterns with the 16-pad grid.
 
 ````carousel
-![Single Track Sequencer](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Sequencer Screen (Single Track).png)
+![Single Track Sequencer](Loom Screenshots/Sequencer Screen (Single Track).png)
 <!-- slide -->
-![Drum Kit Sequencer](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Sequencer Screen (Drum Kit).png)
+![Drum Kit Sequencer](Loom Screenshots/Sequencer Screen (Drum Kit).png)
+<!-- slide -->
+![64 Step Grid](Loom Screenshots/Sequencer 64 Grid.png)
 ````
 
+- **64-Step Sequencing**: Loom supports sequences up to 64 steps long.
+    - **Bank Buttons (A-D)**: Toggle between 16-step pages to edit longer sequences.
+    - **64 Grid View**: Tap the **'64'** button to view and edit the entire 8x8 step grid at once.
 - **Step Options**: Long-press any active step to access the Step Editor.
+    - **Visual Reference**: ![Step Options](Loom Screenshots/Step Options.png)
     - **Velocity**: Adjust the loudness of the step.
-    - **Gate Length**: Control note duration. Gates > 100% create "Legato" slides if the engine supports it.
+    - **Gate Length**: Control note duration. Gates > 100% create "Legato" slides. The range extends to **8.0 steps**, with a **cubic response curve** on the slider for surgical precision at short values.
     - **Probability**: Set the chance (0-100%) that the step will play.
-    - **Ratchet**: Repeat the note multiple times within a single step (e.g., 2x, 3x, 4x) for drum rolls or glitches.
+    - **Ratchet**: Repeat the note multiple times within a single step.
+    - **Remove Step (Polymetry)**: Tapping **Remove Step** completely excises the step from the sequence for that specific voice. This shortens the loop length, creating **polymetric drift** where voices move out of phase with the main clock.
+- **Skipped Step Restoration**: Long-press a pad on the sequencer grid to restore a previously "removed" step.
 - **Octave +/-**: Quickly shift the entire sequence pitch.
 
 ---
@@ -44,27 +52,88 @@ Create and edit patterns with the 16-pad grid.
 Shape your sound using the dedicated controls for each engine.
 
 ````carousel
-![Subtractive Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (Subtractive).png)
+![Subtractive Engine](Loom Screenshots/Param Screen (Subtractive).png)
 <!-- slide -->
-![FM Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (FM).png)
+![FM Engine](Loom Screenshots/Param Screen (FM).png)
 <!-- slide -->
-![Wavetable Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (Wavetable).png)
+![Wavetable Engine](Loom Screenshots/Param Screen (Wavetable).png)
 <!-- slide -->
-![Sampler Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (Sampler).png)
+![Sampler Engine](Loom Screenshots/Param Screen (Sampler).png)
 <!-- slide -->
-![Granular Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (Granular).png)
+![Sample Chopping](Loom Screenshots/Sample Chopping.png)
 <!-- slide -->
-![FM Drum Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (FM Drum).png)
+![Granular Engine](Loom Screenshots/Param Screen (Granular).png)
 <!-- slide -->
-![Analog Drum Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (Analogue Drum).png)
+![FM Drum Engine](Loom Screenshots/Param Screen (FM Drum).png)
 <!-- slide -->
-![MIDI Output Engine](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Param Screen (MIDI).png)
+![Analog Drum Engine](Loom Screenshots/Param Screen (Analogue Drum).png)
+<!-- slide -->
+![Audio In Engine](Loom Screenshots/Audio In Parameters.png)
+<!-- slide -->
+![MIDI Output Engine](Loom Screenshots/Param Screen (MIDI).png)
 ````
 
-**Sampler Modes**:
-- **One Shot**: Plays the sample from start to finish. Good for drums.
-- **Chopped**: Splits the sample into 16 slices, mapped to the step sequencer. Each step can trigger a specific slice.
-- **Loop**: Loops the sample continuously while the key is held.
+#### Subtractive Engine
+**Sounds Like**: Classic 70s and 80s analog synths. Great for fat basses, lush pads, and sharp leads.
+- **Osc 1-4 Pitch**: Semitone offset for each of the four oscillators.
+- **Osc 1-4 Fold / Drive**: Add harmonic grit via wave-folding or traditional saturation.
+- **PW (Pulse Width)**: Modifies the symmetry of square waves for "thin" or "nasal" timbres.
+- **Cutoff / Resonance**: Filter the sound to remove high frequencies and add "squelch."
+- **Detune**: Offsets oscillator pitches slightly for a thicker, wider sound.
+
+#### FM Engine
+**Sounds Like**: 80s digital synths (DX7). Excels at metallic bells, glassy pianos, and complex evolving stabs.
+- **Algorithm**: Changes how the 6 operators modulate each other (from serial to parallel).
+- **Brightness**: Global modulation depth; the "master harmonic control."
+- **Op 1-6 Level / Ratio**: Individual volume and frequency multipliers for the 6 internal operators.
+- **Feedback / FB Drive**: Routes signal back into the operator for harsh, noisy textures.
+
+#### Wavetable Engine
+**Sounds Like**: Modern digital synthesis. Known for morphing "dubstep" growls and evolving pads.
+- **Position**: Sweeps through the frames of the current wavetable file.
+- **Warp**: Non-linear phase distortion for unique harmonic shifting.
+- **Crush / Bits / Srate**: Digital artifacts and lo-fi reduction for "crunchy" textures.
+- **Detune**: Adds subtle pitch variation for a "chorused" feel.
+
+#### Sampler Engine
+**Sounds Like**: Traditional sample playback. Used for acoustic instruments, vocal chops, and found sounds.
+- **Pitch**: Changes frequency without changing playback speed (Time-stretching).
+- **Stretch**: Changes playback time without changing pitch.
+- **Speed**: Classic tape-style control where time and pitch are linked.
+- **Reverse**: Plays the loaded sample backwards.
+- **Trim Start / End**: Defines the specific region of the sample to be played.
+- **Sampler Modes**:
+  - **One Shot**: Plays once to the end.
+  - **Chopped**: Splits audio into 16 slices; each slice gets its own independent track.
+  - **One Shot Chops**: Like Chopped, but slices play to the end when triggered.
+  - **Loop**: Perpetually loops the selected region.
+
+#### Granular Engine
+**Sounds Like**: Ambient "clouds" and textures. Turns any sample into a wash of microscopic sound particles.
+- **Position / Spray**: Where in the sample grains start, and how much random "jitter" is added.
+- **Grain Size**: Length of sound particles; smaller is glitchy, larger is smooth.
+- **Density**: How many grains are born per second.
+- **Detune / Width**: Random pitch variation and stereo positioning for massive textures.
+- **Reverse Prob**: The chance that any individual grain will play backwards.
+
+#### Drum Engines (FM & Analog)
+**Sounds Like**: High-impact percussion. FM is digital/metallic, Analog is warm/explosive.
+- **Pitch (Tune)**: Root frequency of the drum hit.
+- **Click (FM)**: Pitch envelope "snap" for kicks or noise burst for snares/hats.
+- **Param A (Analog)**: Mode-specific control (*Punch* for Kicks, *Snappy* for Snares, *Spread* for Claps).
+- **Param B (Analog)**: Controls *Detune* for metallic hats or *Grit* for other voices.
+- **Decay**: Controls the length of the drum tail.
+
+#### Audio In Engine
+**Sounds Like**: High-end outboard processing. Run external gear through Loom's signal path.
+- **Gain / Wavefold**: Boost and distort the external audio signal.
+- **Gate ON/OFF**: When ON, audio only passes when a note is triggered.
+- **Filter**: Dedicated Low-pass, High-pass, and Band-pass options with ADSR modulation.
+
+#### MIDI Output
+**Sounds Like**: Whatever external gear you connect!
+- **Channel**: Selects the target MIDI channel (1-16).
+- **Gate / Length**: Controls the duration of the external notes sent.
 
 ---
 
@@ -72,9 +141,9 @@ Shape your sound using the dedicated controls for each engine.
 Chain your tracks through high-quality FX and manage the signal path.
 
 ````carousel
-![Effects Pedalboard](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Effects Screen.png)
+![Effects Pedalboard](Loom Screenshots/Effects Screen.png)
 <!-- slide -->
-![Routing Matrix](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Patch Screen.png)
+![Routing Matrix](Loom Screenshots/Patch Screen.png)
 ````
 
 **Global Effects Suite**:
@@ -97,7 +166,11 @@ The effects chain processes audio in a semi-parallel bus structure. Each track h
 ### Settings & Troubleshooting
 Project management and system controls.
 
-![Settings Screen](/Users/danielmiller/.gemini/antigravity/brain/0dad9a40-7a34-4754-a4da-b660dbf82e09/Settings Screen.png)
+````carousel
+![Settings Screen](Loom Screenshots/Settings Screen.png)
+<!-- slide -->
+![File Browser & Export](Loom Screenshots/File Browser Menu & Export.png)
+````
 
 - **RESET AUDIO ENGINE (PANIC)**: If the audio becomes silent, distorted, or "heavy," tap this button. It performs a **"Nuclear Reset"** by completely reconstructing the native audio engine, clearing out any bad state or NaN (Not-a-Number) values.
 - **Project Files**: Save and Load your sessions. Note: Loading a project also triggers an engine reset for stability.
@@ -116,3 +189,8 @@ To provide maximum headroom and prevent clipping:
 - Track volumes are default-scaled to **45%** on load.
 - Global saturation and internal gain stages are optimized to allow for layering multiple heavy synth engines without digital distortion.
 - **Global Limiter**: A master soft-limiter prevents digital overs at the final output.
+
+### Performance & UI Updates
+- **High-Precision Export**: The export system now provides real-time progress feedback and notifications when files are ready.
+- **Contextual Interface**: Buttons like **ARP** automatically hide for engines that don't support them (like FM Drum or Sampler Chops), keeping the workspace clean.
+- **CPU Smart-Decimation**: The engine now optimizes filter and envelope calculations dynamically to ensure stable performance even on older devices.

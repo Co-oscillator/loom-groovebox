@@ -10,9 +10,9 @@ Welcome to Loom Groovebox, a powerful mobile synthesizer and sequencer designed 
 The hub for live performance. Toggle between Melodic and Drum Kit layouts depending on your track type.
 
 ````carousel
-![Melodic Play Screen](Loom Screenshots/Play Screen (Melodic).png)
+![Melodic Play Screen](assets/Play_Screen_Melodic.png)
 <!-- slide -->
-![Drum Kit Play Screen](Loom Screenshots/Play Screen (Drum Kit).png)
+![Drum Kit Play Screen](assets/Play_Screen_Drum_Kit.png)
 ````
 
 - **Arpeggiator Menu**: Long-press the **ARP** button to open the advanced Arpeggiator configuration.
@@ -26,18 +26,18 @@ The hub for live performance. Toggle between Melodic and Drum Kit layouts depend
 Create and edit patterns with the 16-pad grid.
 
 ````carousel
-![Single Track Sequencer](Loom Screenshots/Sequencer Screen (Single Track).png)
+![Single Track Sequencer](assets/Sequencer_Screen_Single_Track.png)
 <!-- slide -->
-![Drum Kit Sequencer](Loom Screenshots/Sequencer Screen (Drum Kit).png)
+![Drum Kit Sequencer](assets/Sequencer_Screen_Drum_Kit.png)
 <!-- slide -->
-![64 Step Grid](Loom Screenshots/Sequencer 64 Grid.png)
+![64 Step Grid](assets/Sequencer_64_Grid.png)
 ````
 
 - **64-Step Sequencing**: Loom supports sequences up to 64 steps long.
     - **Bank Buttons (A-D)**: Toggle between 16-step pages to edit longer sequences.
     - **64 Grid View**: Tap the **'64'** button to view and edit the entire 8x8 step grid at once.
 - **Step Options**: Long-press any active step to access the Step Editor.
-    - **Visual Reference**: ![Step Options](Loom Screenshots/Step Options.png)
+    - **Visual Reference**: ![Step Options](assets/Step_Options.png)
     - **Velocity**: Adjust the loudness of the step.
     - **Gate Length**: Control note duration. Gates > 100% create "Legato" slides. The range extends to **8.0 steps**, with a **cubic response curve** on the slider for surgical precision at short values.
     - **Probability**: Set the chance (0-100%) that the step will play.
@@ -52,25 +52,25 @@ Create and edit patterns with the 16-pad grid.
 Shape your sound using the dedicated controls for each engine.
 
 ````carousel
-![Subtractive Engine](Loom Screenshots/Param Screen (Subtractive).png)
+![Subtractive Engine](assets/Param_Screen_Subtractive.png)
 <!-- slide -->
-![FM Engine](Loom Screenshots/Param Screen (FM).png)
+![FM Engine](assets/Param_Screen_FM.png)
 <!-- slide -->
-![Wavetable Engine](Loom Screenshots/Param Screen (Wavetable).png)
+![Wavetable Engine](assets/Param_Screen_Wavetable.png)
 <!-- slide -->
-![Sampler Engine](Loom Screenshots/Param Screen (Sampler).png)
+![Sampler Engine](assets/Param_Screen_Sampler.png)
 <!-- slide -->
-![Sample Chopping](Loom Screenshots/Sample Chopping.png)
+![Sample Chopping](assets/Sample_Chopping.png)
 <!-- slide -->
-![Granular Engine](Loom Screenshots/Param Screen (Granular).png)
+![Granular Engine](assets/Param_Screen_Granular.png)
 <!-- slide -->
-![FM Drum Engine](Loom Screenshots/Param Screen (FM Drum).png)
+![FM Drum Engine](assets/Param_Screen_FM_Drum.png)
 <!-- slide -->
-![Analog Drum Engine](Loom Screenshots/Param Screen (Analogue Drum).png)
+![Analog Drum Engine](assets/Param_Screen_Analogue_Drum.png)
 <!-- slide -->
-![Audio In Engine](Loom Screenshots/Audio In Parameters.png)
+![Audio In Engine](assets/Audio_In_Parameters.png)
 <!-- slide -->
-![MIDI Output Engine](Loom Screenshots/Param Screen (MIDI).png)
+![MIDI Output Engine](assets/Param_Screen_MIDI.png)
 ````
 
 #### Subtractive Engine
@@ -141,9 +141,9 @@ Shape your sound using the dedicated controls for each engine.
 Chain your tracks through high-quality FX and manage the signal path.
 
 ````carousel
-![Effects Pedalboard](Loom Screenshots/Effects Screen.png)
+![Effects Pedalboard](assets/Effects_Screen.png)
 <!-- slide -->
-![Routing Matrix](Loom Screenshots/Patch Screen.png)
+![Routing Matrix](assets/Patch_Screen.png)
 ````
 
 **Global Effects Suite**:
@@ -167,9 +167,9 @@ The effects chain processes audio in a semi-parallel bus structure. Each track h
 Project management and system controls.
 
 ````carousel
-![Settings Screen](Loom Screenshots/Settings Screen.png)
+![Settings Screen](assets/Settings_Screen.png)
 <!-- slide -->
-![File Browser & Export](Loom Screenshots/File Browser Menu & Export.png)
+![File Browser & Export](assets/File_Browser_Menu_and_Export.png)
 ````
 
 - **RESET AUDIO ENGINE (PANIC)**: If the audio becomes silent, distorted, or "heavy," tap this button. It performs a **"Nuclear Reset"** by completely reconstructing the native audio engine, clearing out any bad state or NaN (Not-a-Number) values.

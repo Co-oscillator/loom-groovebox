@@ -344,12 +344,6 @@ public:
   }
 
   void render(float *left, float *right) {
-    if (!mBufferLock->try_lock()) {
-      *left = *right = 0.0f;
-      return;
-    }
-    std::lock_guard<std::mutex> lock(*mBufferLock, std::adopt_lock);
-
     if (mSource.empty()) {
       *left = *right = 0.0f;
       return;

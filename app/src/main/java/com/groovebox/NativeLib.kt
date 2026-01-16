@@ -17,7 +17,7 @@ class NativeLib {
     external fun setPlaying(playing: Boolean)
     external fun triggerNote(trackIndex: Int, note: Int, velocity: Int)
     external fun releaseNote(trackIndex: Int, note: Int)
-    external fun setStep(trackIndex: Int, stepIndex: Int, active: Boolean, notes: IntArray, velocity: Float, ratchet: Int, punch: Boolean, probability: Float, gate: Float)
+    external fun setStep(trackIndex: Int, stepIndex: Int, active: Boolean, notes: IntArray, velocity: Float, ratchet: Int, punch: Boolean, probability: Float, gate: Float, isSkipped: Boolean)
     external fun setSequencerConfig(trackIndex: Int, numPages: Int, stepsPerPage: Int)
     external fun setRouting(destTrack: Int, sourceTrack: Int, source: Int, dest: Int, amount: Float, destParamId: Int = -1)
     external fun setParameter(trackIndex: Int, parameterId: Int, value: Float)
@@ -37,7 +37,7 @@ class NativeLib {
     external fun loadDefaultWavetable(trackIndex: Int)
     external fun saveSample(trackIndex: Int, path: String)
     external fun trimSample(trackIndex: Int)
-    external fun getCurrentStep(trackIndex: Int): Int
+    external fun getCurrentStep(trackIndex: Int, drumIndex: Int = -1): Int
     external fun getStepActive(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Boolean
     external fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray)
     external fun getGranularPlayheads(trackIndex: Int): FloatArray
@@ -72,6 +72,7 @@ class NativeLib {
     
     external fun getAllTrackParameters(trackIndex: Int): FloatArray
     external fun getAllStepActiveStates(trackIndex: Int): BooleanArray
+    external fun getRecordedSampleData(trackIndex: Int, targetSampleRate: Float): FloatArray?
     external fun restorePresets()
     external fun setInputDevice(deviceId: Int)
 }

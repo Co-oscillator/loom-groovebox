@@ -46,6 +46,7 @@ static inline float softLimit(float x) {
 
 AudioEngine::AudioEngine() {
   mSampleRate = 48000.0; // Default to common Android rate
+  mBpm = 120.0f;
   setupTracks();
   for (int i = 0; i < 15; ++i)
     mFxChainDest[i] = -1;
@@ -77,6 +78,7 @@ void AudioEngine::setupTracks() {
     mTracks[i].smoothedVolume = 0.7f;
     mTracks[i].pan = 0.5f;
     mTracks[i].smoothedPan = 0.5f;
+    mTracks[i].mSilenceFrames = 48001; // Skip initial idle processing burst
     clearSequencer(i);
   }
 }
@@ -350,6 +352,9 @@ void AudioEngine::setParameter(int trackIndex, int parameterId, float value) {
 
 void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
                                         float value) {
+  if (!std::isfinite(value))
+    return;
+
   // Global Parameters (trackIndex = -1)
   if (trackIndex == -1) {
     if (parameterId == 2103) {
@@ -1031,7 +1036,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
     // Unified Processing Block (Control + Audio + NoteOff)
     {
-      // std::lock_guard<std::recursive_mutex> lock(mLock);
+      std::lock_guard<std::recursive_mutex> lock(mLock);
       // REMOVED: Locking here causes audio dropouts if UI thread holds lock.
       // Audio thread should run free. We rely on atomics/race-tolerance for
       // params. Critical ops (like vector resize) should be guarded, but we
@@ -1120,15 +1125,16 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
             // Drum Sequencer
             bool isSamplerChops = (track.engineType == 2 &&
-                                   track.samplerEngine.getPlayMode() == 2);
+                                   track.samplerEngine.getPlayMode() >= 3);
             if (track.engineType == 5 || track.engineType == 6 ||
                 isSamplerChops) {
               for (int d = 0; d < 16; ++d) {
-                track.drumSequencers[d].jumpToStep(seqStep);
+                track.drumSequencers[d].advance();
+                int drumStep = track.drumSequencers[d].getCurrentStepIndex();
                 const std::vector<Step> &dSteps =
                     track.drumSequencers[d].getSteps();
-                if (seqStep < dSteps.size()) {
-                  const Step &ds = dSteps[seqStep];
+                if (drumStep < dSteps.size()) {
+                  const Step &ds = dSteps[drumStep];
                   if (ds.active) {
                     if (ds.probability >= 1.0f ||
                         gRng.next() <= ds.probability) {
@@ -1306,10 +1312,11 @@ void AudioEngine::setArpRate(int trackIndex, float rate, int divisionMode) {
 void AudioEngine::setStep(int trackIndex, int stepIndex, bool active,
                           const std::vector<int> &notes, float velocity,
                           int ratchet, bool punch, float probability,
-                          float gate) {
+                          float gate, bool isSkipped) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex >= 0 && trackIndex < mTracks.size()) {
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     Step step;
+    step.isSkipped = isSkipped;
     for (int n : notes) {
       step.addNote(n, velocity, 0.0f);
     }
@@ -1396,6 +1403,8 @@ void AudioEngine::setSequencerConfig(int trackIndex, int numPages,
 void AudioEngine::setTempo(float bpm) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   // Safety clamp BPM to reasonable musical range
+  if (!std::isfinite(bpm))
+    return;
   mBpm = std::max(1.0f, std::min(999.0f, bpm));
 }
 
@@ -1468,6 +1477,13 @@ void AudioEngine::setSwing(float swing) {
 void AudioEngine::setPatternLength(int length) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   mPatternLength = (length <= 0) ? 1 : (length > 64 ? 64 : length);
+
+  // Propagate to all track sequencers
+  int pages = (mPatternLength + 15) / 16;
+  for (int i = 0; i < (int)mTracks.size(); ++i) {
+    setSequencerConfig(i, pages, 16);
+  }
+
   if (mGlobalStepIndex >= mPatternLength) {
     mGlobalStepIndex = 0;
   }
@@ -1648,9 +1664,14 @@ void AudioEngine::jumpToStep(int stepIndex) {
   mSampleCount = mSamplesPerStep;
 }
 
-int AudioEngine::getCurrentStep(int trackIndex) {
+int AudioEngine::getCurrentStep(int trackIndex, int drumIndex) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    if (drumIndex >= 0 && drumIndex < 16) {
+      return mTracks[trackIndex]
+          .drumSequencers[drumIndex]
+          .getCurrentStepIndex();
+    }
     return mTracks[trackIndex].sequencer.getCurrentStepIndex();
   }
   return 0;
@@ -1804,6 +1825,53 @@ void AudioEngine::trimSample(int trackIndex) {
       mTracks[trackIndex].granularEngine.trim(start, end);
     }
   }
+}
+
+std::vector<float> AudioEngine::getRecordedSampleData(int trackIndex,
+                                                      float targetSampleRate) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (trackIndex < 0 || trackIndex >= mTracks.size())
+    return {};
+
+  auto &track = mTracks[trackIndex];
+  const std::vector<float> *source = nullptr;
+
+  if (track.engineType == 2) {
+    source = &track.samplerEngine.getSampleData();
+  } else if (track.engineType == 3) {
+    source = &track.granularEngine.getSampleData();
+  }
+
+  if (!source || source->empty())
+    return {};
+
+  float sourceRate = static_cast<float>(mSampleRate);
+  if (sourceRate <= 0)
+    sourceRate = 48000.0f;
+
+  if (std::abs(sourceRate - targetSampleRate) < 1.0f) {
+    return *source; // No resampling needed
+  }
+
+  double ratio = static_cast<double>(sourceRate) / targetSampleRate;
+  size_t targetSize = static_cast<size_t>(source->size() / ratio);
+  std::vector<float> result(targetSize);
+
+  for (size_t i = 0; i < targetSize; ++i) {
+    double pos = i * ratio;
+    int idx = static_cast<int>(pos);
+    float frac = static_cast<float>(pos - idx);
+
+    // Get 4 points for cubic interpolation
+    float y0 = source->at(std::max(0, idx - 1));
+    float y1 = source->at(idx);
+    float y2 = source->at(std::min((int)source->size() - 1, idx + 1));
+    float y3 = source->at(std::min((int)source->size() - 1, idx + 2));
+
+    result[i] = cubicInterpolation(y0, y1, y2, y3, frac);
+  }
+
+  return result;
 }
 
 void AudioEngine::startRecordingSample(int trackIndex) {
@@ -2082,7 +2150,7 @@ void AudioEngine::setResampling(bool isResampling) {
 }
 
 void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
+  // Lock handled by onAudioReady caller
   // Master volume and safety
   if (!std::isfinite(mMasterVolume))
     mMasterVolume = 0.5f;
@@ -2175,9 +2243,9 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         break;
       }
 
-      if (std::isnan(rawSampleL))
+      if (!std::isfinite(rawSampleL))
         rawSampleL = 0.0f;
-      if (std::isnan(rawSampleR))
+      if (!std::isfinite(rawSampleR))
         rawSampleR = 0.0f;
 
       float monoSum = (rawSampleL + rawSampleR) * 0.5f;

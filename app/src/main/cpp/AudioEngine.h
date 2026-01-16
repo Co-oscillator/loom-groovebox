@@ -65,7 +65,7 @@ public:
   void setStep(int trackIndex, int stepIndex, bool active,
                const std::vector<int> &notes, float velocity = 0.8f,
                int ratchet = 1, bool punch = false, float probability = 1.0f,
-               float gate = 1.0f);
+               float gate = 1.0f, bool isSkipped = false);
   void setSequencerConfig(int trackIndex, int numPages, int stepsPerPage);
   // New helper for modulation without affecting UI state
   void updateEngineParameter(int trackIndex, int parameterId, float value);
@@ -92,7 +92,7 @@ public:
   void clearParameterLocks(int trackIndex, int stepIndex);
   void setIsRecording(bool isRecording);
   void setResampling(bool isResampling); // New: Resampling Mode Setter
-  int getCurrentStep(int trackIndex);
+  int getCurrentStep(int trackIndex, int drumIndex = -1);
   void setArpConfig(int trackIndex, int mode, int octaves, int inversion,
                     bool isLatched,
                     const std::vector<std::vector<bool>> &rhythms,
@@ -116,6 +116,8 @@ public:
   std::vector<Step> getSequencerSteps(int trackIndex);
   std::vector<float> getAllTrackParameters(int trackIndex); // New sync method
   std::vector<float> getSamplerSlicePoints(int trackIndex);
+  std::vector<float> getRecordedSampleData(int trackIndex,
+                                           float targetSampleRate);
   void panic();
   void loadFmPreset(int trackIndex, int presetId);
   void setClockMultiplier(int trackIndex, float multiplier);

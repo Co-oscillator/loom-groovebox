@@ -26,6 +26,7 @@ public:
     TSvf svf;
     float lastSample = 0.0f;
     float srateCounter = 0.0f;
+    uint32_t controlCounter = 0;
 
     void reset() {
       active = false;
@@ -207,7 +208,6 @@ public:
   float render() {
     float mixedOutput = 0.0f;
     int activeCount = 0;
-    std::lock_guard<std::mutex> lock(*mMutex);
     if (mTable.empty())
       return 0.0f;
 
@@ -283,11 +283,13 @@ public:
       }
 
       float fEnv = v.filterEnv.nextValue();
-      float cutoff = 20.0f + mCutoff * mCutoff * 18000.0f;
-      cutoff += fEnv * mF_Amt * 12000.0f;
-      cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
+      if (v.controlCounter++ % 16 == 0) {
+        float cutoff = 20.0f + mCutoff * mCutoff * 18000.0f;
+        cutoff += fEnv * mF_Amt * 12000.0f;
+        cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
 
-      v.svf.setParams(cutoff, 0.7f + mResonance * 5.0f, mSampleRate);
+        v.svf.setParams(cutoff, 0.7f + mResonance * 5.0f, mSampleRate);
+      }
       mixedOutput += v.svf.process(v.lastSample, (TSvf::Type)mFilterMode) *
                      env * v.amplitude;
     }

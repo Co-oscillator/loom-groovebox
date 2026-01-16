@@ -17,6 +17,16 @@ static inline float fast_tanh(float x) {
   float x2 = x * x;
   return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
+// 4-point, 3rd-order Hermite Interpolation (Cubic)
+static inline float cubicInterpolation(float y0, float y1, float y2, float y3,
+                                       float mu) {
+  float mu2 = mu * mu;
+  float a0 = -0.5f * y0 + 1.5f * y1 - 1.5f * y2 + 0.5f * y3;
+  float a1 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
+  float a2 = -0.5f * y0 + 0.5f * y2;
+  float a3 = y1;
+  return (a0 * mu * mu2) + (a1 * mu2) + (a2 * mu) + a3;
+}
 
 // Fast Sine Approximation using Look-Up Table
 struct FastSine {

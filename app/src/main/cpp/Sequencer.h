@@ -12,6 +12,7 @@ struct Step {
   };
 
   bool active = false;
+  bool isSkipped = false;
   std::vector<NoteInfo> notes;
   int ratchet = 1;    // 1 = regular, 2 = double, etc.
   bool punch = false; // 1.1x volume + overdrive
@@ -107,29 +108,36 @@ public:
       return;
     }
 
-    if (mIsRandom) {
-      mNextStep = rand() % totalSteps;
-    } else {
-      if (mDirection == 0) { // Forward
-        mNextStep = (mCurrentStep + 1) % totalSteps;
-      } else if (mDirection == 1) { // Backward
-        mNextStep = (mCurrentStep - 1 + totalSteps) % totalSteps;
-      } else if (mDirection == 2) { // Ping-Pong
-        if (mPingPongForward) {
-          mNextStep = mCurrentStep + 1;
-          if (mNextStep >= totalSteps) {
-            mNextStep = std::max(0, totalSteps - 2);
-            mPingPongForward = false;
-          }
-        } else {
-          mNextStep = mCurrentStep - 1;
-          if (mNextStep < 0) {
-            mNextStep = std::min(totalSteps - 1, 1);
-            mPingPongForward = true;
+    int searchLimit = totalSteps;
+    int searchCount = 0;
+
+    do {
+      if (mIsRandom) {
+        mNextStep = rand() % totalSteps;
+      } else {
+        if (mDirection == 0) { // Forward
+          mNextStep = (mCurrentStep + 1) % totalSteps;
+        } else if (mDirection == 1) { // Backward
+          mNextStep = (mCurrentStep - 1 + totalSteps) % totalSteps;
+        } else if (mDirection == 2) { // Ping-Pong
+          if (mPingPongForward) {
+            mNextStep = mCurrentStep + 1;
+            if (mNextStep >= totalSteps) {
+              mNextStep = std::max(0, totalSteps - 2);
+              mPingPongForward = false;
+            }
+          } else {
+            mNextStep = mCurrentStep - 1;
+            if (mNextStep < 0) {
+              mNextStep = std::min(totalSteps - 1, 1);
+              mPingPongForward = true;
+            }
           }
         }
       }
-    }
+      mCurrentStep = mNextStep; // Update reference for loop check
+      searchCount++;
+    } while (mSteps[mNextStep].isSkipped && searchCount < searchLimit);
   }
 
   const Step &getCurrentStep() const { return mSteps[mCurrentStep]; }

@@ -41,7 +41,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setPlaying(
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
     JNIEnv *env, jobject thiz, jint track_index, jint step_index,
     jboolean active, jintArray notes, jfloat velocity, jint ratchet,
-    jboolean punch, jfloat probability, jfloat gate) {
+    jboolean punch, jfloat probability, jfloat gate, jboolean is_skipped) {
   if (engine) {
     std::vector<int> noteVec;
     bool hasNotes = false;
@@ -62,7 +62,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
 
     // Deep Sanitization: Clamp all inputs to valid ranges
     float safeVelocity = std::max(0.0f, std::min(1.0f, velocity));
-    float safeGate = std::max(0.0f, std::min(1.0f, gate));
+    float safeGate = std::max(0.0f, std::min(8.0f, gate));
     float safeProb = std::max(0.0f, std::min(1.0f, probability));
     int safeRatchet = std::max(1, std::min(16, ratchet));
 
@@ -75,7 +75,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
     }
 
     engine->setStep(track_index, step_index, safeActive, noteVec, safeVelocity,
-                    safeRatchet, punch, safeProb, gate);
+                    safeRatchet, punch, safeProb, safeGate, is_skipped);
   }
 }
 
@@ -218,9 +218,9 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_jumpToStep(
 }
 
 extern "C" JNIEXPORT jint JNICALL Java_com_groovebox_NativeLib_getCurrentStep(
-    JNIEnv *env, jobject thiz, jint track_index) {
+    JNIEnv *env, jobject thiz, jint track_index, jint drum_index) {
   if (engine)
-    return engine->getCurrentStep(track_index);
+    return engine->getCurrentStep(track_index, drum_index);
   return 0;
 }
 
@@ -545,4 +545,20 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setInputDevice(
     JNIEnv *env, jobject thiz, jint device_id) {
   if (engine)
     engine->setInputDevice(device_id);
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_groovebox_NativeLib_getRecordedSampleData(JNIEnv *env, jobject thiz,
+                                                   jint track_index,
+                                                   jfloat target_sample_rate) {
+  if (engine) {
+    std::vector<float> data =
+        engine->getRecordedSampleData(track_index, target_sample_rate);
+    if (!data.empty()) {
+      jfloatArray result = env->NewFloatArray(data.size());
+      env->SetFloatArrayRegion(result, 0, data.size(), data.data());
+      return result;
+    }
+  }
+  return nullptr;
 }

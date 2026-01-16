@@ -62,6 +62,7 @@ public:
     float pitchEnv = 1.0f;
     float pitchEnvDecay = 0.001f;
     Adsr masterEnv;
+    uint32_t controlCounter = 0;
 
     void reset() {
       active = false;
@@ -72,6 +73,7 @@ public:
       lastOp5Out = 0.0f;
       op5FeedbackHistory = 0.0f;
       masterEnv.reset();
+      controlCounter = 0;
     }
   };
 
@@ -502,8 +504,10 @@ public:
       v.lastOp5Out = o[5];
 
       float cutoffNormalized = std::max(0.001f, std::min(0.999f, mCutoff));
-      float freq = 20.0f * powf(900.0f, cutoffNormalized);
-      v.svf.setParams(freq, 0.7f + mResonance * 4.0f, mSampleRate);
+      if (v.controlCounter++ % 16 == 0) {
+        float freq = 20.0f * powf(900.0f, cutoffNormalized);
+        v.svf.setParams(freq, 0.7f + mResonance * 4.0f, mSampleRate);
+      }
       float filtered =
           v.svf.process(out * v.amplitude * mEnv, (TSvf::Type)mFilterMode);
       mixedOutput += fast_tanh(filtered);

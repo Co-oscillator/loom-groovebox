@@ -13,7 +13,7 @@
 
 class SamplerEngine {
 public:
-  enum PlayMode { OneShot, Sustain, Chops };
+  enum PlayMode { OneShot, Sustain, Loop, Chops, OneShotChops };
 
   struct Slice {
     size_t start;
@@ -35,6 +35,8 @@ public:
     // Simple Granular state
     uint32_t grainTimer = 0;
     static const int GRAIN_SIZE = 1024; // Samples
+
+    uint32_t controlCounter = 0;
 
     void reset() {
       active = false;
@@ -196,13 +198,13 @@ public:
     v.envelope.setParameters(mAttack, mDecay, mSustain, mRelease);
     v.envelope.trigger();
 
-    if (mPlayMode == Chops && !mSlices.empty()) {
+    if ((mPlayMode == Chops || mPlayMode == OneShotChops) && !mSlices.empty()) {
       // Map Note 60 -> Slice 0. Safe modulo.
       int sliceIdx = 0;
       if (note >= 60)
         sliceIdx = (note - 60);
 
-      // Explicitly cycle through slices (User requested cycling, not clamping)
+      // Explicitly cycle through slices
       if (!mSlices.empty()) {
         sliceIdx = sliceIdx % (int)mSlices.size();
       } else {
@@ -229,7 +231,9 @@ public:
     v.grainPosition = v.position;
     v.grainTimer = 0;
 
-    float keyShift = (mPlayMode == Chops) ? 0.0f : (float)(note - 60);
+    float keyShift = (mPlayMode == Chops || mPlayMode == OneShotChops)
+                         ? 0.0f
+                         : (float)(note - 60);
     v.pitchRatio = powf(2.0f, (mPitch + keyShift) / 12.0f);
   }
 
@@ -238,7 +242,7 @@ public:
   void releaseNote(int note) {
     for (auto &v : mVoices) {
       if (v.active && v.note == note) {
-        if (mPlayMode == Sustain || mPlayMode == Chops) {
+        if (mPlayMode == Sustain || mPlayMode == Chops || mPlayMode == Loop) {
           v.envelope.release();
         }
       }
@@ -285,7 +289,16 @@ public:
       setFilterEnvAmount(value);
       break;
     case 320:
-      mPlayMode = static_cast<PlayMode>(std::min(2, (int)(value * 3.0f)));
+      if (value < 0.2f)
+        mPlayMode = OneShot;
+      else if (value < 0.4f)
+        mPlayMode = Sustain;
+      else if (value < 0.6f)
+        mPlayMode = Loop;
+      else if (value < 0.8f)
+        mPlayMode = Chops;
+      else
+        mPlayMode = OneShotChops;
       break;
     case 330:
       mTrimStart = value;
@@ -323,10 +336,6 @@ public:
   void setFilterEnvAmount(float v) { mFilterEnvAmount = v; }
 
   float render() {
-    if (!mBufferLock->try_lock())
-      return 0.0f;
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock, std::adopt_lock);
-
     if (mBuffer.empty())
       return 0.0f;
 
@@ -366,12 +375,19 @@ public:
       // ONLY use Granular if actively stretching time (mStretch != 1.0)
       bool useGranular = (std::abs(mStretch - 1.0f) > 0.02f);
 
+      // Update loop/trim points dynamically during playback if not in chops
+      // mode
+      if (mPlayMode != Chops && mPlayMode != OneShotChops) {
+        v.start = static_cast<size_t>(mTrimStart * mBuffer.size());
+        v.end = static_cast<size_t>(mTrimEnd * mBuffer.size());
+      }
+
       float voiceOutput = 0.0f;
       if (!useGranular) {
         // Classic mode: Resampling (Pitch and Time are linked)
         v.position += baseResampleRate;
         if (v.position >= v.end || v.position < v.start) {
-          if (mPlayMode == Sustain) {
+          if (mPlayMode == Sustain || mPlayMode == Loop) {
             v.position = mReverse ? (double)v.end - 1.0 : (double)v.start;
           } else {
             v.envelope.release();
@@ -411,7 +427,7 @@ public:
         }
 
         if (v.position >= v.end || v.position < v.start) {
-          if (mPlayMode == Sustain) {
+          if (mPlayMode == Sustain || mPlayMode == Loop) {
             v.position = mReverse ? (double)v.end - 1.0 : (double)v.start;
           } else {
             v.envelope.release();
@@ -420,12 +436,14 @@ public:
       }
 
       // Filter Processing
-      float cutoff = 20.0f + (mFilterCutoff * mFilterCutoff * 18000.0f);
-      // Integrate envelope to filter cutoff
-      cutoff += env * mFilterEnvAmount * 12000.0f;
-      cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
+      if (v.controlCounter++ % 16 == 0) {
+        float cutoff = 20.0f + (mFilterCutoff * mFilterCutoff * 18000.0f);
+        // Integrate envelope to filter cutoff
+        cutoff += env * mFilterEnvAmount * 12000.0f;
+        cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
 
-      v.filter.setParams(cutoff, 0.7f + mFilterResonance * 5.0f, 44100.0f);
+        v.filter.setParams(cutoff, 0.7f + mFilterResonance * 5.0f, 44100.0f);
+      }
       voiceOutput = v.filter.process(voiceOutput, TSvf::LowPass);
 
       mixedOutput += voiceOutput * env * v.baseVelocity;

@@ -57,7 +57,21 @@ public:
       inR = 0.0f;
 
     // Smooth Transitions
+    if (!std::isfinite(mTargetDelayFrames))
+      mTargetDelayFrames = 11025.0f;
+    if (!std::isfinite(mTargetFeedback))
+      mTargetFeedback = 0.5f;
+    if (!std::isfinite(mTargetMix))
+      mTargetMix = 0.5f;
+    if (!std::isfinite(mTargetFilterMix))
+      mTargetFilterMix = 0.5f;
+    if (!std::isfinite(mTargetResonance))
+      mTargetResonance = 0.0f;
+
     mSmoothedDelay += 0.001f * (mTargetDelayFrames - mSmoothedDelay);
+    if (!std::isfinite(mSmoothedDelay))
+      mSmoothedDelay = mTargetDelayFrames;
+
     mFeedback += 0.001f * (mTargetFeedback - mFeedback);
     mMix += 0.001f * (mTargetMix - mMix);
     mFilterMix += 0.001f * (mTargetFilterMix - mFilterMix);
@@ -66,12 +80,34 @@ public:
     float delayedL = 0.0f, delayedR = 0.0f;
 
     // Read from Delay Lines
-    float rp = (float)mWriteIndex - mSmoothedDelay;
+    float bufferSize = (float)mBufferL.size();
+    if (bufferSize < 4.0f)
+      return; // Extreme safety
+
+    float safeDelay = mSmoothedDelay;
+    if (!std::isfinite(safeDelay) || safeDelay < 0.0f)
+      safeDelay = 1.0f;
+    if (safeDelay > bufferSize - 2.0f)
+      safeDelay = bufferSize - 2.0f;
+
+    float rp = (float)mWriteIndex - safeDelay;
     while (rp < 0)
-      rp += (float)mBufferL.size();
-    int i0 = (int)rp;
+      rp += bufferSize;
+
+    // Final clamp to ensure i0/i1 are always valid regardless of floating point
+    // edge cases
+    int i0 = static_cast<int>(rp);
+    if (i0 < 0)
+      i0 = 0;
+    if (i0 >= (int)mBufferL.size())
+      i0 = (int)mBufferL.size() - 1;
+
     int i1 = (i0 + 1) % mBufferL.size();
-    float frac = rp - (float)i0;
+    float frac = rp - static_cast<float>(i0);
+    if (frac < 0.0f)
+      frac = 0.0f;
+    if (frac > 1.0f)
+      frac = 1.0f;
 
     delayedL = mBufferL[i0] * (1.0f - frac) + mBufferL[i1] * frac;
     delayedR = mBufferR[i0] * (1.0f - frac) + mBufferR[i1] * frac;
@@ -82,10 +118,8 @@ public:
     }
 
     // Filter Logic (Per Channel)
-    auto processFilter = [&](float input, float &z1, float &z2, float cutoff,
-                             float res) {
-      float g = tanf(M_PI * cutoff / sampleRate);
-      float k = 2.0f - (res * 1.95f);
+    auto processFilter = [&](float input, float &z1, float &z2, float g,
+                             float k) {
       float a1 = 1.0f / (1.0f + g * (g + k));
       float a2 = g * a1;
       float a3 = g * a2;
@@ -94,9 +128,9 @@ public:
       float v2 = z2 + a2 * z1 + a3 * v3;
       z1 = 2.0f * v1 - z1;
       z2 = 2.0f * v2 - z2;
-      if (std::abs(z1) < 1.0e-12f)
+      if (std::abs(z1) < 1.0e-9f)
         z1 = 0.0f;
-      if (std::abs(z2) < 1.0e-12f)
+      if (std::abs(z2) < 1.0e-9f)
         z2 = 0.0f;
 
       if (mTargetFilterMix < 0.45f)
@@ -113,10 +147,11 @@ public:
       cutoff = 40.0f * powf(200.0f, (mFilterMix - 0.55f) / 0.45f);
     cutoff = std::max(20.0f, std::min(sampleRate * 0.45f, cutoff));
 
-    float filteredL =
-        processFilter(delayedL, mSvfZ1L, mSvfZ2L, cutoff, mResonance);
-    float filteredR =
-        processFilter(delayedR, mSvfZ1R, mSvfZ2R, cutoff, mResonance);
+    float g = tanf(M_PI * cutoff / sampleRate);
+    float k = 2.0f - (mResonance * 1.95f);
+
+    float filteredL = processFilter(delayedL, mSvfZ1L, mSvfZ2L, g, k);
+    float filteredR = processFilter(delayedR, mSvfZ1R, mSvfZ2R, g, k);
 
     // Cross-Feedback / Ping-Pong
     float nextL = 0, nextR = 0;
@@ -151,9 +186,18 @@ public:
       nextR = inR + filteredR * mFeedback;
     }
 
+    // Denormal prevention
+    if (std::abs(nextL) < 1.0e-9f)
+      nextL = 0.0f;
+    if (std::abs(nextR) < 1.0e-9f)
+      nextR = 0.0f;
+
     mBufferL[mWriteIndex] = fast_tanh(nextL);
     mBufferR[mWriteIndex] = fast_tanh(nextR);
-    mWriteIndex = (mWriteIndex + 1) % mBufferL.size();
+    if (mBufferL.size() > 0)
+      mWriteIndex = (mWriteIndex + 1) % mBufferL.size();
+    else
+      mWriteIndex = 0;
 
     outL = (inL * (1.0f - mMix)) + (filteredL * mMix);
     outR = (inR * (1.0f - mMix)) + (filteredR * mMix);

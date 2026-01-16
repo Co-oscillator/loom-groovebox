@@ -70,6 +70,7 @@ data class TrackState(
 
 data class StepState(
     val active: Boolean = false,
+    val isSkipped: Boolean = false,
     val notes: List<Int> = emptyList(),
     val velocity: Float = 0.8f,
     val ratchet: Int = 1, // x1 to x9 repeats
@@ -188,7 +189,8 @@ data class GrooveboxState(
     val midiLearnStep: Int = 0, // 0: OFF, 1: SELECT_STRIP, 2: SELECT_PARAM
     val midiLearnSelectedStrip: Int? = null,
     val focusedParameter: Int? = null, // parameterId
-    val currentSequencerBank: Int = 0, // 0=A, 1=B, 2=C, 3=D
+    val currentSequencerBank: Int = 0, // 0=A, 1=B, 2=C, 3=D, 4=64-Step Grid
+    val is64StepView: Boolean = false,
     val echoModeActive: Boolean = false, // Debugging: Echo received MIDI back to device
 
     // Transport & Sequencing Logic

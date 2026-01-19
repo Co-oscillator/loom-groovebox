@@ -1,3 +1,4 @@
+#define TSF_IMPLEMENTATION
 #include "AudioEngine.h"
 #include "WavFileUtils.h" // New
 #include "engines/BitcrusherFx.h"
@@ -279,6 +280,9 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
     case 8: // AUDIO IN
       track.audioInEngine.triggerNote(note, velocity);
       break;
+    case 9: // SOUNDFONT
+      track.soundFontEngine.noteOn(note, velocity);
+      break;
     }
 
     // 5. Recording Logic
@@ -361,7 +365,29 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       mLpLfoL.setShape(value);
       mLpLfoR.setShape(value);
     }
-    // Add other global parameters here if needed
+    // Handle Global Effects & Arp (500-599) even if trackIndex is -1
+    else if (parameterId >= 500 && parameterId < 600) {
+      int fxId = (parameterId - 500) / 10;
+      int subId = parameterId % 10;
+      if (fxId == 0) { // Reverb
+        if (subId == 0)
+          mReverbFx.setSize(value);
+        else if (subId == 1)
+          mReverbFx.setDamping(value);
+        else if (subId == 2)
+          mReverbFx.setModDepth(value);
+        else if (subId == 3) {
+          mReverbFx.setMix(value);
+          mFxMixLevels[6] = value;
+        } else if (subId == 4)
+          mReverbFx.setPreDelay(value);
+        else if (subId == 5)
+          mReverbFx.setType(static_cast<int>(value * 3.9f));
+        else if (subId == 6)
+          mReverbFx.setTone(value);
+      }
+      // Add other global FX here if they need trackIndex -1 support
+    }
     return;
   }
 
@@ -399,6 +425,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.samplerEngine.setFilterCutoff(value);
       track.wavetableEngine.setFilterCutoff(value);
       track.granularEngine.setParameter(1, value);
+      track.soundFontEngine.setParameter(1, value);
       break;
     case 2: // Common Resonance
       track.subtractiveEngine.setResonance(value);
@@ -406,10 +433,12 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.samplerEngine.setFilterResonance(value);
       track.wavetableEngine.setResonance(value);
       track.granularEngine.setParameter(2, value);
+      track.soundFontEngine.setParameter(2, value);
       break;
     case 3: // Env Amount
       track.subtractiveEngine.setFilterEnvAmount(value);
       track.fmEngine.setParameter(3, value);
+      track.soundFontEngine.setParameter(3, value);
       break;
     case 4:
       track.subtractiveEngine.setOscWaveform(1, value);
@@ -419,12 +448,15 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       break;
     case 6:
       track.subtractiveEngine.setDetune(value);
+      track.soundFontEngine.setParameter(6, value);
       break;
     case 7:
       track.subtractiveEngine.setLfoRate(value);
+      track.soundFontEngine.setParameter(7, value);
       break;
     case 8:
       track.subtractiveEngine.setLfoDepth(value);
+      track.soundFontEngine.setParameter(8, value);
       break;
     }
   }
@@ -441,6 +473,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.wavetableEngine.setAttack(value);
       track.fmEngine.setParameter(100, value);
       track.audioInEngine.setParameter(100, value);
+      track.soundFontEngine.setParameter(100, value);
       break;
     case 101:
       track.subtractiveEngine.setDecay(value);
@@ -449,6 +482,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.wavetableEngine.setDecay(value);
       track.fmEngine.setParameter(101, value);
       track.audioInEngine.setParameter(101, value);
+      track.soundFontEngine.setParameter(101, value);
       break;
     case 102:
       track.subtractiveEngine.setSustain(value);
@@ -457,6 +491,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.fmEngine.setParameter(parameterId, value);
       track.wavetableEngine.setSustain(value);
       track.audioInEngine.setParameter(parameterId, value);
+      track.soundFontEngine.setParameter(102, value);
       break;
     case 103:
       track.subtractiveEngine.setRelease(value);
@@ -465,6 +500,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.fmEngine.setParameter(parameterId, value);
       track.wavetableEngine.setRelease(value);
       track.audioInEngine.setParameter(parameterId, value);
+      track.soundFontEngine.setParameter(103, value);
       break;
     case 104:
       track.subtractiveEngine.setOscWaveform(0, value);
@@ -644,6 +680,8 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         mReverbFx.setPreDelay(value);
       else if (subId == 5)
         mReverbFx.setType(static_cast<int>(value * 3.9f));
+      else if (subId == 6)
+        mReverbFx.setTone(value);
       break;
     case 1: // Chorus
       if (subId == 0)
@@ -955,6 +993,9 @@ void AudioEngine::releaseNoteLocked(int trackIndex, int note,
       track.fmDrumEngine.releaseNote(note);
       track.granularEngine.releaseNote(note);
       track.wavetableEngine.releaseNote(note);
+      track.analogDrumEngine.releaseNote(note);
+      track.audioInEngine.releaseNote(note);
+      track.soundFontEngine.noteOff(note);
     }
   }
 }
@@ -997,11 +1038,21 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
     if (mIsRecordingSample && mRecordingTrackIndex != -1) {
       auto &track = mTracks[mRecordingTrackIndex];
+      float *input = static_cast<float *>(audioData);
+      int channels = audioStream->getChannelCount();
+
       for (int i = 0; i < numFrames; ++i) {
+        float sampleToPush = 0.0f;
+        if (channels == 2) {
+          sampleToPush = (input[i * 2] + input[i * 2 + 1]) * 0.5f;
+        } else {
+          sampleToPush = input[i];
+        }
+
         if (track.engineType == 2)
-          track.samplerEngine.pushSample(input[i]);
+          track.samplerEngine.pushSample(sampleToPush);
         else if (track.engineType == 3)
-          track.granularEngine.pushSample(input[i]);
+          track.granularEngine.pushSample(sampleToPush);
       }
     }
     return oboe::DataCallbackResult::Continue;
@@ -1431,6 +1482,7 @@ void AudioEngine::setPlaying(bool playing) {
       track.granularEngine.allNotesOff();
       track.wavetableEngine.allNotesOff();
       track.analogDrumEngine.allNotesOff();
+      track.soundFontEngine.allNotesOff();
     }
   } else {
     for (auto &track : mTracks) {
@@ -1946,6 +1998,13 @@ std::vector<float> AudioEngine::getSamplerSlicePoints(int trackIndex) {
   return {};
 }
 
+void AudioEngine::setSoundFontMapping(int trackIndex, int knobIndex,
+                                      int paramId) {
+  if (trackIndex >= 0 && trackIndex < 8) {
+    mTracks[trackIndex].soundFontEngine.setMapping(knobIndex, paramId);
+  }
+}
+
 void AudioEngine::clearSequencer(int trackIndex) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
@@ -2210,7 +2269,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       Track &track = mTracks[t];
       track.gainReduction = 1.0f; // Reset per frame
 
-      if (!track.isActive && track.mSilenceFrames > 48000) {
+      if (!track.isActive && track.mSilenceFrames > 2400) { // 50ms at 48k
         track.follower.process(0.0f);
         continue;
       }
@@ -2241,6 +2300,11 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       case 8: // AUDIO IN
         rawSampleL = rawSampleR = track.audioInEngine.render(inputSample);
         break;
+      case 9: // SOUNDFONT
+        track.soundFontEngine.render(&rawSampleL, 1);
+        rawSampleR = rawSampleL; // Mono for now, can expand later if TSF
+                                 // supports stereo interleaving better
+        break;
       }
 
       if (!std::isfinite(rawSampleL))
@@ -2250,10 +2314,10 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
 
       float monoSum = (rawSampleL + rawSampleR) * 0.5f;
 
-      // Silence Detection
+      // Silence Detection (Tightened)
       if (std::abs(monoSum) < 0.0001f) {
         track.mSilenceFrames++;
-        if (track.mSilenceFrames > 48000) {
+        if (track.mSilenceFrames > 2400) {
           bool activeVoices = false;
           for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
             if (track.mActiveNotes[v].active) {
@@ -2283,19 +2347,22 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         track.smoothedVolume += 0.01f * (track.volume - track.smoothedVolume);
       }
 
-      float trackOutputL =
-          rawSampleL * track.smoothedVolume * track.gainReduction;
-      float trackOutputR =
-          rawSampleR * track.smoothedVolume * track.gainReduction;
+      float finalVol = track.smoothedVolume * track.gainReduction;
+      float trackOutputL = rawSampleL * finalVol;
+      float trackOutputR = rawSampleR * finalVol;
 
       if (track.mPunchCounter > 0) {
-        trackOutputL = fast_tanh(trackOutputL * 1.5f);
-        trackOutputR = fast_tanh(trackOutputR * 1.5f);
+        // Fast approximation for punch boost
+        trackOutputL *= 1.5f;
+        trackOutputR *= 1.5f;
         track.mPunchCounter--;
       }
 
-      trackOutputL = fast_tanh(trackOutputL);
-      trackOutputR = fast_tanh(trackOutputR);
+      // Soft clip only if likely to peak
+      if (std::abs(trackOutputL) > 0.8f)
+        trackOutputL = fast_tanh(trackOutputL);
+      if (std::abs(trackOutputR) > 0.8f)
+        trackOutputR = fast_tanh(trackOutputR);
 
       mixedSampleL += trackOutputL * 0.35f * track.panL;
       mixedSampleR += trackOutputR * 0.35f * track.panR;
@@ -2336,30 +2403,44 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       }
     };
 
-    // Serial Chain Processing (Some are mono-in, stereo-out or mono/mono)
-    routeFx(0, mOverdriveFx.process(fxBusesL[0]),
-            mOverdriveFx.process(fxBusesR[0]));
-    routeFx(1, mBitcrusherFx.process(fxBusesL[1]),
-            mBitcrusherFx.process(fxBusesR[1]));
+    // Serial Chain Processing - Skip if bus is idle
+    if (std::abs(fxBusesL[0]) > 0.00001f || std::abs(fxBusesR[0]) > 0.00001f)
+      routeFx(0, mOverdriveFx.process(fxBusesL[0]),
+              mOverdriveFx.process(fxBusesR[0]));
 
-    float hpL = mHpLfoL.process(fxBusesL[9], sampleRate);
-    mHpLfoR.syncFrom(mHpLfoL); // KILL PHASE SWIRL
-    float hpR = mHpLfoR.process(fxBusesR[9], sampleRate);
-    routeFx(9, hpL, hpR);
+    if (std::abs(fxBusesL[1]) > 0.00001f || std::abs(fxBusesR[1]) > 0.00001f)
+      routeFx(1, mBitcrusherFx.process(fxBusesL[1]),
+              mBitcrusherFx.process(fxBusesR[1]));
 
-    float lpL = mLpLfoL.process(fxBusesL[10], sampleRate);
-    mLpLfoR.syncFrom(mLpLfoL); // KILL PHASE SWIRL
-    float lpR = mLpLfoR.process(fxBusesR[10], sampleRate);
-    routeFx(10, lpL, lpR);
+    if (std::abs(fxBusesL[9]) > 0.00001f || std::abs(fxBusesR[9]) > 0.00001f) {
+      float hpL = mHpLfoL.process(fxBusesL[9], sampleRate);
+      mHpLfoR.syncFrom(mHpLfoL);
+      float hpR = mHpLfoR.process(fxBusesR[9], sampleRate);
+      routeFx(9, hpL, hpR);
+    }
 
-    routeFx(2, mChorusFx.process(fxBusesL[2], sampleRate),
-            mChorusFx.process(fxBusesR[2], sampleRate));
+    if (std::abs(fxBusesL[10]) > 0.00001f ||
+        std::abs(fxBusesR[10]) > 0.00001f) {
+      float lpL = mLpLfoL.process(fxBusesL[10], sampleRate);
+      mLpLfoR.syncFrom(mLpLfoL); // KILL PHASE SWIRL
+      float lpR = mLpLfoR.process(fxBusesR[10], sampleRate);
+      routeFx(10, lpL, lpR);
+    }
 
-    routeFx(3, mPhaserFx.process(fxBusesL[3], sampleRate),
-            mPhaserFx.process(fxBusesR[3], sampleRate));
+    if (std::abs(fxBusesL[2]) > 0.00001f || std::abs(fxBusesR[2]) > 0.00001f) {
+      routeFx(2, mChorusFx.process(fxBusesL[2], sampleRate),
+              mChorusFx.process(fxBusesR[2], sampleRate));
+    }
 
-    routeFx(4, mTapeWobbleFx.process(fxBusesL[4], sampleRate),
-            mTapeWobbleFx.process(fxBusesR[4], sampleRate));
+    if (std::abs(fxBusesL[3]) > 0.00001f || std::abs(fxBusesR[3]) > 0.00001f) {
+      routeFx(3, mPhaserFx.process(fxBusesL[3], sampleRate),
+              mPhaserFx.process(fxBusesR[3], sampleRate));
+    }
+
+    if (std::abs(fxBusesL[4]) > 0.00001f || std::abs(fxBusesR[4]) > 0.00001f) {
+      routeFx(4, mTapeWobbleFx.process(fxBusesL[4], sampleRate),
+              mTapeWobbleFx.process(fxBusesR[4], sampleRate));
+    }
 
     {
       float dL = 0, dR = 0;
@@ -2387,25 +2468,28 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       }
     }
 
-    routeFx(7,
-            mSlicerFx.process(fxBusesL[7], mSampleCount + i, mSamplesPerStep),
-            mSlicerFx.process(fxBusesR[7], mSampleCount + i, mSamplesPerStep));
+    if (std::abs(fxBusesL[7]) > 0.00001f || std::abs(fxBusesR[7]) > 0.00001f) {
+      routeFx(
+          7, mSlicerFx.process(fxBusesL[7], mSampleCount + i, mSamplesPerStep),
+          mSlicerFx.process(fxBusesR[7], mSampleCount + i, mSamplesPerStep));
+    }
 
-    routeFx(8, mCompressorFx.process(fxBusesL[8], sidechainSignal),
-            mCompressorFx.process(fxBusesR[8], sidechainSignal));
+    if (std::abs(fxBusesL[8]) > 0.00001f || std::abs(fxBusesR[8]) > 0.00001f) {
+      routeFx(8, mCompressorFx.process(fxBusesL[8], sidechainSignal),
+              mCompressorFx.process(fxBusesR[8], sidechainSignal));
+    }
 
-    {
+    if (std::abs(fxBusesL[11]) > 0.00001f ||
+        std::abs(fxBusesR[11]) > 0.00001f) {
       float fL, fR;
       fL = mFlangerFx.process(fxBusesL[11], sampleRate);
       fR = mFlangerFx.process(fxBusesR[11], sampleRate);
       routeFx(11, fL, fR);
     }
 
-    {
+    if (std::abs(fxBusesL[12]) > 0.00001f ||
+        std::abs(fxBusesR[12]) > 0.00001f) {
       float sL = 0, sR = 0;
-      // Auto-Panner typically takes mono and generates stereo.
-      // We use the sum of the FX bus for input.
-      // Moved to index 12 to avoid LP LFO (index 10) collision.
       mAutoPannerFx.setPhase(mLpLfoL.getPhase()); // SYNC WITH LP LFO
       mAutoPannerFx.process((fxBusesL[12] + fxBusesR[12]) * 0.5f, sL, sR,
                             sampleRate);
@@ -2419,13 +2503,20 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       }
     }
 
-    routeFx(13, mTapeEchoFx.process(fxBusesL[13], sampleRate),
-            mTapeEchoFx.process(fxBusesR[13], sampleRate));
-    routeFx(14, mOctaverFx.process(fxBusesL[14], sampleRate),
-            mOctaverFx.process(fxBusesR[14], sampleRate));
+    if (std::abs(fxBusesL[13]) > 0.00001f ||
+        std::abs(fxBusesR[13]) > 0.00001f) {
+      routeFx(13, mTapeEchoFx.process(fxBusesL[13], sampleRate),
+              mTapeEchoFx.process(fxBusesR[13], sampleRate));
+    }
 
-    float finalL = (currentSampleL + wetSampleL + spreadL) * mMasterVolume;
-    float finalR = (currentSampleR + wetSampleR + spreadR) * mMasterVolume;
+    if (std::abs(fxBusesL[14]) > 0.00001f ||
+        std::abs(fxBusesR[14]) > 0.00001f) {
+      routeFx(14, mOctaverFx.process(fxBusesL[14], sampleRate),
+              mOctaverFx.process(fxBusesR[14], sampleRate));
+    }
+
+    float finalL = (mixedSampleL + wetSampleL + spreadL) * mMasterVolume;
+    float finalR = (mixedSampleR + wetSampleR + spreadR) * mMasterVolume;
 
     if (!std::isfinite(finalL))
       finalL = 0.0f;
@@ -2566,4 +2657,32 @@ void AudioEngine::setInputDevice(int deviceId) {
            mInputStream->getSampleRate());
     }
   }
+}
+void AudioEngine::loadSoundFont(int trackIndex, const std::string &path) {
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    std::lock_guard<std::recursive_mutex> lock(mLock);
+    mTracks[trackIndex].soundFontEngine.load(path);
+  }
+}
+
+void AudioEngine::setSoundFontPreset(int trackIndex, int presetIndex) {
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    std::lock_guard<std::recursive_mutex> lock(mLock);
+    mTracks[trackIndex].soundFontEngine.setPreset(presetIndex);
+  }
+}
+
+int AudioEngine::getSoundFontPresetCount(int trackIndex) {
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    return mTracks[trackIndex].soundFontEngine.getPresetCount();
+  }
+  return 0;
+}
+
+std::string AudioEngine::getSoundFontPresetName(int trackIndex,
+                                                int presetIndex) {
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    return mTracks[trackIndex].soundFontEngine.getPresetName(presetIndex);
+  }
+  return "";
 }

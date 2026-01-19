@@ -35,6 +35,11 @@ class NativeLib {
     external fun loadSample(trackIndex: Int, path: String)
     external fun loadWavetable(trackIndex: Int, path: String)
     external fun loadDefaultWavetable(trackIndex: Int)
+    external fun loadSoundFont(trackIndex: Int, path: String)
+    external fun setSoundFontPreset(trackIndex: Int, presetIndex: Int)
+    external fun getSoundFontPresetCount(trackIndex: Int): Int
+    external fun getSoundFontPresetName(trackIndex: Int, presetIndex: Int): String
+    external fun setSoundFontMapping(trackIndex: Int, knobIndex: Int, paramId: Int)
     external fun saveSample(trackIndex: Int, path: String)
     external fun trimSample(trackIndex: Int)
     external fun getCurrentStep(trackIndex: Int, drumIndex: Int = -1): Int

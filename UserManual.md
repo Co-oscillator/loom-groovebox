@@ -194,3 +194,19 @@ To provide maximum headroom and prevent clipping:
 - **High-Precision Export**: The export system now provides real-time progress feedback and notifications when files are ready.
 - **Contextual Interface**: Buttons like **ARP** automatically hide for engines that don't support them (like FM Drum or Sampler Chops), keeping the workspace clean.
 - **CPU Smart-Decimation**: The engine now optimizes filter and envelope calculations dynamically to ensure stable performance even on older devices.
+
+## SoundFont Libraries
+
+Loom includes a curated **Starter Pack** of high-quality, open-licensed SoundFonts to get you started immediately.
+
+### Included in the App
+- **GeneralUser GS** by S. Christian Collins ([GNU GPL v2](http://www.schristiancollins.com/generaluser.php))
+- **MuseScore MS Basic** by MuseScore Team ([MIT / GPL](https://musescore.org/en/handbook/3/soundfonts-and-sfz-files#list))
+- **FreePats Project** by the FreePats Community ([GPL / CC-BY-SA](https://freepats.zenvoid.org/))
+
+### Recommended External Collections
+The following libraries are highly recommended for professional use but are not bundled due to their large size (2GB+):
+- **VSCO 2: Community Edition** (CC0 Public Domain) - Orchestral strings, brass, and woodwinds.
+- **SGM-V2.01** (CC-BY Attribution) - Realistic guitars and pianos. credit to the author (Shan).
+
+You can import these manually via the **SELECT SF2** button in the SoundFont engine parameters.

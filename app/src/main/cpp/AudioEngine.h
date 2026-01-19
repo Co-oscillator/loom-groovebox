@@ -29,6 +29,7 @@
 #include "engines/PhaserFx.h"
 #include "engines/SamplerEngine.h"
 #include "engines/SlicerFx.h"
+#include "engines/SoundFontEngine.h"
 #include "engines/SubtractiveEngine.h"
 #include "engines/TapeEchoFx.h"
 #include "engines/TapeWobbleFx.h"
@@ -109,6 +110,11 @@ public:
   void loadDefaultWavetable(int trackIndex);
   void saveSample(int trackIndex, const std::string &path); // New
   void trimSample(int trackIndex);
+  void loadSoundFont(int trackIndex, const std::string &path);
+  void setSoundFontPreset(int trackIndex, int presetIndex);
+  void setSoundFontMapping(int trackIndex, int knobIndex, int paramId);
+  int getSoundFontPresetCount(int trackIndex);
+  std::string getSoundFontPresetName(int trackIndex, int presetIndex);
   void clearSequencer(int trackIndex);
   void setMasterVolume(float volume);
   bool getStepActive(int trackIndex, int stepIndex, int drumIndex = -1);
@@ -189,6 +195,7 @@ private:
     WavetableEngine wavetableEngine;
     AnalogDrumEngine analogDrumEngine;
     AudioInEngine audioInEngine;
+    SoundFontEngine soundFontEngine;
 
     float parameters[2500] = {0.0f};
     float appliedParameters[2500] = {0.0f}; // Values after P-locks and Mods

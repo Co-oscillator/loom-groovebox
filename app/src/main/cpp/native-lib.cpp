@@ -461,6 +461,45 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_loadWavetable(
   }
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_loadSoundFont(
+    JNIEnv *env, jobject thiz, jint track_index, jstring path) {
+  if (engine) {
+    const char *nativePath = env->GetStringUTFChars(path, 0);
+    engine->loadSoundFont(track_index, std::string(nativePath));
+    env->ReleaseStringUTFChars(path, nativePath);
+  }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_setSoundFontPreset(JNIEnv *env, jobject thiz,
+                                                jint track_index,
+                                                jint preset_index) {
+  if (engine) {
+    engine->setSoundFontPreset(track_index, preset_index);
+  }
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_groovebox_NativeLib_getSoundFontPresetCount(JNIEnv *env, jobject thiz,
+                                                     jint track_index) {
+  if (engine) {
+    return engine->getSoundFontPresetCount(track_index);
+  }
+  return 0;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_groovebox_NativeLib_getSoundFontPresetName(JNIEnv *env, jobject thiz,
+                                                    jint track_index,
+                                                    jint preset_index) {
+  if (engine) {
+    std::string name =
+        engine->getSoundFontPresetName(track_index, preset_index);
+    return env->NewStringUTF(name.c_str());
+  }
+  return env->NewStringUTF("");
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_groovebox_NativeLib_loadDefaultWavetable(JNIEnv *env, jobject thiz,
                                                   jint track_index) {
@@ -561,4 +600,13 @@ Java_com_groovebox_NativeLib_getRecordedSampleData(JNIEnv *env, jobject thiz,
     }
   }
   return nullptr;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_setSoundFontMapping(JNIEnv *env, jobject thiz,
+                                                 jint track_index,
+                                                 jint knob_index,
+                                                 jint param_id) {
+  if (engine)
+    engine->setSoundFontMapping(track_index, knob_index, param_id);
 }

@@ -1,7 +1,7 @@
 package com.groovebox
 
 enum class EngineType {
-    SUBTRACTIVE, FM, SAMPLER, GRANULAR, WAVETABLE, FM_DRUM, ANALOG_DRUM, MIDI, AUDIO_IN
+    SUBTRACTIVE, FM, SAMPLER, GRANULAR, WAVETABLE, FM_DRUM, ANALOG_DRUM, MIDI, AUDIO_IN, SOUNDFONT
 }
 
 enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM }
@@ -50,6 +50,10 @@ data class TrackState(
     val activeWavetableName: String = "Basic",
     val filterMode: Int = 0,
     val clockMultiplier: Float = 1.0f,
+    val soundFontPath: String? = null,
+    val soundFontPresetIndex: Int = 0,
+    val soundFontPresetName: String = "None",
+    val soundFontMapping: Map<Int, Int> = emptyMap(),
     val parameters: Map<Int, Float> = mapOf(
         112 to 1.0f,  // Cutoff
         113 to 0.0f,  // Resonance
@@ -238,7 +242,10 @@ data class GrooveboxState(
     
     // Copy/Paste State
     val copiedSteps: List<StepState>? = null,
-    val copiedDrumSteps: List<List<StepState>>? = null
+    val copiedDrumSteps: List<List<StepState>>? = null,
+    
+    // UI State
+    val is6x6Grid: Boolean = false
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L

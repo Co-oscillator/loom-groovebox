@@ -13,9 +13,33 @@ import java.io.*
 object PersistenceManager {
     private const val FILENAME = "strip_assignments.json"
     private const val PROJECTS_DIR = "Projects"
+    private const val LOOM_ROOT = "Loom"
+
+    fun getLoomFolder(context: Context): File {
+        try {
+            // Priority 1: SD Card Root (visible to user)
+            val root = File(android.os.Environment.getExternalStorageDirectory(), LOOM_ROOT)
+            if (root.exists() || root.mkdirs()) return root
+            
+            // Priority 2: Public Documents (visible to user, more standard)
+            val docs = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), LOOM_ROOT)
+            if (docs.exists() || docs.mkdirs()) return docs
+            
+            // Priority 3: App External Files (visible to user via Android/data)
+            val appExt = context.getExternalFilesDir(null)
+            if (appExt != null) {
+                val loom = File(appExt, LOOM_ROOT)
+                if (loom.exists() || loom.mkdirs()) return loom
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        // Last resort: context.filesDir (Internal, not visible without root)
+        return context.filesDir
+    }
 
     private fun getProjectsDir(context: Context): File {
-        val dir = File(context.filesDir, PROJECTS_DIR)
+        val dir = File(getLoomFolder(context), PROJECTS_DIR)
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
@@ -77,12 +101,12 @@ object PersistenceManager {
         } else false
     }
 
-    fun saveAssignments(context: Context, stripAssignments: Map<EngineType, List<StripRouting>>, knobAssignments: Map<EngineType, List<StripRouting>>) {
+    fun saveAssignments(context: Context, stripAssignments: Map<EngineType, List<StripRouting>>?, knobAssignments: Map<EngineType, List<StripRouting>>?) {
         val root = JSONObject()
         
         // Save Strips
         val stripsObj = JSONObject()
-        stripAssignments.forEach { (engine, routings) ->
+        stripAssignments?.forEach { (engine, routings) ->
             val array = JSONArray()
             routings.forEach { r ->
                 val obj = JSONObject()
@@ -100,7 +124,7 @@ object PersistenceManager {
 
         // Save Knobs
         val knobsObj = JSONObject()
-        knobAssignments.forEach { (engine, routings) ->
+        knobAssignments?.forEach { (engine, routings) ->
             val array = JSONArray()
             routings.forEach { r ->
                 val obj = JSONObject()
@@ -116,12 +140,16 @@ object PersistenceManager {
         }
         root.put("knobs", knobsObj)
         
-        val file = File(context.filesDir, FILENAME)
-        file.writeText(root.toString())
+        try {
+            val file = File(getLoomFolder(context), FILENAME)
+            file.writeText(root.toString())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun loadAssignments(context: Context): Pair<Map<EngineType, List<StripRouting>>, Map<EngineType, List<StripRouting>>> {
-        val file = File(context.filesDir, FILENAME)
+        val file = File(getLoomFolder(context), FILENAME)
         if (!file.exists()) return Pair(emptyMap(), emptyMap())
 
         val jsonString = file.readText()
@@ -192,29 +220,71 @@ object PersistenceManager {
     }
 
     fun clearAssignments(context: Context) {
-        val file = File(context.filesDir, FILENAME)
+        val file = File(getLoomFolder(context), FILENAME)
         if (file.exists()) {
             file.delete()
         }
     }
 
     fun copyWavetablesToFilesDir(context: Context) {
+        copyAssetsToFilesDir(context, "wavetables")
+    }
+
+    fun copySoundFontsToFilesDir(context: Context) {
+        copyAssetsToFilesDir(context, "soundfonts")
+    }
+
+    private fun copyAssetsToFilesDir(context: Context, dirName: String) {
         try {
-            val wavetablesDir = File(context.filesDir, "wavetables")
-            if (!wavetablesDir.exists()) {
-                wavetablesDir.mkdirs()
+            val destDir = File(getLoomFolder(context), dirName)
+            if (!destDir.exists()) {
+                destDir.mkdirs()
             }
 
-            val assets = context.assets.list("wavetables") ?: return
+            val assets = context.assets.list(dirName) ?: return
             for (assetName in assets) {
-                val outFile = File(wavetablesDir, assetName)
+                val outFile = File(destDir, assetName)
                 if (!outFile.exists()) {
-                    context.assets.open("wavetables/$assetName").use { input ->
+                    context.assets.open("$dirName/$assetName").use { input ->
                         FileOutputStream(outFile).use { output ->
                             input.copyTo(output)
                         }
                     }
                 }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun migrateToExternalStorage(context: Context) {
+        try {
+            val internalDir = context.filesDir
+            val externalDir = getLoomFolder(context)
+            
+            // List of directories to migrate
+            val dirs = listOf(PROJECTS_DIR, "wavetables", "soundfonts", "samples", "granular")
+            dirs.forEach { dirName ->
+                val source = File(internalDir, dirName)
+                val dest = File(externalDir, dirName)
+                if (source.exists() && source.isDirectory) {
+                    if (!dest.exists()) dest.mkdirs()
+                    source.listFiles()?.forEach { file ->
+                        val destFile = File(dest, file.name)
+                        if (!destFile.exists()) {
+                            file.copyTo(destFile)
+                            file.delete()
+                        }
+                    }
+                }
+            }
+            
+            // Migrate assignments file
+            val sourceFile = File(internalDir, FILENAME)
+            val destFile = File(externalDir, FILENAME)
+            if (sourceFile.exists() && !destFile.exists()) {
+                sourceFile.copyTo(destFile)
+                sourceFile.delete()
             }
         } catch (e: Exception) {
             e.printStackTrace()

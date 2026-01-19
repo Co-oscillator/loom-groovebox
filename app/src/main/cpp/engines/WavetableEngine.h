@@ -20,6 +20,7 @@ public:
     int note = -1;
     double phase = 0.0;
     float frequency = 440.0f;
+    float targetFrequency = 440.0f;
     float amplitude = 1.0f;
     Adsr envelope;
     Adsr filterEnv;
@@ -35,6 +36,8 @@ public:
       envelope.reset();
       filterEnv.reset();
       svf.setParams(1000.0f, 0.7f, 44100.0f);
+      frequency = 440.0f;
+      targetFrequency = 440.0f;
       lastSample = 0.0f;
       srateCounter = 0.0f;
     }
@@ -93,6 +96,7 @@ public:
     mSampleRate = sampleRate;
     mFrequency = freq;
   }
+  void setGlide(float g) { mGlide = g; }
 
   void loadWavetable(const std::vector<float> &data) {
     std::lock_guard<std::mutex> lock(*mMutex);
@@ -132,7 +136,10 @@ public:
     v.active = true;
     v.note = note;
     v.amplitude = velocity / 127.0f;
-    v.frequency = 440.0f * powf(2.0f, (note - 69) / 12.0f);
+    float baseFreq = 440.0f * powf(2.0f, (note - 69) / 12.0f);
+    v.targetFrequency = baseFreq;
+    v.frequency = (mGlide > 0.001f) ? mLastFrequency : baseFreq;
+    mLastFrequency = baseFreq;
 
     v.envelope.setSampleRate(mSampleRate);
     v.envelope.setParameters(mAttack, mDecay, mSustain, mRelease);
@@ -202,6 +209,9 @@ public:
     case 31: // Srate
       mSrate = value;
       break;
+    case 355:
+      setGlide(value);
+      break;
     }
   }
 
@@ -214,6 +224,15 @@ public:
     for (auto &v : mVoices) {
       if (!v.active)
         continue;
+
+      if (mGlide > 0.001f) {
+        float glideTimeSamples = mGlide * mSampleRate * 0.5f;
+        float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
+        v.frequency += (v.targetFrequency - v.frequency) * glideAlpha;
+      } else {
+        v.frequency = v.targetFrequency;
+      }
+
       float env = v.envelope.nextValue();
       if (env < 0.0001f && !v.envelope.isActive()) {
         v.active = false;
@@ -310,7 +329,8 @@ private:
   std::vector<Voice> mVoices;
   std::vector<float> mTable;
   int mNumFrames = 1;
-  float mSampleRate = 44100.0f, mFrequency = 440.0f;
+  float mSampleRate = 44100.0f, mFrequency = 440.0f, mLastFrequency = 440.0f,
+        mGlide = 0.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
   float mF_Atk = 0.01f, mF_Dcy = 0.1f, mF_Sus = 0.0f, mF_Rel = 0.5f,
         mF_Amt = 0.0f;

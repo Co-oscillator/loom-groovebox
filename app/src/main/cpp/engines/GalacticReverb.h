@@ -236,11 +236,11 @@ public:
     float wetL =
         (mDelayL.read(300) + mDelayL.read(3000) - mDelayAfterAPR.read(1000) +
          mInputAP[1].processDiffusion(0, 0)) *
-        mMix * 0.6f;
+        mMix * 0.75f;
     float wetR =
         (mDelayR.read(300) + mDelayR.read(3000) - mDelayAfterAPL.read(1000) +
          mInputAP[3].processDiffusion(0, 0)) *
-        mMix * 0.6f;
+        mMix * 0.75f;
     // Note: Accurate tapping takes too much CPU/Mem, approximating for "Lush"
     // sound
 
@@ -274,9 +274,9 @@ public:
   void setType(int t) {
     mType = t;
     if (mType == 3) {
-      mFeedback = 0.7f; // Space
+      mFeedback = 0.85f; // Space (more lush)
     } else {
-      mFeedback = 0.3f; // Others
+      mFeedback = 0.6f; // Others (was 0.3)
     }
     // Re-trigger size update to clamp decay
     setSize(mDecay);
@@ -296,7 +296,7 @@ public:
 
 private:
   float mSampleRate = 48000.0f;
-  float mFeedback = 0.3f; // Cross-feedback gain, heavily reduced as requested
+  float mFeedback = 0.6f; // Cross-feedback gain, bumped for lushness
   float mDecay = 0.5f;    // Recirculation gain
   float mDamp = 0.5f;
   float mModDepth = 0.1f;

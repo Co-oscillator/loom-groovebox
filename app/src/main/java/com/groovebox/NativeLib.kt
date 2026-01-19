@@ -44,7 +44,7 @@ class NativeLib {
     external fun trimSample(trackIndex: Int)
     external fun getCurrentStep(trackIndex: Int, drumIndex: Int = -1): Int
     external fun getStepActive(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Boolean
-    external fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray)
+    external fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray)
     external fun getGranularPlayheads(trackIndex: Int): FloatArray
     external fun startRecordingSample(trackIndex: Int)
     external fun stopRecordingSample(trackIndex: Int)
@@ -55,6 +55,7 @@ class NativeLib {
     external fun clearSequencer(trackIndex: Int)
     external fun setMasterVolume(volume: Float)
     external fun panic()
+    external fun getActiveNoteMask(trackIndex: Int): Int
     external fun getCpuLoad(): Float
 
     // Routing / Macro Controls

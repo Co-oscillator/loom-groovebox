@@ -45,6 +45,7 @@ public:
   void setRandomSequence(const std::vector<int> &sequence) {
     mRandomSequence = sequence;
   }
+  void setIsMutated(bool mutated) { mIsMutated = mutated; }
 
   bool isLatched() const { return mIsLatched; }
 
@@ -249,7 +250,13 @@ public:
 
       //    I will accept this interpretation as the most logical working model.
 
-      int noteIdx = mSequence[mStep % mSequence.size()];
+      int idx = mStep % mSequence.size();
+      if (mIsMutated && !mRandomSequence.empty()) {
+          // Mutation only affects WHICH note we pick from the sequence, not the rhythm
+          idx = mRandomSequence[mStep % mRandomSequence.size()] % mSequence.size();
+      }
+
+      int noteIdx = mSequence[idx];
       if (mInversion != 0 && (mStep % mSequence.size()) == 0) {
         noteIdx += mInversion * 12; // Apply inversion to root of cycle
       }
@@ -284,6 +291,7 @@ private:
   int mOctaves;
   int mInversion;
   bool mIsLatched;
+  bool mIsMutated = false;
   bool mIsWaitingForNewGesture;
   std::vector<int> mHeldNotes;
   std::vector<int> mSequence;

@@ -151,7 +151,7 @@ void AudioEngine::stop() {
 // Internal Note Logic
 void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
                                     bool isSequencerTrigger, float gate,
-                                    bool punch) {
+                                    bool punch, bool isArpTrigger) {
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     Track &track = mTracks[trackIndex];
 
@@ -286,7 +286,9 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
     }
 
     // 5. Recording Logic
-    if (mIsRecording && mIsPlaying && !isSequencerTrigger) {
+    // Record if it's a manual tap OR an Arp trigger (but NOT a sequencer
+    // playback trigger)
+    if (mIsRecording && mIsPlaying && (!isSequencerTrigger || isArpTrigger)) {
       double phase = (double)mSampleCount / (mSamplesPerStep + 0.001);
       int stepOffset = (phase > 0.5) ? 1 : 0;
       float subStep = static_cast<float>(phase);
@@ -587,6 +589,13 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.fmEngine.setUseEnvelope(value > 0.5f);
       track.samplerEngine.setParameter(350, value);
       track.granularEngine.setParameter(350, value);
+    } else if (parameterId == 355) {
+      track.subtractiveEngine.setParameter(355, value);
+      track.fmEngine.setParameter(355, value);
+      track.samplerEngine.setParameter(355, value);
+      track.granularEngine.setParameter(355, value);
+      track.wavetableEngine.setParameter(355, value);
+      track.soundFontEngine.setParameter(355, value);
     } else if (track.engineType == 5) {
       track.fmDrumEngine.setParameter(track.selectedFmDrumInstrument,
                                       parameterId - 300, value);
@@ -1246,7 +1255,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
             std::vector<int> arpNotes = track.arpeggiator.nextNotes();
             for (int arpNote : arpNotes) {
               if (arpNote >= 0)
-                triggerNoteLocked(t, arpNote, 100, true);
+                triggerNoteLocked(t, arpNote, 100, true, 0.5f, false, true);
             }
           }
           if (track.mArpCountdown <= 0)
@@ -1730,7 +1739,7 @@ int AudioEngine::getCurrentStep(int trackIndex, int drumIndex) {
 }
 
 void AudioEngine::setArpConfig(int trackIndex, int mode, int octaves,
-                               int inversion, bool isLatched,
+                               int inversion, bool isLatched, bool isMutated,
                                const std::vector<std::vector<bool>> &rhythms,
                                const std::vector<int> &sequence) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
@@ -1761,6 +1770,7 @@ void AudioEngine::setArpConfig(int trackIndex, int mode, int octaves,
     track.arpeggiator.setOctaves(octaves);
     track.arpeggiator.setInversion(inversion);
     track.arpeggiator.setLatched(isLatched);
+    track.arpeggiator.setIsMutated(isMutated);
     track.arpeggiator.setRhythm(rhythms);
     track.arpeggiator.setRandomSequence(sequence);
   }
@@ -2023,12 +2033,40 @@ void AudioEngine::setMasterVolume(float volume) {
 void AudioEngine::panic() {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   for (auto &track : mTracks) {
-    track.isActive = false;
     track.mSilenceFrames = 0;
-    // Fix: only release notes if engine is initialized?
-    // Actually, calling releaseNote on engines usually safe.
-    // But check if track engine pointers correct. They are direct members.
+    // Release all notes in the engine
+    track.subtractiveEngine.allNotesOff();
+    track.fmEngine.allNotesOff();
+    track.fmDrumEngine.allNotesOff();
+    track.analogDrumEngine.allNotesOff();
+    track.wavetableEngine.allNotesOff();
+    track.samplerEngine.allNotesOff();
+    track.granularEngine.allNotesOff();
+    track.soundFontEngine.allNotesOff();
+
+    for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
+      track.mActiveNotes[v].active = false;
+    }
   }
+}
+
+int AudioEngine::getActiveNoteMask(int trackIndex) {
+  if (trackIndex < 0 || trackIndex >= 8)
+    return 0;
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  int mask = 0;
+  auto &track = mTracks[trackIndex];
+  for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
+    if (track.mActiveNotes[v].active) {
+      int note = track.mActiveNotes[v].note;
+      // We only care about notes 0..31 for simple 4x4 or 6x6 highlights
+      // mapped relative to the view. For now, bitset simple 32 notes.
+      if (note >= 60 && note < 92) {
+        mask |= (1 << (note - 60));
+      }
+    }
+  }
+  return mask;
 }
 
 // ... COPY OF OTHER METHODS ...
@@ -2301,9 +2339,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         rawSampleL = rawSampleR = track.audioInEngine.render(inputSample);
         break;
       case 9: // SOUNDFONT
-        track.soundFontEngine.render(&rawSampleL, 1);
-        rawSampleR = rawSampleL; // Mono for now, can expand later if TSF
-                                 // supports stereo interleaving better
+        track.soundFontEngine.render(&rawSampleL, &rawSampleR, 1);
         break;
       }
 

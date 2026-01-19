@@ -1,4 +1,4 @@
-lines = open('/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt').readlines()
+lines = open('/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/java/com/groovebox/MainActivity.kt').readlines()
 balance = 0
 for i, line in enumerate(lines):
     clean_line = line.split('//')[0].strip() # Ignore comments

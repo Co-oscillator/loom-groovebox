@@ -13,7 +13,7 @@
 
 class SamplerEngine {
 public:
-  enum PlayMode { OneShot, Sustain, Loop, Chops, OneShotChops };
+  enum PlayMode { OneShot, Sustain, Loop, Chops, OneShotChops, LoopChops };
 
   struct Slice {
     size_t start;
@@ -29,6 +29,7 @@ public:
     size_t end = 0;
     float baseVelocity = 1.0f;
     float pitchRatio = 1.0f;
+    float targetPitchRatio = 1.0f;
     Adsr envelope;
     TSvf filter;
 
@@ -45,6 +46,8 @@ public:
       grainPosition = 0.0;
       grainTimer = 0;
       envelope.reset();
+      pitchRatio = 1.0f;
+      targetPitchRatio = 1.0f;
     }
   };
 
@@ -162,6 +165,16 @@ public:
     }
   }
 
+  void setSampleRate(float sr) {
+    mSampleRate = (int)sr;
+    for (auto &v : mVoices) {
+      v.envelope.setSampleRate(sr);
+      v.filter.setParams(1000.0f, 0.7f, sr);
+    }
+  }
+
+  void setGlide(float g) { mGlide = g; }
+
   void triggerNote(int note, int velocity) {
     if (!mBufferLock->try_lock())
       return;
@@ -198,7 +211,9 @@ public:
     v.envelope.setParameters(mAttack, mDecay, mSustain, mRelease);
     v.envelope.trigger();
 
-    if ((mPlayMode == Chops || mPlayMode == OneShotChops) && !mSlices.empty()) {
+    if ((mPlayMode == Chops || mPlayMode == OneShotChops ||
+         mPlayMode == LoopChops) &&
+        !mSlices.empty()) {
       // Map Note 60 -> Slice 0. Safe modulo.
       int sliceIdx = 0;
       if (note >= 60)
@@ -231,10 +246,14 @@ public:
     v.grainPosition = v.position;
     v.grainTimer = 0;
 
-    float keyShift = (mPlayMode == Chops || mPlayMode == OneShotChops)
+    float keyShift = (mPlayMode == Chops || mPlayMode == OneShotChops ||
+                      mPlayMode == LoopChops)
                          ? 0.0f
                          : (float)(note - 60);
-    v.pitchRatio = powf(2.0f, (mPitch + keyShift) / 12.0f);
+    float targetRatio = powf(2.0f, (mPitch + keyShift) / 12.0f) * mSpeed;
+    v.targetPitchRatio = targetRatio;
+    v.pitchRatio = (mGlide > 0.001f) ? mLastPitchRatio : targetRatio;
+    mLastPitchRatio = targetRatio;
   }
 
   int getPlayMode() const { return mPlayMode; } // Added Getter for AudioEngine
@@ -242,7 +261,8 @@ public:
   void releaseNote(int note) {
     for (auto &v : mVoices) {
       if (v.active && v.note == note) {
-        if (mPlayMode == Sustain || mPlayMode == Chops || mPlayMode == Loop) {
+        if (mPlayMode == Sustain || mPlayMode == Chops || mPlayMode == Loop ||
+            mPlayMode == LoopChops) {
           v.envelope.release();
         }
       }
@@ -288,17 +308,22 @@ public:
     case 314: // Filter EG Intensity
       setFilterEnvAmount(value);
       break;
+    case 355:
+      setGlide(value);
+      break;
     case 320:
-      if (value < 0.2f)
+      if (value < 0.16f)
         mPlayMode = OneShot;
-      else if (value < 0.4f)
+      else if (value < 0.33f)
         mPlayMode = Sustain;
-      else if (value < 0.6f)
+      else if (value < 0.5f)
         mPlayMode = Loop;
-      else if (value < 0.8f)
+      else if (value < 0.66f)
         mPlayMode = Chops;
-      else
+      else if (value < 0.83f)
         mPlayMode = OneShotChops;
+      else
+        mPlayMode = LoopChops;
       break;
     case 330:
       mTrimStart = value;
@@ -353,6 +378,14 @@ public:
       }
       activeCount++;
 
+      if (mGlide > 0.001f) {
+        float glideTimeSamples = mGlide * mSampleRate * 0.5f;
+        float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
+        v.pitchRatio += (v.targetPitchRatio - v.pitchRatio) * glideAlpha;
+      } else {
+        v.pitchRatio = v.targetPitchRatio;
+      }
+
       /*
        * SAMPLER PARAMETER LOGIC:
        * 1. SPEED (mSpeed): Global playback rate. Affects BOTH traversal (time)
@@ -366,18 +399,19 @@ public:
       // behavior)
       float pitchFactor = v.pitchRatio; // includes mPitch and Note shift
       float baseResampleRate = mSpeed * pitchFactor * (mReverse ? -1.0f : 1.0f);
-
-      // Decoupled Rates for Granular (only used if mStretch != 1.0)
-      float traverseRate = baseResampleRate / std::max(0.01f, mStretch);
-      float readRate =
-          baseResampleRate; // The pitch is already in baseResampleRate
+      float traverseRate = mSpeed * (mReverse ? -1.0f : 1.0f);
+      float readRate = v.pitchRatio;
+      bool useGranular = (std::abs(traverseRate - readRate) > 0.001f) ||
+                         (std::abs(mStretch - 1.0f) > 0.02f);
+      if (std::abs(mStretch - 1.0f) > 0.02f)
+        traverseRate /= std::max(0.01f, mStretch);
 
       // ONLY use Granular if actively stretching time (mStretch != 1.0)
-      bool useGranular = (std::abs(mStretch - 1.0f) > 0.02f);
 
       // Update loop/trim points dynamically during playback if not in chops
       // mode
-      if (mPlayMode != Chops && mPlayMode != OneShotChops) {
+      if (mPlayMode != Chops && mPlayMode != OneShotChops &&
+          mPlayMode != LoopChops) {
         v.start = static_cast<size_t>(mTrimStart * mBuffer.size());
         v.end = static_cast<size_t>(mTrimEnd * mBuffer.size());
       }
@@ -387,7 +421,8 @@ public:
         // Classic mode: Resampling (Pitch and Time are linked)
         v.position += baseResampleRate;
         if (v.position >= v.end || v.position < v.start) {
-          if (mPlayMode == Sustain || mPlayMode == Loop) {
+          if (mPlayMode == Sustain || mPlayMode == Loop ||
+              mPlayMode == LoopChops) {
             v.position = mReverse ? (double)v.end - 1.0 : (double)v.start;
           } else {
             v.envelope.release();
@@ -427,7 +462,8 @@ public:
         }
 
         if (v.position >= v.end || v.position < v.start) {
-          if (mPlayMode == Sustain || mPlayMode == Loop) {
+          if (mPlayMode == Sustain || mPlayMode == Loop ||
+              mPlayMode == LoopChops) {
             v.position = mReverse ? (double)v.end - 1.0 : (double)v.start;
           } else {
             v.envelope.release();
@@ -564,8 +600,10 @@ private:
   float mSpeed = 1.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
   float mFilterCutoff = 1.0f, mFilterResonance = 0.0f, mFilterEnvAmount = 0.0f;
+  float mGlide = 0.0f, mLastPitchRatio = 1.0f;
   PlayMode mPlayMode = OneShot;
   bool mUseEnvelope = true;
+  int mSampleRate = 44100;
 
   std::vector<Slice> mSlices;
   std::vector<float> mBuffer;

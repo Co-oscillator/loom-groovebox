@@ -95,7 +95,7 @@ public:
   void setResampling(bool isResampling); // New: Resampling Mode Setter
   int getCurrentStep(int trackIndex, int drumIndex = -1);
   void setArpConfig(int trackIndex, int mode, int octaves, int inversion,
-                    bool isLatched,
+                    bool isLatched, bool isMutated,
                     const std::vector<std::vector<bool>> &rhythms,
                     const std::vector<int> &sequence);
   void getGranularPlayheads(int trackIndex, GranularEngine::PlayheadInfo *out,
@@ -124,6 +124,7 @@ public:
   std::vector<float> getSamplerSlicePoints(int trackIndex);
   std::vector<float> getRecordedSampleData(int trackIndex,
                                            float targetSampleRate);
+  int getActiveNoteMask(int trackIndex);
   void panic();
   void loadFmPreset(int trackIndex, int presetId);
   void setClockMultiplier(int trackIndex, float multiplier);
@@ -280,7 +281,7 @@ private:
   std::recursive_mutex mLock;
   void triggerNoteLocked(int trackIndex, int note, int velocity,
                          bool isSequencerTrigger = false, float gate = 0.95f,
-                         bool punch = false);
+                         bool punch = false, bool isArpTrigger = false);
   void releaseNoteLocked(int trackIndex, int note,
                          bool isSequencerTrigger = false);
   void setupTracks();

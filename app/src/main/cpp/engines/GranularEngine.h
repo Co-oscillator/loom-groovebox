@@ -21,6 +21,8 @@ public:
   void setDecay(float v) { mDecay = v; }
   void setSustain(float v) { mSustain = v; }
   void setRelease(float v) { mRelease = v; }
+  void setGlide(float g) { mGlide = g; }
+  void setSampleRate(float sr) { mSampleRate = sr; }
 
   struct Grain {
     float position;
@@ -122,6 +124,7 @@ public:
     int note = -1;
     float amplitude = 1.0f;
     float basePitch = 1.0f;
+    float targetBasePitch = 1.0f;
     Adsr envelope;
     float spawnCounter = 0.0f;
   };
@@ -228,11 +231,14 @@ public:
     v.active = true;
     v.note = note;
     v.amplitude = velocity / 127.0f;
-    v.basePitch = powf(2.0f, (note - 60) / 12.0f);
+    float targetPitch = powf(2.0f, (note - 60) / 12.0f);
+    v.targetBasePitch = targetPitch;
+    v.basePitch = (mGlide > 0.001f) ? mLastBasePitch : targetPitch;
+    mLastBasePitch = targetPitch;
     v.spawnCounter = 0.0f;
 
     // Make sure ADSR parameters are applied to THIS voice's ADSR
-    v.envelope.setSampleRate(44100.0f);
+    v.envelope.setSampleRate(mSampleRate);
     v.envelope.setParameters(mMainAttack, mMainDecay, mMainSustain,
                              mMainRelease);
     v.envelope.trigger();
@@ -324,6 +330,8 @@ public:
       mMainRelease = value;
     else if (id == 429)
       mGain = value * 2.5f; // 0 to 250% Gain
+    else if (id == 355)
+      setGlide(value);
 
     // Apply to live voices
     for (auto &v : mVoices) {
@@ -363,6 +371,14 @@ public:
       Voice &v = mVoices[i];
       if (!v.active)
         continue;
+
+      if (mGlide > 0.001f) {
+        float glideTimeSamples = mGlide * mSampleRate * 0.5f;
+        float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
+        v.basePitch += (v.targetBasePitch - v.basePitch) * glideAlpha;
+      } else {
+        v.basePitch = v.targetBasePitch;
+      }
 
       float envVal = v.envelope.nextValue();
       if (envVal < 0.0001f && !v.envelope.isActive()) {
@@ -477,6 +493,9 @@ private:
   int mMaxGrains = 20;
   float mWidth = 0.5f;
   float mReverseProb = 0.0f;
+  float mGlide = 0.0f;
+  float mLastBasePitch = 1.0f;
+  float mSampleRate = 44100.0f;
 
   // Main Envelope Params
   float mMainAttack = 0.01f;

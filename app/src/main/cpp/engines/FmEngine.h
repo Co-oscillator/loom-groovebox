@@ -54,6 +54,7 @@ public:
     bool active = false;
     int note = -1;
     float frequency = 440.0f;
+    float targetFrequency = 440.0f;
     float amplitude = 1.0f;
     FmOperator operators[6];
     TSvf svf;
@@ -67,6 +68,8 @@ public:
     void reset() {
       active = false;
       note = -1;
+      frequency = 440.0f;
+      targetFrequency = 440.0f;
       for (auto &op : operators) {
         op.setUseEnvelope(true);
       }
@@ -132,9 +135,10 @@ public:
   void setIgnoreNoteFrequency(bool ignore) { mIgnoreNoteFrequency = ignore; }
 
   void setFrequency(float freq, float sampleRate) {
-    mFrequency = freq;
     mSampleRate = sampleRate;
+    mFrequency = freq;
   }
+  void setGlide(float g) { mGlide = g; }
 
   void setOpRatio(int op, float ratio) {
     if (op >= 0 && op < 6)
@@ -178,11 +182,15 @@ public:
     float baseFreq = mIgnoreNoteFrequency
                          ? mFrequency
                          : 440.0f * powf(2.0f, (note - 69) / 12.0f);
-    v.frequency = baseFreq;
+    v.targetFrequency = baseFreq;
+    v.frequency = (mGlide > 0.001f) ? mLastFrequency : baseFreq;
+    mLastFrequency = baseFreq;
+
+    float startFreq = v.frequency;
 
     for (int i = 0; i < 6; ++i) {
       v.operators[i].setSampleRate(mSampleRate);
-      v.operators[i].setFrequency(baseFreq, mOpRatios[i], mSampleRate);
+      v.operators[i].setFrequency(startFreq, mOpRatios[i], mSampleRate);
       v.operators[i].setADSR(mOpAttack[i], mOpDecay[i], mOpSustain[i],
                              mOpRelease[i]);
       v.operators[i].setUseEnvelope(mUseEnvelope);
@@ -254,6 +262,8 @@ public:
         else if (subId == 5)
           mOpRatios[opIdx] = value * 16.0f;
       }
+    } else if (id == 355) {
+      setGlide(value);
     }
   }
 
@@ -442,6 +452,23 @@ public:
         v.active = false;
         continue;
       }
+
+      if (mGlide > 0.001f) {
+        float glideTimeSamples = mGlide * mSampleRate * 0.5f;
+        float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
+        v.frequency += (v.targetFrequency - v.frequency) * glideAlpha;
+        for (int i = 0; i < 6; ++i) {
+          v.operators[i].setFrequency(v.frequency, mOpRatios[i], mSampleRate);
+        }
+      } else {
+        v.frequency = v.targetFrequency;
+        // Optimization: periodically update op frequencies if ratios changed
+        if (v.controlCounter % 256 == 0) {
+          for (int i = 0; i < 6; ++i)
+            v.operators[i].setFrequency(v.frequency, mOpRatios[i], mSampleRate);
+        }
+      }
+
       activeCount++;
 
       float velModScale = 1.0f - (0.6f * (1.0f - v.amplitude));
@@ -532,7 +559,8 @@ private:
         mFeedback = 0.0f, mFeedbackDrive = 0.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 1.0f, mRelease = 0.2f;
   int mAlgorithm = 0, mCarrierMask = 1, mActiveMask = 63, mFilterMode = 0;
-  float mSampleRate = 44100.0f, mFrequency = 440.0f;
+  float mSampleRate = 44100.0f, mFrequency = 440.0f, mLastFrequency = 440.0f,
+        mGlide = 0.0f;
   float mPitchSweepAmount = 0.0f;
   bool mUseEnvelope = true, mIgnoreNoteFrequency = false;
 };

@@ -17,6 +17,7 @@ public:
     bool isNoteHeld = false;
     int note = -1;
     float frequency = 440.0f;
+    float targetFrequency = 440.0f;
     float amplitude = 1.0f;
     Adsr ampEnv;
     Adsr filterEnv;
@@ -33,6 +34,8 @@ public:
       active = false;
       isNoteHeld = false;
       note = -1;
+      frequency = 440.0f;
+      targetFrequency = 440.0f;
       ampEnv.reset();
       filterEnv.reset();
       svf.setParams(1000.0f, 0.7f, 44100.0f);
@@ -99,6 +102,8 @@ public:
   }
   void setIgnoreNoteFrequency(bool ignore) { mIgnoreNoteFrequency = ignore; }
 
+  void setGlide(float v) { mGlide = v; }
+
   void allNotesOff() {
     for (auto &v : mVoices) {
       v.active = false;
@@ -123,9 +128,13 @@ public:
     v.isNoteHeld = true;
     v.note = note;
     v.amplitude = velocity / 127.0f;
-    v.frequency = mIgnoreNoteFrequency
-                      ? mFrequency
-                      : 440.0f * powf(2.0f, (note - 69) / 12.0f);
+    float baseFreq = mIgnoreNoteFrequency
+                         ? mFrequency
+                         : 440.0f * powf(2.0f, (note - 69) / 12.0f);
+
+    v.targetFrequency = baseFreq;
+    v.frequency = (mGlide > 0.001f) ? mLastFrequency : baseFreq;
+    mLastFrequency = baseFreq;
 
     v.ampEnv.setSampleRate(mSampleRate);
     v.ampEnv.setParameters(mAttack, mDecay, mSustain, mRelease);
@@ -226,6 +235,8 @@ public:
       mOscPW[id - 190] = value;
       for (auto &v : mVoices)
         v.oscillators[id - 190].setWaveShape(value);
+    } else if (id == 355) {
+      setGlide(value);
     }
   }
 
@@ -259,6 +270,18 @@ public:
     for (auto &v : mVoices) {
       if (!v.active)
         continue;
+
+      if (mGlide > 0.001f) {
+        float glideTimeSamples = mGlide * mSampleRate * 0.5f;
+        float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
+        v.frequency += (v.targetFrequency - v.frequency) * glideAlpha;
+        for (int i = 0; i < 4; ++i) {
+          v.oscillators[i].setFrequency(v.frequency, mSampleRate);
+        }
+      } else {
+        v.frequency = v.targetFrequency;
+      }
+
       float envVal = mUseEnvelope ? v.ampEnv.nextValue() : 1.0f;
       if (envVal < 0.0001f && mUseEnvelope && !v.ampEnv.isActive()) {
         v.active = false;
@@ -343,11 +366,12 @@ private:
         mSustain = 0.8f, mRelease = 0.5f, mF_Atk = 0.01f, mF_Dcy = 0.1f,
         mF_Sus = 0.0f, mF_Rel = 0.5f, mF_Amt = 0.0f;
   float mDetune = 0.0f, mNoiseLevel = 0.0f, mLfoRate = 0.0f, mLfoDepth = 0.0f,
-        mFrequency = 440.0f;
+        mFrequency = 440.0f, mLastFrequency = 440.0f, mGlide = 0.0f;
   unsigned int mNoiseSeed = 12345;
   float mSampleRate = 44100.0f;
-  bool mUseEnvelope = true, mOscSync = false, mRingMod = false,
-       mIgnoreNoteFrequency = false;
+  bool mUseEnvelope = true;
+  bool mReverse = false;
+  bool mOscSync = false, mRingMod = false, mIgnoreNoteFrequency = false;
   float mFmAmt = 0.0f;
   int mFilterMode = 0;
   float mOscPitch[4] = {1.0f, 1.0f, 0.5f, 1.0f},

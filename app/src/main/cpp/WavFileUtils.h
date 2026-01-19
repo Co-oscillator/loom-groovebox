@@ -105,6 +105,7 @@ inline bool loadWav(const std::string &path, std::vector<float> &outData,
 
   uint32_t chunkId, chunkSize;
   bool foundData = false;
+  int audioFormat = 1;
 
   // Need to loop chunks
   while (file.read(reinterpret_cast<char *>(&chunkId), 4)) {
@@ -121,9 +122,9 @@ inline bool loadWav(const std::string &path, std::vector<float> &outData,
     if (std::strncmp(id, "fmt ", 4) == 0) {
       // Read format details if needed, but we rely on simple PCM
       if (chunkSize >= 16) {
-        uint16_t audioFormat, channels, bits;
+        uint16_t fmtTag, channels, bits;
         uint32_t sRate;
-        file.read(reinterpret_cast<char *>(&audioFormat), 2);
+        file.read(reinterpret_cast<char *>(&fmtTag), 2);
         file.read(reinterpret_cast<char *>(&channels), 2);
         file.read(reinterpret_cast<char *>(&sRate), 4);
         file.ignore(6); // ByteRate, BlockAlign
@@ -132,20 +133,26 @@ inline bool loadWav(const std::string &path, std::vector<float> &outData,
 
         outNumChannels = channels;
         outSampleRate = sRate;
-        // We only support loading 16-bit for now in this simple loader
-        if (audioFormat != 1)
-          return false; // Non-PCM
+        if (fmtTag != 1 && fmtTag != 3)
+          return false; // Only PCM or IEEE Float
+        audioFormat = fmtTag;
       } else {
         file.ignore(chunkSize);
       }
     } else if (std::strncmp(id, "data", 4) == 0) {
       foundData = true;
-      int numSamples = chunkSize / 2; // Assuming 16-bit
-      outData.resize(numSamples);
-      for (int i = 0; i < numSamples; ++i) {
-        int16_t s;
-        file.read(reinterpret_cast<char *>(&s), 2);
-        outData[i] = s / 32767.0f;
+      if (audioFormat == 1) { // PCM (Int16)
+        int numSamples = chunkSize / 2;
+        outData.resize(numSamples);
+        for (int i = 0; i < numSamples; ++i) {
+          int16_t s;
+          file.read(reinterpret_cast<char *>(&s), 2);
+          outData[i] = s / 32767.0f;
+        }
+      } else if (audioFormat == 3) { // IEEE Float
+        int numSamples = chunkSize / 4;
+        outData.resize(numSamples);
+        file.read(reinterpret_cast<char *>(outData.data()), chunkSize);
       }
       // Handle odd padding byte if size is odd? WAV standard says alignment to
       // 2 bytes, but chunk size tells truth. data chunk logic usually end of

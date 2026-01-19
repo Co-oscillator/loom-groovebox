@@ -16,43 +16,9 @@
 > Task :app:processDebugManifestForPackage UP-TO-DATE
 > Task :app:processDebugResources UP-TO-DATE
 
-> Task :app:compileDebugKotlin
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:676:13 Conflicting declarations: val context: Context, val context: Context
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:689:36 Unresolved reference: Save
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:695:68 Cannot infer a type for this parameter. Please specify it explicitly.
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:698:61 Cannot infer a type for this parameter. Please specify it explicitly.
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:698:64 Cannot infer a type for this parameter. Please specify it explicitly.
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:699:29 Unresolved reference: nativeLib
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:700:42 Overload resolution ambiguity: 
-public inline fun <T> Iterable<TypeVariable(T)>.forEach(action: (TypeVariable(T)) -> Unit): Unit defined in kotlin.collections
-public inline fun <K, V> Map<out TypeVariable(K), TypeVariable(V)>.forEach(action: (Map.Entry<TypeVariable(K), TypeVariable(V)>) -> Unit): Unit defined in kotlin.collections
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:700:52 Cannot infer a type for this parameter. Please specify it explicitly.
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:700:63 Unresolved reference: nativeLib
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:708:36 Unresolved reference: FolderOpen
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:715:21 Unresolved reference: nativeLib
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:720:36 Unresolved reference: FileDownload
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:727:13 Conflicting declarations: val context: Context, val context: Context
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:770:49 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:771:46 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:771:70 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:774:38 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:774:96 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:802:49 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:803:46 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:803:70 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:806:38 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:806:102 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:813:13 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:820:29 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:822:41 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:822:74 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:825:43 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:830:25 Unresolved reference: mappingStripIndex
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/persistence/PersistenceManager.kt:16:46 Unresolved reference: GrooveboxState
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/persistence/PersistenceManager.kt:25:40 Unresolved reference: GrooveboxState
-e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/persistence/PersistenceManager.kt:29:87 Unresolved reference: GrooveboxState
-
 > Task :app:compileDebugKotlin FAILED
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:6167:37 Type mismatch: inferred type is File? but File was expected
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:6186:37 Type mismatch: inferred type is File? but File was expected
 
 [Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/build/reports/problems/problems-report.html
 
@@ -75,5 +41,5 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD FAILED in 27s
+BUILD FAILED in 21s
 16 actionable tasks: 1 executed, 15 up-to-date

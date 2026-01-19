@@ -10,7 +10,7 @@ def remove_comments_and_strings(content):
     content = re.sub(r'//.*', '', content)
     return content
 
-with open('/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt', 'r') as f:
+with open('/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/java/com/groovebox/MainActivity.kt', 'r') as f:
     text = f.read()
 
 # Split by lines to track line numbers

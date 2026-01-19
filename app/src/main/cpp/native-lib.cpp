@@ -226,8 +226,8 @@ extern "C" JNIEXPORT jint JNICALL Java_com_groovebox_NativeLib_getCurrentStep(
 
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setArpConfig(
     JNIEnv *env, jobject thiz, jint track_index, jint mode, jint octaves,
-    jint inversion, jboolean is_latched, jobjectArray rhythms,
-    jintArray sequence) {
+    jint inversion, jboolean is_latched, jboolean is_mutated,
+    jobjectArray rhythms, jintArray sequence) {
   if (engine) {
     std::vector<std::vector<bool>> rhythmVecs;
     if (rhythms != nullptr) {
@@ -257,7 +257,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setArpConfig(
     }
 
     engine->setArpConfig(track_index, mode, octaves, inversion, is_latched,
-                         rhythmVecs, seqVec);
+                         is_mutated, rhythmVecs, seqVec);
   }
 }
 
@@ -609,4 +609,11 @@ Java_com_groovebox_NativeLib_setSoundFontMapping(JNIEnv *env, jobject thiz,
                                                  jint param_id) {
   if (engine)
     engine->setSoundFontMapping(track_index, knob_index, param_id);
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_com_groovebox_NativeLib_getActiveNoteMask(JNIEnv *env, jobject thiz,
+                                               jint track_index) {
+  if (engine)
+    return engine->getActiveNoteMask(track_index);
+  return 0;
 }

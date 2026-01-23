@@ -137,29 +137,22 @@ Shape your sound using the dedicated controls for each engine.
 
 ---
 
-### Effects & Routing
-Chain your tracks through high-quality FX and manage the signal path.
+### Effects & Signal Flow
+Loom v1.8+ uses a **Serial Pedalboard** structure. Audio flows from your tracks through a chain of up to 5 programmable slots.
 
-````carousel
-![Effects Pedalboard](assets/Effects_Screen.png)
-<!-- slide -->
-![Routing Matrix](assets/Patch_Screen.png)
-````
+#### Serial Chaining Logic
+Unlike traditional mixer "sends," the effects in Loom are connected head-to-tail:
+1. **The Chain**: Audio enters Slot 1, then the output of Slot 1 feeds Slot 2, and so on. This means the order matters. For example, placing a **Distortion** before a **Reverb** will result in a distorted sound being washed in reverb. Swapping them will result in the reverb tail being distorted—a much harsher sound.
+2. **Pre-Fader / Dry Kill**: The **SEND** amount on each track determines how much signal enters the *start* of the chain (Slot 1). Because this is "Pre-Fader," you can turn a track's main Volume to 0% but keep its SEND at 100% to hear only the processed "Wet" sound.
+3. **Pedal Interactions**:
+   - **Mix (Dry/Wet)**: Most pedals have a Mix knob. At 0%, the pedal acts as a "bypass," passing the signal from the previous slot through perfectly. At 100%, you only hear the effect's output. 
+   - **Cumulative Gain**: Be careful with **Overdrive** or **Bitcrusher** early in the chain, as they can significantly boost the signal level hitting subsequent effects, potentially leading to clipped or "smashed" sounding tails in the Reverb or Delay.
+   - **Temporal Feedback**: Effects with internal feedback (Delay, Reverb) keep "playing" even after you stop sending audio to them. This feedback will continue to be processed by any pedals that follow them in the chain.
 
-**Global Effects Suite**:
-The effects chain processes audio in a semi-parallel bus structure. Each track has a **Send** amount to the FX bus.
-- **Reverb (Hall)**: Spacious hall reverb with Size and Damping controls.
-- **Delay**: Stereo delay with Feedback and Mix.
-- **Overdrive**: Analog-style saturation and wave-folding.
-- **Bitcrusher**: Reduces sample rate and bit depth for lo-fi textures.
-- **Chorus / Phaser / Flanger**: Modulation effects for widening and motion.
-- **Slicer**: Rhythmic gating effect synced to the tempo.
-- **Compressor**: Dynamics control to glue the mix together.
-- **Tape Wobble**: Simulates the pitch instability of worn tape.
-
-**Routing Matrix**:
-- Connect LFOs (Left Side) to any destinations (Top Labels).
-- "Cables" show active connections. Tap a node to adjust modulation depth.
+#### Routing Matrix
+- **LFOs & Macros**: Connect any modulation source (Left) to any destination (Top).
+- **Interactive Nodes**: Tap a node to set the modulation depth. Green nodes represent active connections.
+- **Sidechaining**: Select a "Source Track" in the Routing menu to drive the Compressor or Auto-Wah on other tracks.
 
 ---
 

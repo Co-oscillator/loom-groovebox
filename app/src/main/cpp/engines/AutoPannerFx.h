@@ -34,22 +34,21 @@ public:
       lfo = (mPhase < 0.5f) ? 1.0f : -1.0f;
     }
 
+    // Single-Signal Panning (Mono-to-Stereo movement)
+    // Sum to mono first (or balance) to ensure a single directional image
+    float monoSum = (inL + inR) * 0.5f;
+
     // Calculate Pan Position [-1, 1]
     float currentPan = mPan + (lfo * mDepth);
     currentPan = std::max(-1.0f, std::min(1.0f, currentPan));
 
-    // True Stereo Panning (Criss-Cross)
-    // Left channel pans L->R, Right channel pans R->L
-    float angleL = (currentPan + 1.0f) * (float)M_PI * 0.25f; // 0 to PI/2
-    float gainLL = std::cos(angleL);
-    float gainLR = std::sin(angleL);
+    // Constant Power Panning Law
+    float angle = (currentPan + 1.0f) * (float)M_PI * 0.25f; // 0 to PI/2
+    float gainL = std::cos(angle);
+    float gainR = std::sin(angle);
 
-    float angleR = (1.0f - currentPan) * (float)M_PI * 0.25f; // Inverse
-    float gainRL = std::cos(angleR);
-    float gainRR = std::sin(angleR);
-
-    float wetL = (inL * gainLL + inR * gainRL);
-    float wetR = (inL * gainLR + inR * gainRR);
+    float wetL = monoSum * gainL;
+    float wetR = monoSum * gainR;
 
     outL = (inL * (1.0f - mMix)) + (wetL * mMix);
     outR = (inR * (1.0f - mMix)) + (wetR * mMix);

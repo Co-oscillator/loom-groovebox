@@ -262,6 +262,8 @@ public:
       setNoiseLevel(value);
     } else if (id == 355) {
       setGlide(value);
+    } else if (id == 155) { // Sub Shape
+      setOscWaveform(2, value);
     }
   }
 

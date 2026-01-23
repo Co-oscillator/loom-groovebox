@@ -2,6 +2,7 @@
 #define SOUNDFONT_ENGINE_H
 
 #include "../libs/tsf.h"
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -15,12 +16,14 @@ public:
   }
 
   void load(const std::string &path) {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (mTsf)
       tsf_close(mTsf);
     mTsf = tsf_load_filename(path.c_str());
     if (mTsf) {
       tsf_set_output(mTsf, TSF_STEREO_INTERLEAVED, 48000, 0.0f);
       tsf_channel_set_pitchrange(mTsf, 0, 24.0f); // +/- 2 octaves
+      mBufferPos = 128;                           // Force reload
     }
   }
 
@@ -34,6 +37,7 @@ public:
   void setGlide(float g) { mGlide = g; }
 
   void setPreset(int presetIndex) {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (mTsf && presetIndex >= 0 && presetIndex < tsf_get_presetcount(mTsf)) {
       tsf_note_off_all(mTsf);
       tsf_channel_set_presetindex(mTsf, 0, presetIndex);
@@ -69,6 +73,7 @@ public:
   }
 
   void render(float *left, float *right, int numFrames) {
+    std::lock_guard<std::mutex> lock(mMutex);
     if (mTsf) {
       if (mGlide > 0.001f) {
         float glideTimeSamples = mGlide * mSampleRate * 0.5f;
@@ -80,14 +85,21 @@ public:
         updatePitchWheel();
       }
 
-      float buffer[2];
       for (int i = 0; i < numFrames; ++i) {
-        tsf_render_float(mTsf, buffer, 1, 0);
-        *left = buffer[0];
-        *right = buffer[1];
+        if (mBufferPos >= mBufferFrames) {
+          // Render next internal block (64 samples interleaved)
+          mBufferFrames = 64;
+          tsf_render_float(mTsf, mInternalBuffer, mBufferFrames, 0);
+          mBufferPos = 0;
+        }
+        left[i] = mInternalBuffer[mBufferPos * 2];
+        right[i] = mInternalBuffer[mBufferPos * 2 + 1];
+        mBufferPos++;
       }
     } else {
-      *left = *right = 0.0f;
+      for (int i = 0; i < numFrames; ++i) {
+        left[i] = right[i] = 0.0f;
+      }
     }
   }
 
@@ -142,6 +154,11 @@ private:
   int mLastNote = -1;
   float mCurrentPitchWheel = 0.0f;
   float mSampleRate = 48000.0f;
+
+  float mInternalBuffer[128]; // 64 stereo frames
+  int mBufferPos = 128;
+  int mBufferFrames = 128;
+  std::mutex mMutex;
 };
 
 #endif // SOUNDFONT_ENGINE_H

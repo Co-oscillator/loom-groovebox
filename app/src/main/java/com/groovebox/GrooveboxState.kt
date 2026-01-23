@@ -13,10 +13,10 @@ data class ArpConfig(
     val isLatched: Boolean = false,
     val inversion: Int = 0, // -2 to +2
     val rhythms: List<List<Boolean>> = listOf(
-        List(8) { true },
-        List(8) { false },
-        List(8) { false }
-    ), // 3 lanes x 8 steps
+        List(16) { true },
+        List(16) { false },
+        List(16) { false }
+    ), // 3 lanes x 16 steps
     val randomSequence: List<Int> = emptyList(), // The 8-step random seed
     val arpRate: Float = 1.0f,
     val arpDivisionMode: Int = 0, // 0=Reg, 1=Dotted, 2=Triplet

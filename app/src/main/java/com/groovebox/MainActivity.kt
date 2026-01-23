@@ -456,7 +456,8 @@ class MainActivity : ComponentActivity() {
                     fmParams[171] = 2.0f // Op 2 Ratio
                     fmParams[161] = 0.01f // Op 1 Atk
                     fmParams[162] = 0.5f // Op 1 Dcy
-                    TrackState(id = i, engineType = EngineType.FM, parameters = fmParams, fmCarrierMask = 3)
+                    fmParams[9] = 0.5f   // Center Pan
+                    TrackState(id = i, engineType = EngineType.FM, parameters = fmParams, fmCarrierMask = 3, pan = 0.5f)
                 }
                 2 -> TrackState(id = i, engineType = EngineType.WAVETABLE)
                 3 -> TrackState(id = i, engineType = EngineType.SAMPLER)
@@ -2604,6 +2605,7 @@ fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange:
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Knob("SHP 1", 0f, 104, state, onStateChange, nativeLib, knobSize = 48.dp)
                         Knob("SHP 2", 0f, 105, state, onStateChange, nativeLib, knobSize = 48.dp)
+                        Knob("SUB SHP", 0f, 155, state, onStateChange, nativeLib, knobSize = 48.dp)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Knob("DETUNE", 0.1f, 106, state, onStateChange, nativeLib, knobSize = 48.dp)
@@ -6453,7 +6455,14 @@ fun ArpSettingsSheet(
                          val laneColors = listOf(Color(0xFF43A047), Color(0xFF1E88E5), Color(0xFF8E24AA)) // Grn, Blu, Purp
                          
                          (2 downTo 0).forEach { laneIdx ->
-                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
+                             if (laneIdx < 2) {
+                                 androidx.compose.material3.HorizontalDivider(
+                                     modifier = Modifier.padding(horizontal = 40.dp),
+                                     thickness = 1.dp,
+                                     color = Color.Black.copy(alpha = 0.5f)
+                                 )
+                             }
+                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                                  Text(laneLabels[laneIdx], style = MaterialTheme.typography.labelSmall, color = laneColors[laneIdx], modifier = Modifier.width(40.dp))
                                  
                                      val lanePattern = config.rhythms[laneIdx]

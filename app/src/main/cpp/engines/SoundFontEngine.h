@@ -11,6 +11,34 @@ class SoundFontEngine {
 public:
   SoundFontEngine() : mTsf(nullptr), mMutex(std::make_unique<std::mutex>()) {}
 
+  // Explicit move semantics required due to custom destructor + unique_ptr
+  SoundFontEngine(SoundFontEngine &&other) noexcept
+      : mTsf(other.mTsf), mGlide(other.mGlide), mLastNote(other.mLastNote),
+        mCurrentPitchWheel(other.mCurrentPitchWheel),
+        mSampleRate(other.mSampleRate), mBufferPos(other.mBufferPos),
+        mBufferFrames(other.mBufferFrames), mMutex(std::move(other.mMutex)) {
+    other.mTsf = nullptr;
+    memcpy(mInternalBuffer, other.mInternalBuffer, sizeof(mInternalBuffer));
+  }
+
+  SoundFontEngine &operator=(SoundFontEngine &&other) noexcept {
+    if (this != &other) {
+      if (mTsf)
+        tsf_close(mTsf);
+      mTsf = other.mTsf;
+      other.mTsf = nullptr;
+      mGlide = other.mGlide;
+      mLastNote = other.mLastNote;
+      mCurrentPitchWheel = other.mCurrentPitchWheel;
+      mSampleRate = other.mSampleRate;
+      mBufferPos = other.mBufferPos;
+      mBufferFrames = other.mBufferFrames;
+      mMutex = std::move(other.mMutex);
+      memcpy(mInternalBuffer, other.mInternalBuffer, sizeof(mInternalBuffer));
+    }
+    return *this;
+  }
+
   ~SoundFontEngine() {
     if (mTsf)
       tsf_close(mTsf);

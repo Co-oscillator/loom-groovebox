@@ -28,7 +28,9 @@ public:
   }
 
   inline float read(int delaySamps) const {
-    int readPos = mWritePos - delaySamps;
+    // mWritePos points to the index for the NEXT write.
+    // The most recent sample is at mWritePos - 1.
+    int readPos = (mWritePos - 1) - delaySamps;
     while (readPos < 0)
       readPos += mSize;
     return mBuffer[readPos];
@@ -91,6 +93,8 @@ public:
     return bufOut - inVal * feedback;
   }
 
+  inline float read(int delaySamps) const { return mDelay.read(delaySamps); }
+
   void setSize(int s) { mDelaySize = s; }
 
 private:
@@ -150,9 +154,19 @@ public:
 
     float mono = (inL + inR) * 0.5f;
 
+    // Anti-denormal injection (DC offset to prevent CPU spikes at silence)
+    mono += 1.0e-18f;
+
     // Pre-Delay
     mPreDelay.write(mono);
-    float input = mPreDelay.read((int)(mPreDelayMilli * 0.001f * mSampleRate));
+    // Ensure pre-delay value is safe
+    float readPoint = mPreDelayMilli * 0.001f * mSampleRate;
+    if (readPoint < 0.0f)
+      readPoint = 0.0f;
+    if (readPoint > 9590.0f)
+      readPoint = 9590.0f;
+
+    float input = mPreDelay.read((int)readPoint);
 
     // Diffusion
     input = mInputAP[0].processDiffusion(input, 0.5f);
@@ -196,8 +210,8 @@ public:
                 mDecay)); // Decay separate from feedback? Dattorro combines
 
     // Tone L (New)
-    mToneFilterL += mTone * (dampenedL - mToneFilterL);
-    if (!std::isfinite(mToneFilterL))
+    mToneFilterL += mTone * (dampenedL - mToneFilterL) + 1.0e-18f;
+    if (!std::isfinite(mToneFilterL) || std::abs(mToneFilterL) < 1.0e-18f)
       mToneFilterL = 0.0f;
     float tonedL = mToneFilterL;
 
@@ -225,24 +239,28 @@ public:
     float dampenedR = std::max(-2.0f, std::min(2.0f, mFilterR * mDecay));
 
     // Tone R (New)
-    mToneFilterR += mTone * (dampenedR - mToneFilterR);
-    if (!std::isfinite(mToneFilterR))
+    mToneFilterR += mTone * (dampenedR - mToneFilterR) + 1.0e-18f;
+    if (!std::isfinite(mToneFilterR) || std::abs(mToneFilterR) < 1.0e-18f)
       mToneFilterR = 0.0f;
     float tonedR = mToneFilterR;
 
     mDelayAfterAPR.write(tonedR);
 
-    // Taps for Stereo (Approximated Plate extraction)
-    float wetL =
-        (mDelayL.read(300) + mDelayL.read(3000) - mDelayAfterAPR.read(1000) +
-         mInputAP[1].processDiffusion(0, 0)) *
-        mMix * 0.75f;
-    float wetR =
-        (mDelayR.read(300) + mDelayR.read(3000) - mDelayAfterAPL.read(1000) +
-         mInputAP[3].processDiffusion(0, 0)) *
-        mMix * 0.75f;
-    // Note: Accurate tapping takes too much CPU/Mem, approximating for "Lush"
-    // sound
+    // Dattorro extraction taps for "Lush" sound (Plate extraction style)
+    // Left: Taps from Right Tank half-delays and Allpasses
+    // Right: Taps from Left Tank half-delays and Allpasses
+
+    float wetL = (mDelayAfterAPR.read(266) + mDelayAfterAPR.read(2974) -
+                  mLoopAPR.read(1913) + mDelayAfterAPR.read(1996) -
+                  mDelayAfterAPL.read(1990) - mLoopAPL.read(187) -
+                  mDelayAfterAPL.read(1066)) *
+                 mMix * 0.8f; // Reduced from 1.5f to fix loudness
+
+    float wetR = (mDelayAfterAPL.read(353) + mDelayAfterAPL.read(3627) -
+                  mLoopAPL.read(1228) + mDelayAfterAPL.read(2673) -
+                  mDelayAfterAPR.read(2111) - mLoopAPR.read(335) -
+                  mDelayAfterAPR.read(121)) *
+                 mMix * 0.8f;
 
     // Global Panic Check: Reset if audio becomes non-finite
     if (!std::isfinite(wetL) || !std::isfinite(wetR)) {
@@ -252,7 +270,17 @@ public:
 
     outL = wetL;
     outR = wetR;
+
+    // Silence tracking
+    if (std::abs(wetL) < 1e-9f && std::abs(wetR) < 1e-9f) {
+      if (mSilentCounter < 48000)
+        mSilentCounter++;
+    } else {
+      mSilentCounter = 0;
+    }
   }
+
+  bool isSilent() const { return mSilentCounter >= 48000; }
 
   // Parameter Setters
   void setSize(float v) {
@@ -268,6 +296,7 @@ public:
   void setDamping(float v) { setDamp(v); }
   void setModDepth(float v) { mModDepth = v; }
   void setMix(float v) { mMix = v; }
+  float getMix() const { return mMix; }
   void setPreDelay(float v) { mPreDelayMilli = v * 200.0f; }
   void setTone(float v) { mTone = 0.1f + v * 0.8f; } // LPF on output
 
@@ -310,6 +339,7 @@ private:
   // State
   float mFilterL = 0.0f, mFilterR = 0.0f;
   float mToneFilterL = 0.0f, mToneFilterR = 0.0f;
+  uint32_t mSilentCounter = 48000; // Start silent
 
   Galactic::DelayLine mPreDelay;
   Galactic::AllPass mInputAP[4];

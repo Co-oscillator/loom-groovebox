@@ -19,7 +19,7 @@ public:
       tsf_close(mTsf);
     mTsf = tsf_load_filename(path.c_str());
     if (mTsf) {
-      tsf_set_output(mTsf, TSF_STEREO_INTERLEAVED, 44100, 0.0f);
+      tsf_set_output(mTsf, TSF_STEREO_INTERLEAVED, 48000, 0.0f);
       tsf_channel_set_pitchrange(mTsf, 0, 24.0f); // +/- 2 octaves
     }
   }
@@ -99,7 +99,26 @@ public:
   void setParameter(int id, float value) {
     if (id == 355) {
       setGlide(value);
+    } else if (id == 100) { // Attack -> CC 73
+      midiControl(73, (int)(value * 127));
+    } else if (id == 103) { // Release -> CC 72
+      midiControl(72, (int)(value * 127));
+    } else if (id == 112 || id == 1) { // Cutoff -> CC 74 (Brightness)
+      midiControl(74, (int)(value * 127));
+    } else if (id == 113 || id == 2) { // Resonance -> CC 71 (Harmonic Content)
+      midiControl(71, (int)(value * 127));
+    } else if (id == 150) { // Reverb Send -> CC 91
+      midiControl(91, (int)(value * 127));
+    } else if (id == 151) { // Chorus Send -> CC 93
+      midiControl(93, (int)(value * 127));
+    } else if (id == 152) { // Pan -> CC 10
+      midiControl(10, (int)(value * 127));
     }
+  }
+
+  void midiControl(int cc, int val) {
+    if (mTsf)
+      tsf_channel_midi_control(mTsf, 0, cc, val);
   }
 
   void setMapping(int knobId, int genId) {
@@ -122,7 +141,7 @@ private:
   float mGlide = 0.0f;
   int mLastNote = -1;
   float mCurrentPitchWheel = 0.0f;
-  float mSampleRate = 44100.0f;
+  float mSampleRate = 48000.0f;
 };
 
 #endif // SOUNDFONT_ENGINE_H

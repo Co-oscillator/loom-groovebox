@@ -19,7 +19,10 @@ data class ArpConfig(
     ), // 3 lanes x 8 steps
     val randomSequence: List<Int> = emptyList(), // The 8-step random seed
     val arpRate: Float = 1.0f,
-    val arpDivisionMode: Int = 0 // 0=Reg, 1=Dotted, 2=Triplet
+    val arpDivisionMode: Int = 0, // 0=Reg, 1=Dotted, 2=Triplet
+    val isChordProgEnabled: Boolean = false,
+    val chordProgMood: Int = 0,
+    val chordProgComplexity: Int = 0
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L
@@ -55,15 +58,40 @@ data class TrackState(
     val soundFontPresetName: String = "None",
     val soundFontMapping: Map<Int, Int> = emptyMap(),
     val parameters: Map<Int, Float> = mapOf(
-        112 to 1.0f,  // Cutoff
-        113 to 0.0f,  // Resonance
+        0 to 0.7f,    // Volume
+        1 to 1.0f,    // Cutoff
+        2 to 0.0f,    // Resonance
         100 to 0.01f, // Attack
-        101 to 0.1f,  // Decay
-        102 to 0.8f,  // Sustain
-        103 to 0.5f,  // Release
+        101 to 0.5f,  // Decay
+        102 to 1.0f,  // Sustain
+        103 to 0.2f,  // Release
+        104 to 0.2f,  // Osc 1 Wave (Saw)
+        105 to 0.4f,  // Osc 2 Wave (Square)
+        107 to 0.6f,  // Osc 1 Volume
+        108 to 0.4f,  // Osc 2 Volume
+        109 to 0.4f,  // Osc 3 (Sub) Volume
+        9 to 0.5f,    // Pan
+        160 to 0.25f, // Subtractive Osc 1 Pitch / FM Op 1 Level (1.0 / 0.25)
+        161 to 0.25f, // Subtractive Osc 2 Pitch / FM Op 2 Level (1.0 / 0.25)
+        162 to 0.125f, // Subtractive Osc 3 (Sub) Pitch / FM Op 3 Level (0.5 / 0.125)
+        163 to 0.25f, // Subtractive Osc 4 Pitch / FM Op 4 Level (1.0 / 0.25)
+        170 to 0.0f,  // Osc 1 Drive (1.0)
+        171 to 0.0f,  // Osc 2 Drive (1.0)
+        172 to 0.0f,  // Osc 3 Drive (1.0)
+        173 to 0.0f,  // Osc 4 Drive (1.0)
+        156 to 0.2f,  // FM Algorithm
         151 to 0.5f,  // FM Filter
         157 to 0.5f,  // FM Brightness
-        9 to 0.5f     // Pan (Center)
+        320 to 0.0f,  // Sampler Mode
+        341 to 0.5f,  // Sampler Speed
+        350 to 1.0f,  // Use Envelope (True)
+        400 to 0.5f,  // Granular Position
+        406 to 0.2f,  // Granular Grain Size
+        407 to 0.5f,  // Granular Density
+        429 to 0.5f,  // Granular Gain
+        // FM Drum Gains
+        205 to 0.7f, 215 to 0.7f, 225 to 0.7f, 235 to 0.7f, 
+        245 to 0.7f, 255 to 0.7f, 265 to 0.7f, 275 to 0.7f
     )
 ) : java.io.Serializable {
     companion object {
@@ -211,6 +239,7 @@ data class GrooveboxState(
     val isParameterLocking: Boolean = false,
     val isResampling: Boolean = false, 
     val isRecordingSample: Boolean = false,
+    val isRecordingLocked: Boolean = false,
     val recordingTrackIndex: Int = -1,
     val lockedParamsThisStep: Set<Int> = emptySet(), 
     

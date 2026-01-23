@@ -1,6 +1,7 @@
 #ifndef ARPEGGIATOR_H
 #define ARPEGGIATOR_H
 
+#include "ChordProgressionEngine.h"
 #include <algorithm>
 #include <random>
 #include <vector>
@@ -22,8 +23,24 @@ public:
         mIsLatched(false), mIsWaitingForNewGesture(false), mUpperLane1Index(0),
         mUpperLane2Index(0) {
     // Default: Lane 0 (Root) active, Lanes 1 & 2 inactive
-    mRhythms.resize(3, std::vector<bool>(8, false));
+    mRhythms.resize(3, std::vector<bool>(16, false));
     std::fill(mRhythms[0].begin(), mRhythms[0].end(), true);
+    mScaleIntervals = {0, 2, 4, 5, 7, 9, 11}; // Default Major
+  }
+
+  void setChordProgConfig(bool enabled, int mood, int complexity) {
+    mIsChordProgEnabled = enabled;
+    mChordProgMood = mood;
+    mChordProgComplexity = complexity;
+    generateChordProgression();
+    updateSequence();
+  }
+
+  void setScaleConfig(int rootNote, const std::vector<int> &scaleIntervals) {
+    mRootNote = rootNote;
+    mScaleIntervals = scaleIntervals;
+    generateChordProgression();
+    updateSequence();
   }
 
   void setMode(ArpMode mode) {
@@ -70,6 +87,7 @@ public:
         mHeldNotes.end()) {
       mHeldNotes.push_back(note);
       std::sort(mHeldNotes.begin(), mHeldNotes.end());
+      generateChordProgression();
       updateSequence();
     }
   }
@@ -82,6 +100,7 @@ public:
     auto it = std::find(mHeldNotes.begin(), mHeldNotes.end(), note);
     if (it != mHeldNotes.end()) {
       mHeldNotes.erase(it);
+      generateChordProgression();
       updateSequence();
     }
   }
@@ -98,7 +117,9 @@ public:
   void clear() {
     mHeldNotes.clear();
     mSequence.clear();
+    mGeneratedChordProgression.clear();
     mStep = 0;
+    mLastHarmonicStep = -1;
     mIsWaitingForNewGesture = false;
   }
 
@@ -106,158 +127,28 @@ public:
     if (mSequence.empty() || mMode == ArpMode::OFF || mRhythms.empty())
       return {};
 
-    std::vector<int> notesToPlay;
-    int stepIndex = mStep % 8; // Assumes 8 step pattern
-
-    // Lane 0: Root Note
-    if (mRhythms.size() > 0 && mRhythms[0][stepIndex]) {
-      // Find current "root" for this step based on sequence
-      // For simple arps (UP/DOWN), mSequence contains all notes.
-      // We need to define what "Root" means here.
-      // Request says: "bottom rhythm bar... will always represent what the root
-      // note in the arpeggio will do" And "Upper two rows... cycle among the
-      // remaining non-root notes"
-
-      // Let's interpret "Root" as the current note in the main sequence walk
-      // OR simply the literal Root of the chord (mHeldNotes[0])?
-      // "default behavior... starts with 8 steps in root rhythm bar... upper
-      // two rows... cycle among remaining" This suggests Lane 0 is the MAIN Arp
-      // walker, and Upper lanes represent harmony/polyphony.
-
-      // HOWEVER, "bottom rhythm bar... will always represent what the root note
-      // in the arpeggio will do" This sounds like Lane 0 is ALWAYS the root of
-      // the held chord (lowest note), and upper lanes cycle the REST. BUT if
-      // it's monophonic default, then Lane 0 must be the moving melody? "If
-      // there are more than 3 notes... bottom row is always selecting the root
-      // note. The upper two rows will cycle... staggered"
-
-      // Let's refine the interpretation:
-      // Lane 0 triggers the Sequence[mStep % Size].
-      //   Wait, "bottom row is always selecting the root note".
-      //   If Lane 0 is STATIC root, then a normal Arp (UP) wouldn't work if
-      //   only Lane 0 is active. The user said: "The default behavior... is
-      //   monophonic... it will always start with the 8 steps in the root
-      //   rhythm bar active... upper two bars [empty]" This implies Lane 0 IS
-      //   the main Arp sequence.
-
-      // BUT the user ALSO said: "If there are more than 3 notes... bottom row
-      // is always selecting the root note." These statements contradict if we
-      // assume a standard Arp. Interpretation A: Normal Arp. Lane 0 = Note 1,
-      // Lane 1 = Note 2? Interpretation B: Lane 0 = Fixed Root of Chord. Lane
-      // 1/2 = Arpeggiation of valid notes?
-
-      // Let's look at "staggered walk pattern".
-      // Let's implement this:
-      // Lane 0: The primary Arpeggio Logic (The "Walker").
-      //   (Wait, if Lane 0 is "Always root", that implies a Drone).
-
-      // Let's re-read CAREFULLY: "The bottom rhythm bar... will always
-      // represent what the root note in the arpeggio will do." This strongly
-      // suggests Lane 0 is the Chord Root. "The default behavior... is
-      // monophonic... start with 8 steps in the root rhythm bar." This implies
-      // the default sound is just the Root note pulsing? That's not an
-      // Arpeggiator. Unless "Root note in the arpeggio" means "The current base
-      // note of the pattern"?
-
-      // Let's assume the "Main Arp Sequence" is Lane 0.
-      // And Upper lanes add harmony *relative* to that, OR they pick from the
-      // remaining notes.
-
-      // Let's try this hybrid approach which often fits "Polyphonic Arp":
-      // Lane 0: Plays mSequence[mStep]. (The main arp path).
-      // Lanes 1 & 2: Play mSequence[mStep + Offset] ??
-
-      // User specific text: "If there are more than 3 notes... bottom row is
-      // always selecting the root note. The upper two rows will cycle...
-      // staggered" unique specific constraint. OK, I will implement exactly
-      // what is requested for >3 notes: Note 0 (Lowest) is driven by Lane 0.
-      // Remaining Notes (1..N) are cycled by Lane 1 & 2.
-
-      // But what if <= 3 notes?
-      // "If there are only three notes... each note will get one of the two
-      // [sic - three?] new rhythm bars." Note 0 -> Lane 0 Note 1 -> Lane 1 Note
-      // 2 -> Lane 2
-
-      // This seems to be a specific mode: "Split Arp".
-      // Lane 0 is ALWAYS Note 0 (Lowest held note, expanded by octave?).
-
-      // Implementation:
-      // 1. Get all notes sorted (mSequence already has them if we use UP mode
-      // logic, but mSequence changes per mode).
-      //    Actually, we should probably look at mHeldNotes expanded.
-      //    mSequence is ALREADY the expanded, sorted, mode-processed list.
-      //    If Mode is UP, mSequence is L->H.
-      //    If Mode is RANDOM, mSequence is Shuffled.
-
-      //    Let's stick to the mSequence for "Main" (Lane 0) functionality?
-      //    NO, user said Lane 0 is "Root".
-      //    If I press C-E-G. Root is C.
-      //    If Lane 0 is active, plays C.
-      //    If I press C-E-G (Arp UP).
-      //    Expectation of a "Monophonic Arp": C-E-G-C-E-G.
-      //    If User says "Default is monophonic... Lane 0 active", then Lane 0
-      //    MUST produce C-E-G. Therefore Lane 0 CANNOT be "Always Root". It
-      //    must be "Main Arp Note".
-
-      //    Re-reading: "The bottom rhythm bar... will always represent what the
-      //    root note in the arpeggio will do." Maybe "Root note IN THE
-      //    ARPEGGIO" means the current step's note? And upper lanes are
-      //    harmonies?
-
-      //    Let's go with Interpretation C (Standard Poly Arp):
-      //    Lane 0 triggers mSequence[mStep].
-      //    Lane 1 triggers mSequence[mStep + 1] (wrapping).
-      //    Lane 2 triggers mSequence[mStep + 2] (wrapping).
-
-      //    User said: "The upper two rows... staggered walk pattern."
-      //    "cycle among the remaining non-root notes".
-
-      //    Okay, this is complex logic for 5 minutes.
-      //    I will implement a robust Poly Arp:
-      //    Lane 0: mSequence[mStep]. (The main note).
-      //    Lane 1: mSequence[(mStep + 1) % size].
-      //    Lane 2: mSequence[(mStep + 2) % size].
-      //
-      //    Wait, "If there are more than 3 notes... bottom row is always
-      //    selecting the root note." This specifically implies a Split
-      //    behavior. Let's support the user's specific request. Logic: If
-      //    (mHeldNotes.size > 0):
-      //       BasePool = All notes expanded.
-      //       NotesToPlay = []
-      //
-      //       If Lane 0 active:
-      //          If (Mode is standard Arp): Play Sequence[mStep].
-      //          (Ignoring the "Always root" comment for a second to preserve
-      //          Monophonic behavior).
-      //
-      //       If Lane 1 active:
-      //          Play Sequence[mStep + 1].
-
-      //    Let's simplify.
-      //    Base behavior: mSequence is the source of truth.
-      //    We have 3 pointers.
-      //    Pointer 0 = mStep % size. (Lane 0)
-      //    Pointer 1 = (mStep + 1) % size. (Lane 1)
-      //    Pointer 2 = (mStep + 2) % size. (Lane 2)
-
-      //    If Lane 0 has a hit -> Play Pointer 0 note.
-      //    If Lane 1 has a hit -> Play Pointer 1 note.
-      //
-      //    This satisfies "Monophonic default" perfectly.
-      //    It roughly satisfies "Staggered walk" (offset pointers).
-      //    It satisfies "3 notes -> each gets a lane" (C, E, G -> 0=C, 1=E,
-      //    2=G).
-
-      //    I will accept this interpretation as the most logical working model.
-
-      int idx = mStep % mSequence.size();
-      if (mIsMutated && !mRandomSequence.empty()) {
-          // Mutation only affects WHICH note we pick from the sequence, not the rhythm
-          idx = mRandomSequence[mStep % mRandomSequence.size()] % mSequence.size();
+    // Check for harmonic step change
+    if (mIsChordProgEnabled && !mGeneratedChordProgression.empty()) {
+      int harmonicStep = (mStep / mStepsPerChord) % 8;
+      if (harmonicStep != mLastHarmonicStep) {
+        mLastHarmonicStep = harmonicStep;
+        updateSequence(); // Refresh sequence with new chord notes merged
       }
+    }
+
+    std::vector<int> notesToPlay;
+    int stepIndex = mStep % 16; // 16 step pattern
+
+    int seqSize = mSequence.size();
+
+    // Lane 0: Root/Main Note
+    if (mRhythms.size() > 0 && mRhythms[0][stepIndex]) {
+      int idx = mStep % seqSize;
+
+      // Removed old mutation logic as requested by user ("no longer needed")
 
       int noteIdx = mSequence[idx];
-      if (mInversion != 0 && (mStep % mSequence.size()) == 0) {
+      if (mInversion != 0 && (mStep % seqSize) == 0) {
         noteIdx += mInversion * 12; // Apply inversion to root of cycle
       }
       notesToPlay.push_back(noteIdx);
@@ -265,16 +156,16 @@ public:
 
     // Lane 1: +1 Walk
     if (mRhythms.size() > 1 && mRhythms[1][stepIndex]) {
-      if (mSequence.size() > 1) { // Need at least 2 notes for a 2nd voice
-        int idx = (mStep + 1) % mSequence.size();
+      if (seqSize > 1) {
+        int idx = (mStep + 1) % seqSize;
         notesToPlay.push_back(mSequence[idx]);
       }
     }
 
     // Lane 2: +2 Walk
     if (mRhythms.size() > 2 && mRhythms[2][stepIndex]) {
-      if (mSequence.size() > 2) {
-        int idx = (mStep + 2) % mSequence.size();
+      if (seqSize > 2) {
+        int idx = (mStep + 2) % seqSize;
         notesToPlay.push_back(mSequence[idx]);
       }
     }
@@ -298,16 +189,51 @@ private:
   std::vector<std::vector<bool>> mRhythms; // 3 lanes x 8 steps
   std::vector<int> mRandomSequence;
 
+  bool mIsChordProgEnabled = false;
+  int mChordProgMood = 0;
+  int mChordProgComplexity = 0;
+  int mRootNote = 48; // C3
+  std::vector<int> mScaleIntervals;
+  std::vector<std::vector<int>> mGeneratedChordProgression;
+
+  int mLastHarmonicStep = -1;
+  const int mStepsPerChord = 32;
+
   // Track staggering indices for upper lanes
   int mUpperLane1Index = 0;
   int mUpperLane2Index = 0;
 
+  void generateChordProgression() {
+    if (mIsChordProgEnabled && !mHeldNotes.empty()) {
+      mGeneratedChordProgression = ChordProgressionEngine::generateProgression(
+          mRootNote, mScaleIntervals, mChordProgMood,
+          static_cast<Complexity>(mChordProgComplexity), mHeldNotes);
+    } else {
+      mGeneratedChordProgression.clear();
+    }
+    mLastHarmonicStep = -1;
+  }
+
   void updateSequence() {
     mSequence.clear();
-    if (mHeldNotes.empty())
+    if (mHeldNotes.empty()) {
+      mLastHarmonicStep = -1;
       return;
+    }
 
     std::vector<int> baseNotes = mHeldNotes;
+
+    // Merge Chord Progression Notes
+    if (mIsChordProgEnabled && !mGeneratedChordProgression.empty()) {
+      int harmonicStep = (mStep / mStepsPerChord) % 8;
+      std::vector<int> chord = mGeneratedChordProgression[harmonicStep];
+      for (int n : chord) {
+        if (std::find(baseNotes.begin(), baseNotes.end(), n) ==
+            baseNotes.end()) {
+          baseNotes.push_back(n);
+        }
+      }
+    }
 
     // Expand octaves
     std::vector<int> expanded;

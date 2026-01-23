@@ -15,7 +15,7 @@ public:
       active = false;
       ampEnv.reset();
       filterEnv.reset();
-      svf.setParams(1000.0f, 0.7f, 44100.0f);
+      svf.setParams(1000.0f, 0.7f, 48000.0f);
     }
   };
 
@@ -133,7 +133,7 @@ public:
         v.active = false;
         // Clear filter state when inactive to prevent denormal/resonance
         // build-up
-        v.svf.setParams(1000.0f, 0.7f, 44100.0f); // Default safe point
+        v.svf.setParams(1000.0f, 0.7f, 48000.0f); // Default safe point
         return 0.0f;
       }
     }
@@ -183,7 +183,7 @@ public:
 
 private:
   std::vector<Voice> mVoices;
-  float mSampleRate = 44100.0f;
+  float mSampleRate = 48000.0f;
   float mLastX = 0.0f;
   float mLastY = 0.0f;
   bool mGated = true;

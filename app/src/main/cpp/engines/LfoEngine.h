@@ -1,6 +1,7 @@
 #ifndef LFO_ENGINE_H
 #define LFO_ENGINE_H
 
+#include "../Utils.h"
 #include <cmath>
 #include <cstdlib>
 
@@ -36,7 +37,7 @@ public:
     float out = 0.0f;
     switch (mShape) {
     case LfoShape::Sine:
-      out = std::sin(mPhase * 2.0f * 3.14159265f);
+      out = FastSine::get(mPhase);
       break;
     case LfoShape::Triangle:
       out = (mPhase < 0.5f) ? (4.0f * mPhase - 1.0f) : (3.0f - 4.0f * mPhase);
@@ -68,7 +69,7 @@ public:
     float out = 0.0f;
     switch (mShape) {
     case LfoShape::Sine:
-      out = std::sin(mPhase * 2.0f * 3.14159265f);
+      out = FastSine::get(mPhase);
       break;
     case LfoShape::Triangle:
       out = (mPhase < 0.5f) ? (4.0f * mPhase - 1.0f) : (3.0f - 4.0f * mPhase);

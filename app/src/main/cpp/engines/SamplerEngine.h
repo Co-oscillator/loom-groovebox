@@ -207,7 +207,7 @@ public:
     v.note = note;
     v.baseVelocity = velocity / 127.0f;
 
-    v.envelope.setSampleRate(44100.0f);
+    v.envelope.setSampleRate(48000.0f);
     v.envelope.setParameters(mAttack, mDecay, mSustain, mRelease);
     v.envelope.trigger();
 
@@ -338,7 +338,7 @@ public:
       mReverse = value > 0.5f;
       break;
     case 340: {
-      int count = static_cast<int>(value * 14.0f) + 2; // 2 to 16
+      int count = static_cast<int>(value * 15.0f) + 1; // 1 to 16
       findConstrainedSlices(count);
       break;
     }
@@ -429,8 +429,17 @@ public:
           }
         }
         int idx = static_cast<int>(v.position);
+        // Fix: Prevent playing past slice end in Chops modes (One Chop)
         if (idx >= 0 && idx < (int)mBuffer.size()) {
-          voiceOutput = mBuffer[idx];
+          // If we are in a non-looping mode, strictly enforce v.end
+          if (mPlayMode == OneShot || mPlayMode == Chops ||
+              mPlayMode == OneShotChops) {
+            if (idx < (int)v.end) {
+              voiceOutput = mBuffer[idx];
+            }
+          } else {
+            voiceOutput = mBuffer[idx];
+          }
         }
       } else {
         // Granular mode: Time-stretching (Decouples traversal from read rate)
@@ -450,10 +459,27 @@ public:
         float phase = (float)v.grainTimer / (float)Voice::GRAIN_SIZE;
         float w1 = 1.0f - std::abs(phase * 2.0f - 1.0f);
 
-        float s1 =
-            (idx1 >= 0 && idx1 < (int)mBuffer.size()) ? mBuffer[idx1] : 0.0f;
-        float s2 =
-            (idx2 >= 0 && idx2 < (int)mBuffer.size()) ? mBuffer[idx2] : 0.0f;
+        float s1 = 0.0f;
+        if (idx1 >= 0 && idx1 < (int)mBuffer.size()) {
+          if (mPlayMode == OneShot || mPlayMode == Chops ||
+              mPlayMode == OneShotChops) {
+            if (idx1 < (int)v.end)
+              s1 = mBuffer[idx1];
+          } else {
+            s1 = mBuffer[idx1];
+          }
+        }
+
+        float s2 = 0.0f;
+        if (idx2 >= 0 && idx2 < (int)mBuffer.size()) {
+          if (mPlayMode == OneShot || mPlayMode == Chops ||
+              mPlayMode == OneShotChops) {
+            if (idx2 < (int)v.end)
+              s2 = mBuffer[idx2];
+          } else {
+            s2 = mBuffer[idx2];
+          }
+        }
 
         voiceOutput = (s1 * w1) + (s2 * (1.0f - w1));
 
@@ -478,7 +504,7 @@ public:
         cutoff += env * mFilterEnvAmount * 12000.0f;
         cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
 
-        v.filter.setParams(cutoff, 0.7f + mFilterResonance * 5.0f, 44100.0f);
+        v.filter.setParams(cutoff, 0.7f + mFilterResonance * 5.0f, 48000.0f);
       }
       voiceOutput = v.filter.process(voiceOutput, TSvf::LowPass);
 
@@ -603,7 +629,7 @@ private:
   float mGlide = 0.0f, mLastPitchRatio = 1.0f;
   PlayMode mPlayMode = OneShot;
   bool mUseEnvelope = true;
-  int mSampleRate = 44100;
+  int mSampleRate = 48000;
 
   std::vector<Slice> mSlices;
   std::vector<float> mBuffer;

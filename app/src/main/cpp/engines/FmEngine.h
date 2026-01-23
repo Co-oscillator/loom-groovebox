@@ -175,6 +175,7 @@ public:
       idx = 0;
 
     Voice &v = mVoices[idx];
+    v.reset();
     v.active = true;
     v.note = note;
     v.amplitude = velocity / 127.0f;
@@ -390,6 +391,11 @@ public:
       mOpLevels[3] = 0.7f;
       mOpRatios[4] = (presetId == 14) ? 3.0f : 1.5f;
       mOpLevels[4] = 0.2f;
+
+      // Fix Harshness: Limit Brightness and Feedback for these delicate sounds
+      mBrightness = 0.6f;
+      mFeedback = 0.0f; // Flutes usually don't need feedback noise
+
       mAttack = 0.08f;
       mRelease = 0.3f;
       mDecay = 1.0f;
@@ -559,7 +565,7 @@ private:
         mFeedback = 0.0f, mFeedbackDrive = 0.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 1.0f, mRelease = 0.2f;
   int mAlgorithm = 0, mCarrierMask = 1, mActiveMask = 63, mFilterMode = 0;
-  float mSampleRate = 44100.0f, mFrequency = 440.0f, mLastFrequency = 440.0f,
+  float mSampleRate = 48000.0f, mFrequency = 440.0f, mLastFrequency = 440.0f,
         mGlide = 0.0f;
   float mPitchSweepAmount = 0.0f;
   bool mUseEnvelope = true, mIgnoreNoteFrequency = false;

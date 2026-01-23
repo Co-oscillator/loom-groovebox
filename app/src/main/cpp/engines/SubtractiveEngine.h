@@ -56,11 +56,11 @@ public:
   }
 
   void resetToDefaults() {
-    mCutoff = 0.45f;
+    mCutoff = 1.0f;
     mResonance = 0.0f;
     mAttack = 0.01f;
     mDecay = 0.1f;
-    mSustain = 0.8f;
+    mSustain = 1.0f;
     mRelease = 0.5f;
     mF_Atk = 0.01f;
     mF_Dcy = 0.1f;
@@ -78,13 +78,31 @@ public:
     mOscPitch[3] = 1.0f;
     mOscVolumes[0] = 0.6f;
     mOscVolumes[1] = 0.4f;
-    mOscVolumes[2] = 0.0f;
+    mOscVolumes[2] = 0.4f; // Default Sub Volume
     mOscVolumes[3] = 0.0f;
     mOscDrive[0] = mOscDrive[1] = mOscDrive[2] = mOscDrive[3] = 1.0f;
     mOscFold[0] = mOscFold[1] = mOscFold[2] = mOscFold[3] = 0.0f;
     mOscPW[0] = mOscPW[1] = mOscPW[2] = mOscPW[3] = 0.5f;
     mOscWaveforms[0] = Waveform::Sawtooth;
     mOscWaveforms[1] = Waveform::Square;
+    mOscWaveforms[2] = Waveform::Sine; // Explicitly set Sub to Sine
+
+    // Propagate waveforms to all voices immediately
+    for (int i = 0; i < 4; ++i) {
+      setOscWaveform(i, (i == 0)   ? 0.6f
+                        : (i == 1) ? 0.8f
+                        : (i == 2) ? 0.0f
+                                   : 0.6f);
+      // 0.6=Saw, 0.8=Square, 0.0=Sine. Mapping is in setOscWaveform logic.
+      // Or simpler: iterate voices directly:
+    }
+    for (auto &v : mVoices) {
+      v.oscillators[0].setWaveform(mOscWaveforms[0]);
+      v.oscillators[1].setWaveform(mOscWaveforms[1]);
+      v.oscillators[2].setWaveform(mOscWaveforms[2]);
+      v.oscillators[3].setWaveform(mOscWaveforms[3]);
+    }
+
     updateLiveEnvelopes();
   }
 
@@ -225,9 +243,12 @@ public:
       mRingMod = (value > 0.5f);
     else if (id == 152)
       mFmAmt = value;
-    else if (id >= 160 && id <= 163)
-      mOscPitch[id - 160] = value * 4.0f;
-    else if (id >= 170 && id <= 173)
+    else if (id >= 160 && id <= 163) {
+      if (id == 162)
+        mOscPitch[2] = value * 2.0f; // Sub (1 octave lower than Osc 1/2 @ 0.5)
+      else
+        mOscPitch[id - 160] = value * 4.0f;
+    } else if (id >= 170 && id <= 173)
       mOscDrive[id - 170] = 1.0f + value * 10.0f;
     else if (id >= 180 && id <= 183)
       mOscFold[id - 180] = value;
@@ -235,6 +256,10 @@ public:
       mOscPW[id - 190] = value;
       for (auto &v : mVoices)
         v.oscillators[id - 190].setWaveShape(value);
+    } else if (id >= 107 && id <= 109) {
+      setOscVolume(id - 107, value);
+    } else if (id == 110) {
+      setNoiseLevel(value);
     } else if (id == 355) {
       setGlide(value);
     }
@@ -340,6 +365,7 @@ public:
 
       mixedOutput += v.svf.process(output, type);
     }
+    mControlCounter++;
     return fast_tanh(mixedOutput * (activeCount > 1 ? 0.7f : 1.0f));
   }
 
@@ -368,7 +394,7 @@ private:
   float mDetune = 0.0f, mNoiseLevel = 0.0f, mLfoRate = 0.0f, mLfoDepth = 0.0f,
         mFrequency = 440.0f, mLastFrequency = 440.0f, mGlide = 0.0f;
   unsigned int mNoiseSeed = 12345;
-  float mSampleRate = 44100.0f;
+  float mSampleRate = 48000.0f;
   bool mUseEnvelope = true;
   bool mReverse = false;
   bool mOscSync = false, mRingMod = false, mIgnoreNoteFrequency = false;

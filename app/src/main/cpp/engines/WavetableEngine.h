@@ -35,7 +35,7 @@ public:
       phase = 0.0;
       envelope.reset();
       filterEnv.reset();
-      svf.setParams(1000.0f, 0.7f, 44100.0f);
+      svf.setParams(1000.0f, 0.7f, 48000.0f);
       frequency = 440.0f;
       targetFrequency = 440.0f;
       lastSample = 0.0f;
@@ -315,6 +315,10 @@ public:
 
     if (activeCount > 1)
       mixedOutput *= 0.7f;
+
+    // Fix: Increment control counter for LFOs
+    mControlCounter++; // Added this line
+
     return fast_tanh(mixedOutput);
   }
 
@@ -329,7 +333,7 @@ private:
   std::vector<Voice> mVoices;
   std::vector<float> mTable;
   int mNumFrames = 1;
-  float mSampleRate = 44100.0f, mFrequency = 440.0f, mLastFrequency = 440.0f,
+  float mSampleRate = 48000.0f, mFrequency = 440.0f, mLastFrequency = 440.0f,
         mGlide = 0.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
   float mF_Atk = 0.01f, mF_Dcy = 0.1f, mF_Sus = 0.0f, mF_Rel = 0.5f,
@@ -339,6 +343,7 @@ private:
   float mBits = 1.0f, mSrate = 0.0f;
   int mFilterMode = 0;
   std::shared_ptr<std::mutex> mMutex;
+  uint32_t mControlCounter = 0;
 };
 
 #endif

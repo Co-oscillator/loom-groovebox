@@ -37,7 +37,7 @@ public:
       e.setOpLevel(1, 0.8f);
       e.setOpADSR(1, 0.001f, 0.05f, 0.0f, 0.05f); // Super short "thwack"
       e.setFeedback(0.0f);
-      e.setFrequency(45.0f, 44100.0f); // Deep base
+      e.setFrequency(45.0f, 48000.0f); // Deep base
       e.setPitchSweep(2.5f);           // Initial snap
       break;
 
@@ -52,7 +52,7 @@ public:
       e.setOpLevel(1, 0.65f);
       e.setOpADSR(1, 0.001f, 0.15f, 0.0f, 0.1f);
       e.setFeedback(0.6f); // Moderate feedback for snare buzz
-      e.setFrequency(160.0f, 44100.0f);
+      e.setFrequency(160.0f, 48000.0f);
       break;
     case DrumType::Tom:
       // GOAL: Tubby resonance
@@ -63,7 +63,7 @@ public:
       e.setOpLevel(1, 0.4f);
       e.setOpADSR(1, 0.001f, 0.15f, 0.0f, 0.1f);
       e.setFeedback(0.0f);
-      e.setFrequency(90.0f, 44100.0f);
+      e.setFrequency(90.0f, 48000.0f);
       break;
 
     case DrumType::HiHat:
@@ -76,7 +76,7 @@ public:
       e.setOpLevel(1, 0.8f);
       e.setOpADSR(1, 0.001f, 0.04f, 0.0f, 0.02f);
       e.setFeedback(0.8f);              // Dirty noise
-      e.setFrequency(400.0f, 44100.0f); // Start lower than you think!
+      e.setFrequency(400.0f, 48000.0f); // Start lower than you think!
       break;
 
     case DrumType::HiHatOpen:
@@ -88,7 +88,7 @@ public:
       e.setOpLevel(1, 0.8f);
       e.setOpADSR(1, 0.01f, 0.4f, 0.0f, 0.2f);
       e.setFeedback(0.8f);
-      e.setFrequency(400.0f, 44100.0f);
+      e.setFrequency(400.0f, 48000.0f);
       break;
     case DrumType::Cymbal:
       // GOAL: Complex washout
@@ -100,7 +100,7 @@ public:
       e.setOpLevel(1, 0.9f);  // High modulation level is key for crash
       e.setOpADSR(1, 0.01f, 1.2f, 0.0f, 0.5f);
       e.setFeedback(0.7f);
-      e.setFrequency(300.0f, 44100.0f); // Low base freq + FM = Thick Cymbal
+      e.setFrequency(300.0f, 48000.0f); // Low base freq + FM = Thick Cymbal
       break;
 
     case DrumType::Perc:
@@ -113,7 +113,7 @@ public:
       e.setOpLevel(1, 0.6f);
       e.setOpADSR(1, 0.001f, 0.1f, 0.0f, 0.1f);
       e.setFeedback(0.0f);
-      e.setFrequency(550.0f, 44100.0f);
+      e.setFrequency(550.0f, 48000.0f);
       break;
 
     case DrumType::Noise:
@@ -146,11 +146,11 @@ public:
 
   void setPlaybackSpeed(float speed) {}
 
-  void setFrequency(float freq, float sampleRate) {
-    // IGNORE freq to protect instrument-specific body tuning.
-    // Only update the Sample Rate.
+  void setFrequency(float freq, float sampleRate) { setSampleRate(sampleRate); }
+
+  void setSampleRate(float sampleRate) {
     for (int i = 0; i < 8; ++i) {
-      mEngines[i].updateSampleRate(sampleRate);
+      mEngines[i].setSampleRate(sampleRate);
     }
   }
 
@@ -206,7 +206,7 @@ public:
       }
 
       float pitchFreq = baseFreq + (v * v * freqRange);
-      e.setFrequency(pitchFreq, 44100.0f);
+      e.setFrequency(pitchFreq, 48000.0f);
 
     } else if (id == 1) { // REPLACES "ATK" -> "CLICK"
       // For Kicks/Toms: Control Pitch Sweep Amount

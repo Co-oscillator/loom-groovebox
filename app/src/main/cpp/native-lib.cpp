@@ -126,6 +126,15 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setParameter(
     engine->setParameter(track_index, parameter_id, value);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_setParameterPreview(JNIEnv *env, jobject thiz,
+                                                 jint track_index,
+                                                 jint parameter_id,
+                                                 jfloat value) {
+  if (engine)
+    engine->setParameterPreview(track_index, parameter_id, value);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setRouting(
     JNIEnv *env, jobject thiz, jint dest_track, jint source_track, jint source,
     jint dest, jfloat amount, jint dest_param_id) {
@@ -318,6 +327,13 @@ Java_com_groovebox_NativeLib_stopRecordingSample(JNIEnv *env, jobject thiz,
     engine->stopRecordingSample(track_index);
     engine->normalizeSample(track_index);
   }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_setRecordingLocked(JNIEnv *env, jobject thiz,
+                                                jboolean locked) {
+  if (engine)
+    engine->setRecordingLocked(locked);
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
@@ -580,6 +596,13 @@ Java_com_groovebox_NativeLib_restorePresets(JNIEnv *env, jobject thiz) {
   if (engine)
     engine->restorePresets();
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_restoreTrackPreset(JNIEnv *env, jobject thiz,
+                                                jint track_index) {
+  if (engine)
+    engine->restoreTrackPreset(track_index);
+}
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setInputDevice(
     JNIEnv *env, jobject thiz, jint device_id) {
   if (engine)
@@ -616,4 +639,40 @@ Java_com_groovebox_NativeLib_getActiveNoteMask(JNIEnv *env, jobject thiz,
   if (engine)
     return engine->getActiveNoteMask(track_index);
   return 0;
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_setChordProgConfig(JNIEnv *env, jobject thiz,
+                                                jint track_index,
+                                                jboolean enabled, jint mood,
+                                                jint complexity) {
+  if (engine) {
+    engine->setChordProgConfig(track_index, enabled, mood, complexity);
+  }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setScaleConfig(
+    JNIEnv *env, jobject thiz, jint root_note, jintArray intervals) {
+  if (engine) {
+    std::vector<int> intervalVec;
+    if (intervals != nullptr) {
+      jsize len = env->GetArrayLength(intervals);
+      jint *elems = env->GetIntArrayElements(intervals, nullptr);
+      for (int i = 0; i < len; ++i)
+        intervalVec.push_back(elems[i]);
+      env->ReleaseIntArrayElements(intervals, elems, JNI_ABORT);
+    }
+    engine->setScaleConfig(root_note, intervalVec);
+  }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setTrackActive(
+    JNIEnv *env, jobject thiz, jint track_index, jboolean active) {
+  if (engine)
+    engine->setTrackActive(track_index, active);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setTrackPan(
+    JNIEnv *env, jobject thiz, jint track_index, jfloat pan) {
+  if (engine)
+    engine->setTrackPan(track_index, pan);
 }

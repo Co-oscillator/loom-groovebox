@@ -144,6 +144,7 @@ public:
   }
 
   void resetToDefaults() {
+    std::lock_guard<std::mutex> lock(*mBufferLock);
     mPosition = 0.5f;
     mSpeed = 1.0f;
     mGrainSize = 0.2f;
@@ -265,6 +266,7 @@ public:
   }
 
   void setParameter(int id, float value) {
+    std::lock_guard<std::mutex> lock(*mBufferLock);
     if (id == 400)
       mPosition = value;
     else if (id == 401)
@@ -352,6 +354,7 @@ public:
   }
 
   void render(float *left, float *right) {
+    std::lock_guard<std::mutex> lock(*mBufferLock);
     if (mSource.empty()) {
       *left = *right = 0.0f;
       return;
@@ -386,7 +389,7 @@ public:
       }
 
       // Spawn logic
-      float grainDuration = (mGrainSize * 44100.0f * 2.0f) + 100.0f;
+      float grainDuration = (mGrainSize * 48000.0f * 2.0f) + 100.0f;
       float overlap = 0.1f + (mDensity * 4.0f);
       float interval = grainDuration / overlap;
       if (interval < 1.0f)
@@ -495,7 +498,7 @@ private:
   float mReverseProb = 0.0f;
   float mGlide = 0.0f;
   float mLastBasePitch = 1.0f;
-  float mSampleRate = 44100.0f;
+  float mSampleRate = 48000.0f;
 
   // Main Envelope Params
   float mMainAttack = 0.01f;
@@ -505,6 +508,8 @@ private:
   float mGain = 1.0f;
 
   void spawnGrain(float *lfoOffsets, int voiceIdx) {
+    if (mSource.empty())
+      return;
     Voice &v = mVoices[voiceIdx];
     // Find inactive grain
     for (auto &g : mGrains) {
@@ -536,7 +541,7 @@ private:
         float length = mGrainSize;
         if (mLFOS[1].target == 1)
           length *= (1.0f + lfoOffsets[1]);
-        g.initialLife = static_cast<int>(length * 44100.0f * 2.0f + 100);
+        g.initialLife = static_cast<int>(length * 48000.0f * 2.0f + 100);
         g.life = g.initialLife;
         g.envValue = 0.0f;
         g.voiceIdx = voiceIdx; // Link to voice

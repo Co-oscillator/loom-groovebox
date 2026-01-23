@@ -21,6 +21,7 @@ class NativeLib {
     external fun setSequencerConfig(trackIndex: Int, numPages: Int, stepsPerPage: Int)
     external fun setRouting(destTrack: Int, sourceTrack: Int, source: Int, dest: Int, amount: Float, destParamId: Int = -1)
     external fun setParameter(trackIndex: Int, parameterId: Int, value: Float)
+    external fun setParameterPreview(trackIndex: Int, parameterId: Int, value: Float)
     external fun setSwing(swing: Float)
     external fun setPlaybackDirection(trackIndex: Int, direction: Int) // 0: Forward, 1: Backward
     external fun setIsRandomOrder(trackIndex: Int, isRandom: Boolean)
@@ -41,10 +42,14 @@ class NativeLib {
     external fun getSoundFontPresetName(trackIndex: Int, presetIndex: Int): String
     external fun setSoundFontMapping(trackIndex: Int, knobIndex: Int, paramId: Int)
     external fun saveSample(trackIndex: Int, path: String)
+    external fun restorePresets()
+    external fun restoreTrackPreset(trackIndex: Int)
     external fun trimSample(trackIndex: Int)
     external fun getCurrentStep(trackIndex: Int, drumIndex: Int = -1): Int
     external fun getStepActive(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Boolean
     external fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray)
+    external fun setChordProgConfig(trackIndex: Int, enabled: Boolean, mood: Int, complexity: Int)
+    external fun setScaleConfig(rootNote: Int, intervals: IntArray)
     external fun getGranularPlayheads(trackIndex: Int): FloatArray
     external fun startRecordingSample(trackIndex: Int)
     external fun stopRecordingSample(trackIndex: Int)
@@ -79,6 +84,8 @@ class NativeLib {
     external fun getAllTrackParameters(trackIndex: Int): FloatArray
     external fun getAllStepActiveStates(trackIndex: Int): BooleanArray
     external fun getRecordedSampleData(trackIndex: Int, targetSampleRate: Float): FloatArray?
-    external fun restorePresets()
     external fun setInputDevice(deviceId: Int)
+    external fun setRecordingLocked(locked: Boolean)
+    external fun setTrackActive(trackIndex: Int, active: Boolean)
+    external fun setTrackPan(trackIndex: Int, pan: Float)
 }

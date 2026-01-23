@@ -34,7 +34,14 @@ public:
     float crushed = roundf(input * step) / step;
 
     mLastOutput = crushed;
-    return crushed * mMix;
+
+    // Output LPF (One Pole @ ~12kHz)
+    // Coeff approx for 12kHz at 48k is ~0.6
+    mLpfState += 0.6f * (crushed - mLpfState);
+    crushed = mLpfState;
+
+    // Insert Logic: Return crushed - input
+    return (crushed * mMix) - input;
   }
 
 private:
@@ -45,6 +52,7 @@ private:
   int mCounter = 0;
   float mLastOutput = 0.0f;
   float mMix = 1.0f;
+  float mLpfState = 0.0f;
 };
 
 #endif // BITCRUSHER_FX_H

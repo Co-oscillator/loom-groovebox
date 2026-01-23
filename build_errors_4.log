@@ -1,0 +1,74 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+
+> Task :app:compileDebugKotlin
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:207:31 Elvis operator (?:) always returns the left operand of non-nullable type String
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:209:68 Elvis operator (?:) always returns the left operand of non-nullable type String
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:211:65 Elvis operator (?:) always returns the left operand of non-nullable type String
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:217:33 Elvis operator (?:) always returns the left operand of non-nullable type Map<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:269:43 Elvis operator (?:) always returns the left operand of non-nullable type List<Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:380:21 'startActivityForResult(Intent, Int): Unit' is deprecated. Deprecated in Java
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:384:21 'startActivityForResult(Intent, Int): Unit' is deprecated. Deprecated in Java
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:653:88 Elvis operator (?:) always returns the left operand of non-nullable type String
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:752:9 Variable 'context' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:759:67 Elvis operator (?:) always returns the left operand of non-nullable type Map<EngineType, List<StripRouting>>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:760:65 Elvis operator (?:) always returns the left operand of non-nullable type Map<EngineType, List<StripRouting>>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:766:66 Elvis operator (?:) always returns the left operand of non-nullable type Map<EngineType, List<StripRouting>>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:772:65 Elvis operator (?:) always returns the left operand of non-nullable type Map<EngineType, List<StripRouting>>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:791:67 Elvis operator (?:) always returns the left operand of non-nullable type Map<EngineType, List<StripRouting>>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:795:65 Elvis operator (?:) always returns the left operand of non-nullable type Map<EngineType, List<StripRouting>>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:850:21 Variable 'bankOffset' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:1551:46 Variable 'scrollRatio' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:1950:13 'when' is exhaustive so 'else' is redundant here
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:2174:49 Elvis operator (?:) always returns the left operand of non-nullable type String
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3116:47 Variable 'nextCarrier' initializer is redundant
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3454:85 Elvis operator (?:) always returns the left operand of non-nullable type Map<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3455:83 Elvis operator (?:) always returns the left operand of non-nullable type Map<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3492:89 Elvis operator (?:) always returns the left operand of non-nullable type Map<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3815:5 Parameter 'onLocalValueChange' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3850:58 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3851:46 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3854:47 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:3937:25 'forEachGesture(suspend PointerInputScope.() -> Unit): Unit' is deprecated. Use awaitEachGesture instead. forEachGesture() can drop events between gestures.
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4247:108 Parameter 'empledManager' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4392:90 Name shadowed: idx
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4403:30 Variable 'clearAllProgress' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4442:50 Variable 'down' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4735:41 Variable 'down' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4811:143 Parameter 'midiManager' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:5016:49 Variable 'down' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:5017:49 Variable 'downTime' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:5521:21 Variable 'pinDist' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:5525:21 Variable 'angles' is never used
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:6042:37 Name shadowed: track
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:6049:74 Elvis operator (?:) always returns the left operand of non-nullable type Map<Int, Int>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:6931:60 Elvis operator (?:) always returns the left operand of non-nullable type Map<EngineType, List<StripRouting>>
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/midi/MidiManager.kt:24:35 'getter for devices: Array<(out) MidiDeviceInfo!>!' is deprecated. Deprecated in Java
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/midi/MidiManager.kt:32:21 'registerDeviceCallback(MidiManager.DeviceCallback!, Handler!): Unit' is deprecated. Deprecated in Java
+w: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/utils/AudioExporter.kt:37:13 Variable 'pcmOffset' is never used
+
+[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 32s
+16 actionable tasks: 1 executed, 15 up-to-date

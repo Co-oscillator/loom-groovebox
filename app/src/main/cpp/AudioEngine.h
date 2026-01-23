@@ -79,6 +79,7 @@ public:
   void setRouting(int destTrack, int sourceTrack, int source, int dest,
                   float amount, int destParamId = -1);
   void setParameter(int trackIndex, int parameterId, float value);
+  void setParameterPreview(int trackIndex, int parameterId, float value);
   void setSwing(float swing);
   void setPatternLength(int length);
   void setPlaybackDirection(int trackIndex, int direction);
@@ -98,10 +99,14 @@ public:
                     bool isLatched, bool isMutated,
                     const std::vector<std::vector<bool>> &rhythms,
                     const std::vector<int> &sequence);
+  void setChordProgConfig(int trackIndex, bool enabled, int mood,
+                          int complexity);
+  void setScaleConfig(int rootNote, const std::vector<int> &intervals);
   void getGranularPlayheads(int trackIndex, GranularEngine::PlayheadInfo *out,
                             int maxCount);
   void startRecordingSample(int trackIndex);
   void stopRecordingSample(int trackIndex);
+  void setRecordingLocked(bool locked);
   std::vector<float> getSamplerWaveform(int trackIndex, int numPoints);
   void normalizeSample(int trackIndex);
   void resetSampler(int trackIndex);
@@ -133,10 +138,16 @@ public:
   void setArpRate(int trackIndex, float rate, int divisionMode);
   float getCpuLoad();
   void setInputDevice(int deviceId);
+  void setTrackActive(int trackIndex, bool active);
+  void setTrackPan(int trackIndex, float pan);
 
   // Audio Export
   void renderToWav(int numCycles, const std::string &path);
   void renderStereo(float *outBuffer, int numFrames);
+
+  // Track Management
+  void initTrack(int i);
+  void restoreTrackPreset(int trackIndex);
 
   // Routing / Macro Controls
   void setGenericLfoParam(int lfoIndex, int paramId, float value);
@@ -174,8 +185,6 @@ private:
   std::mutex mCommandLock;
 
   void processCommands();
-  void setParameterLocked(int trackIndex, int parameterId, float value,
-                          bool isFromSequencer = false);
 
   std::atomic<float> mCpuLoad{0.0f};
   std::shared_ptr<oboe::AudioStream> mStream;
@@ -238,6 +247,8 @@ private:
     float mArpRate = 1.0f;    // 1.0 = 1/16th, 0.5 = 1/8th, etc.
     int mArpDivisionMode = 0; // 0=Reg, 1=Dotted, 2=Triplet
     bool mArpTriplet = false;
+    bool mParametersDirty = true; // Flag for optimization
+
     double mStepCountdown = 0.0;
     double mArpCountdown = 0.0;
     int mInternalStepIndex = 0;
@@ -269,6 +280,7 @@ private:
   bool mIsRecording = false;       // Transport record (sequencer)
   bool mIsRecordingSample = false; // Sample capture
   bool mIsResampling = false;      // New: Record Master Mix
+  bool mIsRecordingLocked = false;
   int mRecordingTrackIndex = -1;
   float mBpm = 120.0f;
   double mSampleCount = 0;
@@ -288,21 +300,21 @@ private:
 
   // Global Effects
   GalacticReverb mReverbFx;
-  ChorusFx mChorusFx;
-  OverdriveFx mOverdriveFx;
-  BitcrusherFx mBitcrusherFx;
-  PhaserFx mPhaserFx;
-  TapeWobbleFx mTapeWobbleFx;
   DelayFx mDelayFx;
-  SlicerFx mSlicerFx;
+  SlicerFx mSlicerFxL, mSlicerFxR;
   CompressorFx mCompressorFx;
   FilterLfoFx mFilterLfoFx{FilterLfoMode::LowPass};
 
-  // New Effects
-  FlangerFx mFlangerFx;
-  AutoPannerFx mAutoPannerFx;
-  TapeEchoFx mTapeEchoFx;
-  OctaverFx mOctaverFx;
+  // New Effects (Mono per channel)
+  ChorusFx mChorusFxL, mChorusFxR;
+  PhaserFx mPhaserFxL, mPhaserFxR;
+  OverdriveFx mOverdriveFxL, mOverdriveFxR;
+  BitcrusherFx mBitcrusherFxL, mBitcrusherFxR;
+  TapeWobbleFx mTapeWobbleFxL, mTapeWobbleFxR;
+  FlangerFx mFlangerFxL, mFlangerFxR;
+  AutoPannerFx mAutoPannerFx; // This one is native stereo
+  TapeEchoFx mTapeEchoFxL, mTapeEchoFxR;
+  OctaverFx mOctaverFxL, mOctaverFxR;
 
   // Generic LFOs for Routing
   LfoEngine mLfos[6];
@@ -323,6 +335,9 @@ public:
   // FX Chaining (Soft Routing)
   // Maps SourceFX Index -> DestinationFX Index. -1 means Master Mix.
   int mFxChainDest[15];
+  // Feedback buffers for backward-chaining effects (1-sample latency)
+  float mFxFeedbacksL[15] = {0.0f};
+  float mFxFeedbacksR[15] = {0.0f};
 
   // FX Split Filter LFO Effects (Slots 9/10)
   FilterLfoFx mHpLfoL{FilterLfoMode::HighPass};

@@ -1,231 +1,73 @@
-Initialized native services in: /Users/danielmiller/.gradle/native
-Initialized jansi services in: /Users/danielmiller/.gradle/native
-Found daemon DaemonInfo{pid=85894, address=[ba3024f3-c24a-4b75-9677-422791b9b1fd port:60518, addresses:[/127.0.0.1]], state=Idle, lastBusy=1768187266348, context=DefaultDaemonContext[uid=abffb344-5f60-4c62-afe4-5ffbcdd4d530,javaHome=/Applications/Android Studio.app/Contents/jbr/Contents/Home,javaVersion=21,javaVendor=JetBrains s.r.o.,daemonRegistryDir=/Users/danielmiller/.gradle/daemon,pid=85894,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx2048m,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]} however its context does not match the desired criteria.
-JVM is incompatible.
-Wanted: DaemonRequestContext{jvmCriteria=/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home (no JDK specified, using current Java home), daemonOpts=[-Xmx2048m, -Dfile.encoding=UTF-8, -Duser.country=US, -Duser.language=en, -Duser.variant], applyInstrumentationAgent=true, nativeServicesMode=ENABLED, priority=NORMAL}
-Actual: DefaultDaemonContext[uid=abffb344-5f60-4c62-afe4-5ffbcdd4d530,javaHome=/Applications/Android Studio.app/Contents/jbr/Contents/Home,javaVersion=21,javaVendor=JetBrains s.r.o.,daemonRegistryDir=/Users/danielmiller/.gradle/daemon,pid=85894,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx2048m,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]
-
-  Looking for a different daemon...
-Found daemon DaemonInfo{pid=19363, address=[ec330c75-258a-4141-9065-9320bbf0e4f7 port:53699, addresses:[/127.0.0.1]], state=Idle, lastBusy=1768189243729, context=DefaultDaemonContext[uid=36b5a213-155f-4354-875d-45beb2348b35,javaHome=/Users/danielmiller/.antigravity/extensions/redhat.java-1.51.0-darwin-arm64/jre/21.0.9-macosx-aarch64,javaVersion=21,javaVendor=Eclipse Adoptium,daemonRegistryDir=/Users/danielmiller/.gradle/daemon,pid=19363,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx2048m,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]} however its context does not match the desired criteria.
-JVM is incompatible.
-Wanted: DaemonRequestContext{jvmCriteria=/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home (no JDK specified, using current Java home), daemonOpts=[-Xmx2048m, -Dfile.encoding=UTF-8, -Duser.country=US, -Duser.language=en, -Duser.variant], applyInstrumentationAgent=true, nativeServicesMode=ENABLED, priority=NORMAL}
-Actual: DefaultDaemonContext[uid=36b5a213-155f-4354-875d-45beb2348b35,javaHome=/Users/danielmiller/.antigravity/extensions/redhat.java-1.51.0-darwin-arm64/jre/21.0.9-macosx-aarch64,javaVersion=21,javaVendor=Eclipse Adoptium,daemonRegistryDir=/Users/danielmiller/.gradle/daemon,pid=19363,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx2048m,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]
-
-  Looking for a different daemon...
-The client will now receive all logging from the daemon (pid: 91665). The daemon log file: /Users/danielmiller/.gradle/daemon/8.13/daemon-91665.out.log
-Starting 13th build in daemon [uptime: 11 hrs 14 mins 35.834 secs, performance: 97%, GC rate: 0.00/s, heap usage: 4% of 2 GiB]
-Using 8 worker leases.
-Now considering [/Users/danielmiller/Documents/Code Projects/ancient-halley] as hierarchies to watch
-Watching the file system is configured to be enabled if available
-File system watching is active
-Starting Build
-Settings evaluated using settings file '/Users/danielmiller/Documents/Code Projects/ancient-halley/settings.gradle'.
-Projects loaded. Root project using build file '/Users/danielmiller/Documents/Code Projects/ancient-halley/build.gradle'.
-Included projects: [root project 'Groovebox', project ':app']
-
-> Configure project :
-Evaluating root project 'Groovebox' using build file '/Users/danielmiller/Documents/Code Projects/ancient-halley/build.gradle'.
-Resolved plugin [id: 'com.android.application', version: '8.13.2', apply: false]
-Resolved plugin [id: 'com.android.library', version: '8.13.2', apply: false]
-Resolved plugin [id: 'org.jetbrains.kotlin.android', version: '1.9.0', apply: false]
-
-> Configure project :app
-Evaluating project ':app' using build file '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/build.gradle'.
-Resolved plugin [id: 'com.android.application']
-Resolved plugin [id: 'org.jetbrains.kotlin.android']
-Using default execution profile
-Using Kotlin Gradle Plugin gradle81 variant
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
-C/C++: android.ndkPath from module build.gradle is not set
-C/C++: ndk.dir in local.properties is not set
-C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
-C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
-All projects evaluated.
-Task path ':app:externalNativeBuildDebug' matched project ':app'
-Task name matched 'externalNativeBuildDebug'
-Selected primary task 'externalNativeBuildDebug' from project :app
-Tasks to be executed: [task ':app:preBuild', task ':app:preDebugBuild', task ':app:configureCMakeDebug[arm64-v8a]', task ':app:buildCMakeDebug[arm64-v8a]', task ':app:configureCMakeDebug[armeabi-v7a]', task ':app:buildCMakeDebug[armeabi-v7a]', task ':app:configureCMakeDebug[x86]', task ':app:buildCMakeDebug[x86]', task ':app:configureCMakeDebug[x86_64]', task ':app:buildCMakeDebug[x86_64]', task ':app:externalNativeBuildDebug']
-Tasks that were excluded: []
-Resolve mutations for :app:preBuild (Thread[Execution worker,5,main]) started.
-:app:preBuild (Thread[Execution worker,5,main]) started.
-
 > Task :app:preBuild UP-TO-DATE
-Skipping task ':app:preBuild' as it has no actions.
-Resolve mutations for :app:preDebugBuild (Thread[Execution worker,5,main]) started.
-:app:preDebugBuild (Thread[Execution worker,5,main]) started.
-
 > Task :app:preDebugBuild UP-TO-DATE
-Skipping task ':app:preDebugBuild' as it has no actions.
-Resolve mutations for :app:configureCMakeDebug[arm64-v8a] (Thread[Execution worker,5,main]) started.
-:app:configureCMakeDebug[arm64-v8a] (Thread[Execution worker,5,main]) started.
-
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug UP-TO-DATE
 > Task :app:configureCMakeDebug[arm64-v8a]
-Caching disabled for task ':app:configureCMakeDebug[arm64-v8a]' because:
-  Build cache is disabled
-  Caching has been disabled for the task
-Task ':app:configureCMakeDebug[arm64-v8a]' is not up-to-date because:
-  Task.upToDateWhen is false.
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/CMakeLists.txt debug|arm64-v8a : Start JSON generation. Platform version: 26 min SDK version: arm64-v8a
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/CMakeLists.txt debug|arm64-v8a : JSON '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a/android_gradle_build.json' was up-to-date
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/CMakeLists.txt debug|arm64-v8a : JSON generation completed without problems
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/CMakeLists.txt debug|arm64-v8a : Writing build model to /Users/danielmiller/Documents/Code Projects/ancient-halley/app/build/intermediates/cxx/Debug/c57145c4/logs/arm64-v8a/build_model.json
-Resolve mutations for :app:buildCMakeDebug[arm64-v8a] (Thread[Execution worker,5,main]) started.
-:app:buildCMakeDebug[arm64-v8a] (Thread[Execution worker,5,main]) started.
-
-> Task :app:buildCMakeDebug[arm64-v8a]
-Caching disabled for task ':app:buildCMakeDebug[arm64-v8a]' because:
-  Build cache is disabled
-  Caching has been disabled for the task
-Task ':app:buildCMakeDebug[arm64-v8a]' is not up-to-date because:
-  Task.upToDateWhen is false.
-C/C++: starting build
-C/C++: reading expected JSONs
-C/C++: done reading expected JSONs
-C/C++: executing build commands for targets that produce .so files or executables
-C/C++: evaluate miniconfig
-C/C++: evaluate library native-lib (arm64-v8a)
-C/C++: building target library native-lib because no targets are specified.
-C/C++: about to build targets native-lib
-C/C++: Build native-lib
-C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
-  -C \
-  "/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a" \
-  native-lib
-
-Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/ancient-halley/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a native-lib
-Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
-C/C++: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a'
-C/C++: /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp'
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:717:23: error: no member named 'setPan' in 'AutoPannerFx'
-C/C++:   717 |         mAutoPannerFx.setPan(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:719:23: error: no member named 'setRate' in 'AutoPannerFx'
-C/C++:   719 |         mAutoPannerFx.setRate(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:721:23: error: no member named 'setDepth' in 'AutoPannerFx'
-C/C++:   721 |         mAutoPannerFx.setDepth(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:723:23: error: no member named 'setMix' in 'AutoPannerFx'
-C/C++:   723 |         mAutoPannerFx.setMix(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:726:23: error: no member named 'setShape' in 'AutoPannerFx'
-C/C++:   726 |         mAutoPannerFx.setShape(value);
-C/C++:       |         ~~~~~~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1937:16: error: no member named 'advance' in 'LfoEngine'
-C/C++:  1937 |       mLfos[l].advance();
-C/C++:       |       ~~~~~~~~ ^
-C/C++: /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:2157:1: error: extraneous closing brace ('}')
-C/C++:  2157 | }
-C/C++:       | ^
-C/C++: 7 errors generated.
-C/C++: Received process result: 1
 
 > Task :app:buildCMakeDebug[arm64-v8a] FAILED
+C/C++: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/c57145c4/arm64-v8a'
+C/C++: /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/cpp/AudioEngine.cpp'
+C/C++: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/cpp/AudioEngine.cpp:145:20: error: no member named 'setSampleRate' in 'FmDrumEngine'
+C/C++:   145 |     t.fmDrumEngine.setSampleRate(mSampleRate);
+C/C++:       |     ~~~~~~~~~~~~~~ ^
+C/C++: 1 error generated.
 
-[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/build/reports/problems/problems-report.html
+[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/build/reports/problems/problems-report.html
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
 Execution failed for task ':app:buildCMakeDebug[arm64-v8a]'.
-> com.android.ide.common.process.ProcessException: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a'
+> com.android.ide.common.process.ProcessException: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/c57145c4/arm64-v8a'
   [1/2] Building CXX object CMakeFiles/native-lib.dir/AudioEngine.cpp.o
   FAILED: CMakeFiles/native-lib.dir/AudioEngine.cpp.o 
-  /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp'
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:717:23: error: no member named 'setPan' in 'AutoPannerFx'
-    717 |         mAutoPannerFx.setPan(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:719:23: error: no member named 'setRate' in 'AutoPannerFx'
-    719 |         mAutoPannerFx.setRate(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:721:23: error: no member named 'setDepth' in 'AutoPannerFx'
-    721 |         mAutoPannerFx.setDepth(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:723:23: error: no member named 'setMix' in 'AutoPannerFx'
-    723 |         mAutoPannerFx.setMix(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:726:23: error: no member named 'setShape' in 'AutoPannerFx'
-    726 |         mAutoPannerFx.setShape(value);
-        |         ~~~~~~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:1937:16: error: no member named 'advance' in 'LfoEngine'
-   1937 |       mLfos[l].advance();
-        |       ~~~~~~~~ ^
-  /Users/danielmiller/Documents/Code Projects/ancient-halley/app/src/main/cpp/AudioEngine.cpp:2157:1: error: extraneous closing brace ('}')
-   2157 | }
-        | ^
-  7 errors generated.
+  /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/a0de23ce9aa0dadb88065bbd5f98db59/transformed/oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/cpp/AudioEngine.cpp'
+  /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/cpp/AudioEngine.cpp:145:20: error: no member named 'setSampleRate' in 'FmDrumEngine'
+    145 |     t.fmDrumEngine.setSampleRate(mSampleRate);
+        |     ~~~~~~~~~~~~~~ ^
+  1 error generated.
   ninja: build stopped: subcommand failed.
   
   C++ build system [build] failed while executing:
       /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
         -C \
-        "/Users/danielmiller/Documents/Code Projects/ancient-halley/app/.cxx/Debug/c57145c4/arm64-v8a" \
+        "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/c57145c4/arm64-v8a" \
         native-lib
-    from /Users/danielmiller/Documents/Code Projects/ancient-halley/app
+    from /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app
 
 * Try:
 > Run with --stacktrace option to get the stack trace.
-> Run with --debug option to get more log output.
+> Run with --info or --debug option to get more log output.
 > Run with --scan to get full insights.
 > Get more help at https://help.gradle.org.
 
@@ -235,6 +77,5 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD FAILED in 4s
-2 actionable tasks: 2 executed
-Watched directory hierarchies: [/Users/danielmiller/Documents/Code Projects/ancient-halley]
+BUILD FAILED in 5s
+30 actionable tasks: 2 executed, 28 up-to-date

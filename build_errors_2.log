@@ -1,0 +1,65 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+
+> Task :app:compileDebugKotlin FAILED
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4780:30 Expecting ')'
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4782:22 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4783:21 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4783:38 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4783:40 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4783:49 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4783:50 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4784:17 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4784:19 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4784:19 Functions which invoke @Composable functions must be marked with the @Composable annotation
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4784:19 Function declaration must have a name
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4785:27 Unresolved reference: latestState
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4785:46 Unresolved reference: latestState
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4786:13 Comparison of incompatible enums '[Error type: Error property type]' and 'EngineType' is always unsuccessful
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4788:33 Unresolved reference: note
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4788:52 Unresolved reference: padIndex
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4790:13 Comparison of incompatible enums '[Error type: Error property type]' and 'EngineType' is always unsuccessful
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4798:25 Unresolved reference: note
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4798:40 Unresolved reference: padIndex
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4800:34 Unresolved reference: note
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4802:9 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/app/src/main/java/com/groovebox/MainActivity.kt:4802:43 @Composable invocations can only happen from the context of a @Composable function
+
+[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/ancient-halley/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 28s
+16 actionable tasks: 1 executed, 15 up-to-date

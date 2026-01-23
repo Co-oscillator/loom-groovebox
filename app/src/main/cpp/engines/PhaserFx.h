@@ -48,7 +48,7 @@ public:
       x = 0.0f;
 
     mLastOutput = x;
-    return (input + x * mMix) * 0.5f;
+    return std::tanh(x) * mMix; // Wet Only for Parallel Mix
   }
 
 private:

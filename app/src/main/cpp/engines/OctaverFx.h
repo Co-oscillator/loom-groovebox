@@ -121,7 +121,7 @@ public:
     if (mWritePos >= mBuffer.size())
       mWritePos = 0;
 
-    return wet * mMix;
+    return std::tanh(wet) * mMix;
   }
 
   void setParameters(float mix, float detune, float unison, float mode) {

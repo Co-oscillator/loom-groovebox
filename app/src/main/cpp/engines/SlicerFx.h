@@ -56,11 +56,10 @@ public:
         activeGain *= (1.0f - mDepth);
     }
 
-    // If no slicers are active, pass through
-    if (!mActive1 && !mActive2 && !mActive3)
-      return input;
-
-    return input * activeGain;
+    // Insert Logic: return (activeGain - 1) * input
+    // If gain is 1, return 0 (Add nothing).
+    // If gain is 0, return -input (Cancel dry).
+    return input * (activeGain - 1.0f);
   }
 
 private:

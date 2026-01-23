@@ -6,7 +6,7 @@
 
 class ChorusFx {
 public:
-  ChorusFx(int maxDelay = 2048) { mBuffer.resize(maxDelay, 0.0f); }
+  ChorusFx(int maxDelay = 4096) { mBuffer.resize(maxDelay, 0.0f); }
 
   void setRate(float v) { mRate = v; }
   void setDepth(float v) { mDepth = v; }
@@ -66,7 +66,7 @@ public:
     mBuffer[mWritePos] = input;
     mWritePos = (mWritePos + 1) % mBuffer.size();
 
-    return input * (1.0f - mMix) + wetSignal * mMix;
+    return std::tanh(wetSignal) * mMix; // Wet Only for Parallel Mix
   }
 
 private:

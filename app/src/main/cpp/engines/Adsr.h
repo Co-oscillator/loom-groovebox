@@ -79,7 +79,7 @@ public:
   float getValue() const { return mValue; }
 
 private:
-  float mSampleRate = 44100.0f;
+  float mSampleRate = 48000.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.5f;
 
   float mDecayCoeff = 0.999f;

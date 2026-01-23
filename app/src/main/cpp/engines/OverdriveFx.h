@@ -21,7 +21,17 @@ public:
     mHpState += 0.15f * (input - mHpState);
     float x = (input - mHpState) * mDrive;
 
-    // 2. Multi-stage Clipping & Wavefolding for "Texture"
+    // 2. Extra Distortion Stage (New)
+    if (mDist > 0.0f) {
+      // Hard clipping / Folding
+      x *= (1.0f + mDist * 5.0f);
+      if (std::abs(x) > 1.0f) {
+        float overflow = std::abs(x) - 1.0f;
+        x = (x > 0 ? 1.0f : -1.0f) - (overflow * 0.5f); // Fold back
+      }
+    }
+
+    // 3. Multi-stage Clipping & Wavefolding for "Texture"
     float stage1 = (x > 0) ? std::tanh(x) : (x / (1.0f - x)); // Asymmetric
 
     // Wavefolder component for "grit"
@@ -31,14 +41,18 @@ public:
     }
     float mixed = stage1 + grit;
 
-    // 3. Dynamic Low Pass (Tone)
+    // Dynamic Low Pass (Tone)
     float lpAlpha = 0.05f + mTone * 0.6f;
     mLastOutput += lpAlpha * (mixed - mLastOutput);
 
     // Output Level + Slight Boost
-    float out = mLastOutput * mLevel * 1.2f * mMix;
-    return std::tanh(out);
+    float out = mLastOutput * mLevel * 1.2f *
+                mMix; // Internal Mix ignored effectively if we want pure insert
+    // RETURNS (WET - INPUT) for Insert Behavior in Parallel Chain
+    return std::tanh(out) - input;
   }
+
+  void setDistortion(float dist) { mDist = dist; }
 
 private:
   float mDrive = 1.0f;
@@ -47,6 +61,7 @@ private:
   float mLastOutput = 0.0f;
   float mHpState = 0.0f;
   float mMix = 1.0f;
+  float mDist = 0.0f;
 };
 
 #endif // OVERDRIVE_FX_H

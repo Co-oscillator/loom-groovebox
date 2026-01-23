@@ -43,6 +43,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.*
@@ -86,42 +87,113 @@ import java.io.File
 val LocalFocusedValue = staticCompositionLocalOf<(String?) -> Unit> { {} }
 
 fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
-    // NUCLEAR RESET & FULL SIGNAL PATH RECOVERY
+    // ONLY SANITIZE IF IT'S NOT THE INIT PROJECT OR VALUES ARE COMPLETELY ZERO
     val sanitizedTracks = state.tracks.map { track ->
         var newTrack = track
         
-        // 1. Force Track Volume (Nuclear policy: set to safe 0.45f)
-        // User requested 45% default for all tracks on launch.
-        newTrack = newTrack.copy(volume = 0.45f)
+        // 1. Force Track Volume ONLY if it's 0 (Silence)
+        if (newTrack.volume < 0.05f) {
+            newTrack = newTrack.copy(volume = 0.7f)
+        }
         
+        newTrack = newTrack.copy(isActive = true)
         val newParams = newTrack.parameters.toMutableMap()
         
-        // 2. Force Filter Cutoff (Param 1) to Audible Levels
+        newParams[0] = newTrack.volume
+        
+        // 2. Force Filter Cutoff ONLY if it's 0 (Fully Closed)
+        if ((newParams[1] ?: 0.0f) < 0.01f) newParams[1] = 1.0f 
+        
+        // 4. Force Envelopes if suspiciously low (likely 0)
+        if ((newParams[101] ?: 0.0f) < 0.01f) newParams[101] = 0.5f // Decay
+        if ((newParams[102] ?: 0.0f) < 0.01f) newParams[102] = 1.0f // Sustain
+        
+        // Engine-Specific Safety (Osc Levels)
         if (newTrack.engineType == EngineType.SUBTRACTIVE) {
-            // Force LP mode (< 0.5f) if in HP or silent
-            if ((newParams[1] ?: 0.0f) < 0.2f || (newParams[1] ?: 0.0f) >= 0.5f) {
-                newParams[1] = 0.48f 
-            }
-        } else {
-            // FM / Sampler / Wavetable: 1.0f is open
-            if ((newParams[1] ?: 0.0f) < 0.4f) newParams[1] = 0.9f
+             if ((newParams[5] ?: 0.0f) < 0.1f) newParams[5] = 0.7f 
+             // Ensure Osc 1 & 2 are heard
+             if ((newParams[107] ?: 0.0f) < 0.001f && (newParams[108] ?: 0.0f) < 0.001f) {
+                 newParams[107] = 0.6f
+                 newParams[108] = 0.4f
+             }
+             // Ensure Sub Osc (Osc 3) is audible!
+             if ((newParams[109] ?: 0.0f) < 0.1f) newParams[109] = 0.4f
+             if ((newParams[162] ?: 0.0f) < 0.05f) newParams[162] = 0.125f // 0.5x pitch
+             if ((newParams[172] ?: 0.0f) < 0.1f) newParams[172] = 0.0f    // Reset drive if too low
+        }
+
+        // Force Center Panning if missing or hard left (suspicious)
+        if (newParams[9] == null || (newParams[9] ?: 0.5f) < 0.001f) {
+            newParams[9] = 0.5f
+            newTrack = newTrack.copy(pan = 0.5f)
         }
         
-        // 3. Force Resonance (Param 2) to healthy range
-        if ((newParams[2] ?: 0.0f) > 0.8f) newParams[2] = 0.2f
-        
-        // 4. Force Envelopes (101 Decay, 102 Sustain)
-        if ((newParams[101] ?: 0.0f) < 0.2f) newParams[101] = 0.5f
-        if ((newParams[102] ?: 0.0f) < 0.2f) newParams[102] = 0.8f
-        
-        // 5. Force Oscillator/Operator Levels
-        if ((newParams[5] ?: 0.0f) < 0.1f) newParams[5] = 0.6f
+        // FM
         if (newTrack.engineType == EngineType.FM) {
-           if ((newParams[160] ?: 0.0f) < 0.1f) newParams[160] = 0.8f // Op 1 Level
+           if ((newParams[160] ?: 0.0f) < 0.1f) newParams[160] = 0.8f // Op 1
+           if ((newParams[153] ?: 0.0f) < 0.1f) newParams[153] = 1.0f // Carrier Mask
+           if ((newParams[151] ?: 0.0f) < 0.1f) newParams[151] = 1.0f // Filter
+           if ((newParams[350] ?: 0.0f) < 0.1f) newParams[350] = 1.0f 
+        }
+
+        // Wavetable
+        if (newTrack.engineType == EngineType.WAVETABLE) {
+             if ((newParams[450] ?: 0.0f) < 0.001f) newParams[450] = 0.5f // Position
+             if ((newParams[103] ?: 0.0f) < 0.1f) newParams[103] = 0.5f // Release
+             if ((newParams[458] ?: 0.0f) < 0.1f) newParams[458] = 1.0f // Filter
+             if ((newParams[350] ?: 0.0f) < 0.1f) newParams[350] = 1.0f 
+        }
+
+        // Sampler
+        if (newTrack.engineType == EngineType.SAMPLER) {
+            if ((newParams[302] ?: 0.0f) < 0.05f) newParams[302] = 0.5f // Speed
+            if ((newParams[300] ?: 0.0f) < 0.05f) newParams[300] = 0.5f // Pitch
+            if ((newParams[301] ?: 0.0f) < 0.05f) newParams[301] = 0.25f // Stretch
+            
+            if ((newParams[310] ?: 0.0f) < 0.0001f) newParams[310] = 0.001f 
+            if ((newParams[311] ?: 0.0f) < 0.05f) newParams[311] = 0.5f 
+            if ((newParams[312] ?: 0.0f) < 0.05f) newParams[312] = 1.0f // Sustain
+            if ((newParams[350] ?: 0.0f) < 0.1f) newParams[350] = 1.0f // Env
+
+            if ((newParams[330] ?: 0.0f) == 0f && (newParams[331] ?: 0.0f) == 0f) {
+                newParams[330] = 0.0f 
+                newParams[331] = 1.0f 
+            }
+        }
+
+        // FM Drum
+        if (newTrack.engineType == EngineType.FM_DRUM) {
+             for (drum in 0 until 8) {
+                 val gainParams = 200 + (drum * 10) + 5
+                 if ((newParams[gainParams] ?: 0.0f) < 0.1f) newParams[gainParams] = 0.7f
+                 val decayParam = 200 + (drum * 10) + 2
+                 if ((newParams[decayParam] ?: 0.0f) < 0.1f) newParams[decayParam] = 0.5f
+             }
+        }
+
+        // Granular
+        if (newTrack.engineType == EngineType.GRANULAR) {
+             if ((newParams[406] ?: 0.0f) < 0.01f) newParams[406] = 0.2f // Size
+             if ((newParams[407] ?: 0.0f) < 0.01f) newParams[407] = 0.5f // Density
+             if ((newParams[400] ?: 0.0f) < 0.01f) newParams[400] = 0.5f // Pos
+             if ((newParams[429] ?: 0.0f) < 0.01f) newParams[429] = 0.4f // Gain
+             if ((newParams[350] ?: 0.0f) < 0.1f) newParams[350] = 1.0f // Env
+             if ((newParams[401] ?: 0.0f) < 0.01f) newParams[401] = 1.0f // Speed!
+             if ((newParams[410] ?: 0.0f) < 0.01f) newParams[410] = 1.0f // Pitch!
+             if ((newParams[427] ?: 0.0f) < 0.01f) newParams[427] = 1.0f // Sustain
         }
         
-        // 6. Force Envelopes ON for Subtractive/FM
-        if (newTrack.engineType == EngineType.SUBTRACTIVE || newTrack.engineType == EngineType.FM) {
+        // Analog Drum
+        if (newTrack.engineType == EngineType.ANALOG_DRUM) {
+             if ((newParams[0] ?: 0.0f) < 0.1f) newParams[0] = 0.5f 
+             if ((newParams[1] ?: 0.0f) < 0.1f) newParams[1] = 0.5f 
+             if ((newParams[5] ?: 0.0f) < 0.1f) newParams[5] = 0.7f 
+        }
+
+        // Force Envelopes ON logic
+        if (newTrack.engineType == EngineType.SUBTRACTIVE || newTrack.engineType == EngineType.FM || 
+            newTrack.engineType == EngineType.SAMPLER || newTrack.engineType == EngineType.GRANULAR ||
+            newTrack.engineType == EngineType.WAVETABLE) { // Added Wavetable
             newParams[350] = 1.0f 
         }
         
@@ -147,6 +219,7 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
     return state.copy(
         tracks = finalTracks,
         isPlaying = false,
+        selectedTab = 0, // Force Play Screen on Startup
         globalParameters = state.globalParameters ?: emptyMap(),
         macros = state.macros ?: List(8) { MacroState() }
     )
@@ -155,19 +228,29 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
 fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
     nativeLib.setTempo(state.tempo)
     nativeLib.setMasterVolume(state.masterVolume)
+    nativeLib.setScaleConfig(state.rootNote, state.scaleType.intervals.toIntArray())
     
     // Sync Global Parameters (sent to Track 0)
     state.globalParameters.forEach { (pid, v) -> nativeLib.setParameter(0, pid, v) }
 
     // Sync Tracks
     state.tracks.forEachIndexed { trackIdx, t ->
+        // Ensure engine is set FIRST
         nativeLib.setEngineType(trackIdx, t.engineType.ordinal)
         // Safety: Clamp volume to prevent NaNs/Inf
         val safeVol = if (t.volume.isNaN() || t.volume.isInfinite()) 0.45f else t.volume.coerceIn(0f, 2f)
+        Log.d("Groovebox", "SyncTrack ID $trackIdx Type ${t.engineType} Vol $safeVol Act ${t.isActive}")
+        
         nativeLib.setTrackVolume(trackIdx, safeVol)
+        nativeLib.setTrackActive(trackIdx, t.isActive)
+        nativeLib.setTrackPan(trackIdx, t.pan) // Re-added Pan sync
         
         t.parameters.forEach { (pid, v) -> 
             val safeVal = if (v.isNaN() || v.isInfinite()) 0.0f else v.coerceIn(0f, 1f)
+            // Debug critical params: Vol(0), Cutoff(1)
+            if (pid == 0) Log.d("Groovebox", "SyncTrack ID $trackIdx Param 0 (Vol override?) = $safeVal")
+            if (pid == 1) Log.d("Groovebox", "SyncTrack ID $trackIdx Param 1 (Cutoff) = $safeVal")
+            
             nativeLib.setParameter(trackIdx, pid, safeVal) 
         }
         
@@ -185,6 +268,7 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
             t.arpConfig.randomSequence.toIntArray()
         )
         nativeLib.setArpRate(trackIdx, t.arpConfig.arpRate, t.arpConfig.arpDivisionMode)
+        nativeLib.setChordProgConfig(trackIdx, t.arpConfig.isChordProgEnabled, t.arpConfig.chordProgMood, t.arpConfig.chordProgComplexity)
         
         // E. Steps & Automation (Lock Parameters)
         if (t.engineType == EngineType.FM_DRUM || t.engineType == EngineType.ANALOG_DRUM || t.engineType == EngineType.SAMPLER) {
@@ -1003,7 +1087,7 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
+                        .align(Alignment.TopEnd) // Moved to Top
                         .padding(12.dp)
                         .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1906,14 +1990,14 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                     // PATCH RESTORE (Global)
                     Button(
                         onClick = {
-                            nativeLib.restorePresets()
+                            nativeLib.restoreTrackPreset(state.selectedTrackIndex)
                             // Re-sync parameter states from native to UI
                             val current = state
                             val updatedTracks = current.tracks.mapIndexed { idx, track ->
                                 val nativeParamsArray = nativeLib.getAllTrackParameters(idx)
                                 val updatedParams = track.parameters.toMutableMap()
                                 nativeParamsArray.forEachIndexed { pIdx, v -> updatedParams[pIdx] = v }
-                                track.copy(parameters = updatedParams)
+                                track.copy(parameters = updatedParams, isActive = true) // Force Active on Restore
                             }
                             onStateChange(current.copy(tracks = updatedTracks))
                         },
@@ -2588,6 +2672,21 @@ fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange:
                                  Knob("PW", 0.5f, 191, state, onStateChange, nativeLib, knobSize = 48.dp)
                              }
                          }
+                         Box(
+                             modifier = Modifier
+                                 .height(40.dp)
+                                 .width(1.dp)
+                                 .background(Color.White.copy(alpha = 0.2f))
+                         )
+                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                             Text("SUB OSC", style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
+                             Row {
+                                 Knob("Pitch", 0.5f, 162, state, onStateChange, nativeLib, knobSize = 48.dp)
+                                 Knob("Drive", 0.0f, 172, state, onStateChange, nativeLib, knobSize = 48.dp)
+                                 Knob("Fold", 0.0f, 182, state, onStateChange, nativeLib, knobSize = 48.dp)
+                                 Knob("PW", 0.5f, 192, state, onStateChange, nativeLib, knobSize = 48.dp)
+                             }
+                         }
                      }
                  }
              }
@@ -2692,6 +2791,31 @@ fun TestTriggerButton(trackIndex: Int, nativeLib: NativeLib, color: Color, state
 }
 
 @Composable
+fun DiceIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val size = size.minDimension
+        val dotRadius = size * 0.1f
+        val padding = size * 0.2f
+        
+        // Draw 5 dots (Quincunx)
+        val center = Offset(size / 2, size / 2)
+        val tl = Offset(padding, padding)
+        val tr = Offset(size - padding, padding)
+        val bl = Offset(padding, size - padding)
+        val br = Offset(size - padding, size - padding)
+        
+        drawCircle(color, radius = dotRadius, center = center)
+        drawCircle(color, radius = dotRadius, center = tl)
+        drawCircle(color, radius = dotRadius, center = tr)
+        drawCircle(color, radius = dotRadius, center = bl)
+        drawCircle(color, radius = dotRadius, center = br)
+        
+        // Optional: Draw border if needed, but the button has a border.
+        // Let's keep it simple dots.
+    }
+}
+
+@Composable
 fun RandomizeButton(trackIndex: Int, state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, color: Color) {
     val track = state.tracks[trackIndex]
     
@@ -2715,7 +2839,7 @@ fun RandomizeButton(trackIndex: Int, state: GrooveboxState, onStateChange: (Groo
             },
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Default.Refresh, contentDescription = "Randomize", tint = color, modifier = Modifier.size(24.dp))
+        DiceIcon(modifier = Modifier.size(24.dp), color = color)
     }
 }
 
@@ -3407,21 +3531,40 @@ fun SoundFontParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
                             dismissButton = { TextButton(onClick = { showPresetMenu = false }) { Text("Close") } },
                             title = { Text("SELECT PRESET", style = MaterialTheme.typography.titleMedium) },
                             text = {
-                                androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                                    modifier = Modifier.heightIn(max = 400.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
                                     items(presetCount) { i ->
                                         val name = nativeLib.getSoundFontPresetName(trackIndex, i)
-                                        TextButton(
-                                            onClick = {
-                                                nativeLib.setSoundFontPreset(trackIndex, i)
-                                                val newTracks = state.tracks.mapIndexed { idx, t ->
-                                                    if (idx == trackIndex) t.copy(soundFontPresetIndex = i, soundFontPresetName = name) else t
-                                                }
-                                                onStateChange(state.copy(tracks = newTracks))
-                                                showPresetMenu = false
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
+                                        val isSelected = i == track.soundFontPresetIndex
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(40.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(if (isSelected) Color.Magenta else Color.White.copy(alpha = 0.1f))
+                                                .clickable {
+                                                    nativeLib.setSoundFontPreset(trackIndex, i)
+                                                    val newTracks = state.tracks.mapIndexed { idx, t ->
+                                                        if (idx == trackIndex) t.copy(soundFontPresetIndex = i, soundFontPresetName = name) else t
+                                                    }
+                                                    onStateChange(state.copy(tracks = newTracks))
+                                                    showPresetMenu = false
+                                                },
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            Text(name, color = if (i == track.soundFontPresetIndex) Color.Magenta else Color.White, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth())
+                                            Text(
+                                                text = name,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (isSelected) Color.Black else Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(horizontal = 4.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -3544,6 +3687,7 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
     val isRecordingSample = state.isRecordingSample && state.recordingTrackIndex == trackIndex
 
     LaunchedEffect(trackIndex, track.engineType, isRecordingSample) {
+        nativeLib.setEngineType(trackIndex, 2) // Force Sampler Engine (Type 2) to prevent Subtractive fallback
         waveform = nativeLib.getWaveform(trackIndex)
         while(true) {
             if (isRecordingSample) {
@@ -4062,10 +4206,15 @@ fun Knob(
                                         if (latestOnValueChangeOverride != null) {
                                             latestOnValueChangeOverride!!(nextValue)
                                         } else if (parameterId != -1) {
-                                            nativeLib.setParameter(trackIndex, parameterId, nextValue)
+                                            val isAutoLocking = latestState.isRecording && latestState.isPlaying
+                                            val isLockingMode = latestState.isParameterLocking || isAutoLocking
+                                            if (isLockingMode) {
+                                                nativeLib.setParameterPreview(trackIndex, parameterId, nextValue)
+                                            } else {
+                                                nativeLib.setParameter(trackIndex, parameterId, nextValue)
+                                            }
                                             
                                             // Trigger debounced state update for everything else
-                                            val isAutoLocking = latestState.isRecording && latestState.isPlaying
                                             
                                             // For better real-time FEEL without blocking UI:
                                             // Only push FULL state if locking or on end of gesture
@@ -4111,14 +4260,21 @@ fun Knob(
                                 
                                 // Finalize state on release
                                 if (parameterId != -1) {
-                                    val finalValue = value
-                                    latestOnStateChange(latestState.copy(
-                                        focusedValue = null,
-                                        tracks = latestState.tracks.mapIndexed { idx, t ->
-                                            if (idx == trackIndex) t.copy(parameters = t.parameters + (parameterId to finalValue))
-                                            else t
-                                        }
-                                    ))
+                                    val isAutoLocking = latestState.isRecording && latestState.isPlaying
+                                    val isLockingMode = latestState.isParameterLocking || isAutoLocking
+                                    
+                                    if (!isLockingMode) {
+                                        val finalValue = value
+                                        latestOnStateChange(latestState.copy(
+                                            focusedValue = null,
+                                            tracks = latestState.tracks.mapIndexed { idx, t ->
+                                                if (idx == trackIndex) t.copy(parameters = t.parameters + (parameterId to finalValue))
+                                                else t
+                                            }
+                                        ))
+                                    } else {
+                                        latestOnStateChange(latestState.copy(focusedValue = null))
+                                    }
                                 } else {
                                     latestOnStateChange(latestState.copy(focusedValue = null))
                                 }
@@ -4736,13 +4892,26 @@ fun PlayingPad(
                 // Fix for stale state capture: Maintain reference to the most recent state
                 val currentState by rememberUpdatedState(latestState)
                 var isLocallyPressed by remember { mutableStateOf(false) }
+                // Visual state follows local press but with release delay
+                var isVisuallyPressed by remember { mutableStateOf(false) }
+                
+                LaunchedEffect(isLocallyPressed) {
+                    if (isLocallyPressed) {
+                        isVisuallyPressed = true
+                    } else {
+                        // User requested ~100ms highlight tail
+                        delay(100)
+                        isVisuallyPressed = false
+                    }
+                }
+
                 val isHeld = latestState.heldNotes.contains(note)
                 val isMidiTriggered = latestState.lastMidiNote == note && latestState.lastMidiVelocity > 0
                 
                 // LED Sync for EMP16
-                LaunchedEffect(isLocallyPressed, isHeld, isMidiTriggered, isPlaying, currentStep, latestState.currentSequencerBank) {
+                LaunchedEffect(isVisuallyPressed, isHeld, isMidiTriggered, isPlaying, currentStep, latestState.currentSequencerBank) {
                     if (latestState.currentSequencerBank == 0) {
-                        val finalColor = if (isLocallyPressed || isHeld || isMidiTriggered) padColor 
+                        val finalColor = if (isVisuallyPressed || isHeld || isMidiTriggered) padColor 
                                         else if (isPlaying && (currentStep % 16) == padIndex) androidx.compose.ui.graphics.Color.White
                                         else padColor.copy(alpha = 0.2f)
                         
@@ -4764,7 +4933,7 @@ fun PlayingPad(
                     modifier = Modifier
                         .size(padSize)
                         .background(
-                            if (isLocallyPressed || isHeld || isMidiTriggered || isNoteActive) padColor.copy(alpha = 0.9f)
+                            if (isVisuallyPressed || isHeld || isMidiTriggered || isNoteActive) padColor.copy(alpha = 0.9f)
                             else if (isPlaying && isPlayheadHighlight) Color.White.copy(alpha = 0.3f)
                             else if (latestState.tracks[latestState.selectedTrackIndex].engineType == EngineType.FM_DRUM && 
                                      latestState.tracks[latestState.selectedTrackIndex].selectedFmDrumInstrument == (note - 60)) padColor.copy(alpha = 0.2f)
@@ -4795,7 +4964,8 @@ fun PlayingPad(
                                             onStateChange(currentState.copy(jumpModeWaitingForTap = false))
                                         } else {
                                             nativeLib.triggerNote(currentTIdx, triggeredNote, 100)
-                                            onStateChange(currentState.copy(heldNotes = currentState.heldNotes + triggeredNote))
+                                            // onStateChange removed to prevent race condition with UI stickiness
+                                            // Visual feedback is now handled via local isLocallyPressed state
                                             
                                             if (currentState.isRecording) {
                                                 val stepIdx = if (currentState.isPlaying) currentState.currentStep else (currentBank * 16 + padIndex) % 64
@@ -4822,7 +4992,6 @@ fun PlayingPad(
                                         isLocallyPressed = false
                                         if (!currentState.jumpModeWaitingForTap) {
                                             nativeLib.releaseNote(currentTIdx, triggeredNote)
-                                            onStateChange(currentState.copy(heldNotes = currentState.heldNotes - triggeredNote))
                                         }
                                     }
                                 }
@@ -4846,9 +5015,9 @@ fun PlayingPad(
                 )
                 drumMap[note] ?: "Pad $padIndex"
             }
-            else -> getNoteLabel(note)
+            else -> if (isChopMode) "${padIndex + 1}" else getNoteLabel(note)
         }
-                            if (!isChopMode) {
+                            if (!isChopMode || label.isNotEmpty()) {
                                 Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.6f))
                             }
     }
@@ -4927,7 +5096,11 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Button(
-                                        onClick = { onStateChange(state.copy(rootNote = (state.rootNote - 12).coerceAtLeast(0))) },
+                                        onClick = { 
+                                            val newRoot = (state.rootNote - 12).coerceAtLeast(0)
+                                            onStateChange(state.copy(rootNote = newRoot))
+                                            nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
+                                        },
                                         modifier = Modifier.size(40.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                         shape = RoundedCornerShape(8.dp),
@@ -4935,7 +5108,11 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     ) { Text("-", style = MaterialTheme.typography.titleMedium, color = Color.White) }
                                     
                                     Button(
-                                        onClick = { onStateChange(state.copy(rootNote = (state.rootNote + 12).coerceAtMost(110))) },
+                                        onClick = { 
+                                            val newRoot = (state.rootNote + 12).coerceAtMost(110)
+                                            onStateChange(state.copy(rootNote = newRoot))
+                                            nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
+                                        },
                                         modifier = Modifier.size(40.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                         shape = RoundedCornerShape(8.dp),
@@ -5076,19 +5253,21 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     if (note != -1) {
                                         val isInactiveDrumPad = (track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM) && padIndex >= 16
                                         if (!isInactiveDrumPad) {
-                                            PlayingPad(
-                                                padIndex = padIndex,
-                                                note = note,
-                                                padSize = padSize,
-                                                padColor = padColor,
-                                                isPlaying = state.isPlaying,
-                                                currentStep = state.currentStep,
-                                                nativeLib = nativeLib,
-                                                latestState = latestState,
-                                                onStateChange = onStateChange,
-                                                isChopMode = isChopMode,
-                                                isNoteActive = isNoteActive
-                                            )
+                                            key(state.selectedTrackIndex, padIndex) {
+                                                PlayingPad(
+                                                    padIndex = padIndex,
+                                                    note = note,
+                                                    padSize = padSize,
+                                                    padColor = padColor,
+                                                    isPlaying = state.isPlaying,
+                                                    currentStep = state.currentStep,
+                                                    nativeLib = nativeLib,
+                                                    latestState = latestState,
+                                                    onStateChange = onStateChange,
+                                                    isChopMode = isChopMode,
+                                                    isNoteActive = isNoteActive
+                                                )
+                                            }
                                         }
                                     } else {
                                         Spacer(modifier = Modifier.size(padSize))
@@ -5138,6 +5317,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         Surface(
                             onClick = {
                                 onStateChange(state.copy(scaleType = type))
+                                nativeLib.setScaleConfig(state.rootNote, type.intervals.toIntArray())
                                 showScaleMenu = false
                             },
                             color = if (isSelected) Color.Cyan.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
@@ -5187,7 +5367,9 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         val currentOctave = state.rootNote / 12
                         Surface(
                             onClick = {
-                                onStateChange(state.copy(rootNote = currentOctave * 12 + i))
+                                val newRoot = currentOctave * 12 + i
+                                onStateChange(state.copy(rootNote = newRoot))
+                                nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
                                 showTransposeMenu = false
                             },
                             color = if (state.rootNote % 12 == i) Color.Cyan else Color.Transparent,
@@ -5308,18 +5490,78 @@ fun TouchStripsPanel(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
                                         }
                                     )
                                 } else {
-                                    detectDragGestures { change, dragAmount ->
-                                        val delta = dragAmount.y / -200f
-                                        val currentVal = latestState.stripValues[i]
-                                        val newVal = (currentVal + delta).coerceIn(0f, 1f)
-                                        val newValues = latestState.stripValues.toMutableList().apply { set(i, newVal) }
-                                        latestOnStateChange(latestState.copy(stripValues = newValues))
-                                        
-                                        if (routing.targetType == 1) {
-                                            nativeLib.setParameter(latestState.selectedTrackIndex, routing.targetId, newVal)
+                                    detectDragGestures(
+                                        onDrag = { change, dragAmount ->
+                                            val delta = dragAmount.y / -200f
+                                            val currentVal = latestState.stripValues[i]
+                                            val newVal = (currentVal + delta).coerceIn(0f, 1f)
+                                            val newValues = latestState.stripValues.toMutableList().apply { set(i, newVal) }
+                                            
+                                            val isAutoLocking = latestState.isRecording && latestState.isPlaying
+                                            val isLockingMode = latestState.isParameterLocking || isAutoLocking
+                                            
+                                            if (routing.targetType == 1) {
+                                                if (isLockingMode) {
+                                                    nativeLib.setParameterPreview(latestState.selectedTrackIndex, routing.targetId, newVal)
+                                                    val targetIdx = if (isAutoLocking) latestState.currentStep else latestState.lockingTarget?.second
+                                                    if (targetIdx != null) {
+                                                        nativeLib.setParameterLock(latestState.selectedTrackIndex, targetIdx, routing.targetId, newVal)
+                                                    }
+                                                } else {
+                                                    nativeLib.setParameter(latestState.selectedTrackIndex, routing.targetId, newVal)
+                                                }
+                                            }
+
+                                            latestOnStateChange(latestState.copy(
+                                                stripValues = newValues,
+                                                focusedParameter = if (routing.targetType == 1) routing.targetId else null,
+                                                focusedValue = String.format("%.2f", newVal),
+                                                tracks = if (isLockingMode && routing.targetType == 1) {
+                                                    val targetIdx = if (isAutoLocking) latestState.currentStep else latestState.lockingTarget?.second
+                                                     if (targetIdx != null) {
+                                                        latestState.tracks.mapIndexed { tIdx, t ->
+                                                            if (tIdx == latestState.selectedTrackIndex) {
+                                                                if (t.engineType == EngineType.FM_DRUM) {
+                                                                    val inst = t.selectedFmDrumInstrument
+                                                                    t.copy(drumSteps = t.drumSteps.mapIndexed { di, ds ->
+                                                                        if (di == inst) ds.mapIndexed { si, s ->
+                                                                            if (si == targetIdx) s.copy(parameterLocks = s.parameterLocks + (routing.targetId to newVal))
+                                                                            else s
+                                                                        } else ds
+                                                                    })
+                                                                } else {
+                                                                    t.copy(steps = t.steps.mapIndexed { si, s ->
+                                                                        if (si == targetIdx) s.copy(parameterLocks = s.parameterLocks + (routing.targetId to newVal))
+                                                                        else s
+                                                                    })
+                                                                }
+                                                            } else t
+                                                        }
+                                                    } else latestState.tracks
+                                                } else latestState.tracks
+                                            ))
+                                            change.consume()
+                                        },
+                                        onDragEnd = {
+                                            val isAutoLocking = latestState.isRecording && latestState.isPlaying
+                                            val isLockingMode = latestState.isParameterLocking || isAutoLocking
+                                            if (!isLockingMode && routing.targetType == 1) {
+                                                val finalVal = latestState.stripValues[i]
+                                                latestOnStateChange(latestState.copy(
+                                                    focusedValue = null,
+                                                    tracks = latestState.tracks.mapIndexed { idx, t ->
+                                                        if (idx == latestState.selectedTrackIndex) t.copy(parameters = t.parameters + (routing.targetId to finalVal))
+                                                        else t
+                                                    }
+                                                ))
+                                            } else {
+                                                latestOnStateChange(latestState.copy(focusedValue = null))
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            latestOnStateChange(latestState.copy(focusedValue = null))
                                         }
-                                        change.consume()
-                                    }
+                                    )
                                 }
                             }
                     ) {
@@ -5558,10 +5800,36 @@ fun EngineIcon(type: EngineType, modifier: Modifier = Modifier, color: Color = C
                 drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
             }
             type == EngineType.SOUNDFONT -> {
-                // Piano Keys / SF2 symbol
-                repeat(3) { i ->
-                    drawRect(color, size = Size(size.width * 0.28f, size.height * 0.8f), topLeft = Offset(i * size.width * 0.35f, size.height * 0.1f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
-                }
+                // Beamed Note Icon with Offset Square
+                val headRadius = size.minDimension * 0.15f
+                val stemHeight = size.height * 0.5f
+                val note1Center = Offset(size.width * 0.3f, size.height * 0.75f)
+                val note2Center = Offset(size.width * 0.7f, size.height * 0.65f)
+                
+                // Background Square (Offset) - Drawn first
+                val squareSize = size.minDimension * 0.6f
+                val squareOffset = size.minDimension * 0.1f // Shift slightly right/down? Or left/up?
+                // User said "behind and offset". Let's put it top-left or center-offset.
+                drawRect(
+                    color = color.copy(alpha = 0.3f), // Slightly dimmer for background? Or outlined? Icon is usually solid color.
+                    topLeft = Offset(size.width * 0.45f, size.height * 0.1f), // Offset to the right/top
+                    size = Size(squareSize, squareSize),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+                )
+
+                // Heads
+                drawOval(color, topLeft = Offset(note1Center.x - headRadius, note1Center.y - headRadius * 0.8f), size = Size(headRadius * 2, headRadius * 1.6f))
+                drawOval(color, topLeft = Offset(note2Center.x - headRadius, note2Center.y - headRadius * 0.8f), size = Size(headRadius * 2, headRadius * 1.6f))
+                
+                // Stems
+                val stemWidth = strokeWidth
+                drawLine(color, start = Offset(note1Center.x + headRadius * 0.8f, note1Center.y), end = Offset(note1Center.x + headRadius * 0.8f, note1Center.y - stemHeight), strokeWidth = stemWidth)
+                drawLine(color, start = Offset(note2Center.x + headRadius * 0.8f, note2Center.y), end = Offset(note2Center.x + headRadius * 0.8f, note2Center.y - stemHeight), strokeWidth = stemWidth)
+                
+                // Beam
+                val beamStart = Offset(note1Center.x + headRadius * 0.8f, note1Center.y - stemHeight)
+                val beamEnd = Offset(note2Center.x + headRadius * 0.8f, note2Center.y - stemHeight)
+                drawLine(color, start = beamStart, end = beamEnd, strokeWidth = stemWidth * 2.5f)
             }
             else -> {
                 drawRect(color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth))
@@ -6013,46 +6281,114 @@ fun ArpSettingsSheet(
                             }
                         }
 
-                        // Octaves
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("OCTAVES (+/- 3)", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ( -3..3).forEach { oct ->
-                                    val isSelected = config.octaves == oct
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .background(if (isSelected) Color.Cyan else Color.Transparent, CircleShape)
-                                            .clickable {
-                                                val newConfig = config.copy(octaves = oct)
-                                                val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
-                                                onStateChange(state.copy(tracks = newTracks))
-                                                nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, oct, newConfig.inversion, newConfig.isLatched, newConfig.isMutated, newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newConfig.randomSequence.toIntArray())
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) { Text("$oct", color = if (isSelected) Color.Black else Color.White) }
+                        // Octaves & Inversion Stacked
+                        Column(modifier = Modifier.weight(0.8f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Octaves
+                            Column {
+                                Text("OCTAVES (+/- 3)", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    (-3..3).forEach { oct ->
+                                        val isSelected = config.octaves == oct
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .background(if (isSelected) Color.Cyan else Color.Transparent, CircleShape)
+                                                .clickable {
+                                                    val newConfig = config.copy(octaves = oct)
+                                                    val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                                    onStateChange(state.copy(tracks = newTracks))
+                                                    nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, oct, newConfig.inversion, newConfig.isLatched, newConfig.isMutated, newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newConfig.randomSequence.toIntArray())
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) { Text("$oct", color = if (isSelected) Color.Black else Color.White, fontSize = 10.sp) }
+                                    }
+                                }
+                            }
+                            
+                            // Inversion
+                            Column {
+                                Text("INVERSION", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    (-2..2).forEach { inv ->
+                                        val isSelected = config.inversion == inv
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .background(if (isSelected) Color.Cyan else Color.Transparent, CircleShape)
+                                                .clickable {
+                                                    val newConfig = config.copy(inversion = inv)
+                                                    val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                                    onStateChange(state.copy(tracks = newTracks))
+                                                    nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, config.octaves, inv, newConfig.isLatched, newConfig.isMutated, newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newConfig.randomSequence.toIntArray())
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) { Text("$inv", color = if (isSelected) Color.Black else Color.White, fontSize = 10.sp) }
+                                    }
                                 }
                             }
                         }
-                        
-                        // Inversion
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("INVERSION", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                (-2..2).forEach { inv ->
-                                    val isSelected = config.inversion == inv
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .background(if (isSelected) Color.Cyan else Color.Transparent, CircleShape)
-                                            .clickable {
-                                                val newConfig = config.copy(inversion = inv)
+
+                        // chord Progression Section
+                        Column(modifier = Modifier.weight(1.5f)) {
+                            Text("CHORD PROGRESSION", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                // Toggle
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("ON/OFF", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
+                                    Switch(
+                                        checked = config.isChordProgEnabled,
+                                        onCheckedChange = { enabled ->
+                                            val newConfig = config.copy(isChordProgEnabled = enabled)
+                                            val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                            onStateChange(state.copy(tracks = newTracks))
+                                            nativeLib.setChordProgConfig(state.selectedTrackIndex, enabled, config.chordProgMood, config.chordProgComplexity)
+                                            nativeLib.setScaleConfig(state.rootNote, state.scaleType.intervals.toIntArray())
+                                        },
+                                        colors = SwitchDefaults.colors(checkedThumbColor = Color.Cyan)
+                                    )
+                                }
+
+                                // Mood Knob
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    val moods = listOf("Calm", "Happy", "Sad", "Spooky", "Angry", "Excited", "Grand", "Tense")
+                                    Knob(
+                                        label = "MOOD",
+                                        initialValue = config.chordProgMood.toFloat() / 7f,
+                                        parameterId = -100, // Custom for UI
+                                        state = state,
+                                        onStateChange = { newState ->
+                                            val v = newState.tracks[state.selectedTrackIndex].parameters[-100] ?: (config.chordProgMood.toFloat() / 7f)
+                                            val moodIdx = (v * 7.99f).toInt().coerceIn(0, 7)
+                                            val newConfig = config.copy(chordProgMood = moodIdx)
+                                            val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                            onStateChange(state.copy(tracks = newTracks))
+                                            nativeLib.setChordProgConfig(state.selectedTrackIndex, config.isChordProgEnabled, moodIdx, config.chordProgComplexity)
+                                        },
+                                        nativeLib = nativeLib,
+                                        knobSize = 50.dp,
+                                        valueFormatter = { v -> moods[(v * 7.99f).toInt().coerceIn(0, 7)] }
+                                    )
+                                }
+
+                                // Complexity Buttons
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf("SIMPLE", "COMPLEX", "COLTRANE").forEachIndexed { index, label ->
+                                        val isSelected = config.chordProgComplexity == index
+                                        Button(
+                                            onClick = {
+                                                val newConfig = config.copy(chordProgComplexity = index)
                                                 val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
                                                 onStateChange(state.copy(tracks = newTracks))
-                                                nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, config.octaves, inv, newConfig.isLatched, newConfig.isMutated, newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newConfig.randomSequence.toIntArray())
+                                                nativeLib.setChordProgConfig(state.selectedTrackIndex, config.isChordProgEnabled, config.chordProgMood, index)
                                             },
-                                        contentAlignment = Alignment.Center
-                                    ) { Text("$inv", color = if (isSelected) Color.Black else Color.White) }
+                                            modifier = Modifier.height(28.dp).width(80.dp),
+                                            contentPadding = PaddingValues(0.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Cyan else Color.DarkGray),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = if (isSelected) Color.Black else Color.White)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -6070,12 +6406,18 @@ fun ArpSettingsSheet(
                             onClick = {
                                 val track = state.tracks[state.selectedTrackIndex]
                                 val config = track.arpConfig
-                                val newSequence = config.randomSequence.toIntArray().apply {
-                                    // Shuffle the sequence indices (0-15)
-                                    val list = this.toList().shuffled()
-                                    for (i in indices) this[i] = list[i]
+                                // Randomize Rhythms (3 lanes x 16 steps)
+                                val newRhythms = config.rhythms.mapIndexed { laneIdx, row ->
+                                    if (laneIdx == 0) { // Root only
+                                        // Randomize
+                                        List(16) { Math.random() < 0.7 }
+                                    } else {
+                                        // Clear upper lanes to avoid unintended polyphony
+                                        List(16) { false }
+                                    }
                                 }
-                                val newConfig = config.copy(randomSequence = newSequence.toList(), isMutated = true)
+                                
+                                val newConfig = config.copy(rhythms = newRhythms)
                                 val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
                                 onStateChange(state.copy(tracks = newTracks))
                                 
@@ -6086,91 +6428,83 @@ fun ArpSettingsSheet(
                                     newConfig.inversion,
                                     newConfig.isLatched,
                                     newConfig.isMutated,
-                                    newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
-                                    newSequence
+                                    newRhythms.map { it.toBooleanArray() }.toTypedArray(),
+                                    newConfig.randomSequence.toIntArray()
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = if (track.arpConfig.isMutated) Color.Magenta else Color.DarkGray)
-                        ) { Text("MUTATE SEQUENCE", color = Color.White) }
+                        ) { Text("RANDOMIZE RHYTHM", color = Color.White) }
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Rhythm Editor (3 Lanes)
-                         Text("RHYTHM PATTERNS", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                         // Rhythm Editor (3 Lanes)
+                         Text("RHYTHM PATTERNS (16 STEPS)", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                          Text("(Bottom=Root, Upper=Polyphonic Cycle)", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = Color.DarkGray)
                          Spacer(modifier = Modifier.height(8.dp))
                          
                          // 3 Lanes (Reverse order: Lane 2 (Top) -> Lane 0 (Bottom/Root))
-                         val laneLabels = listOf("UP 2", "UP 1", "ROOT")
-                         val laneColors = listOf(Color(0xFF8E24AA), Color(0xFF1E88E5), Color(0xFF43A047)) // Purple, Blue, Green
+                         // Swap Labels to ensure Root is clearly bottom (which is Lane 0)
+                         // Lane 2=Top, Lane 0=Bottom. The loop iterates 2 downTo 0. 
+                         // So Lane 2 (Top) is rendered first.
+                         val laneLabels = listOf("ROOT", "UP 1", "UP 2") // Indices 0,1,2.
+                         // We display Lane 2 first (Top), so we want label "UP 2".
+                         // laneLabels[2] is "UP 2", laneLabels[0] is "ROOT".
+                         val laneColors = listOf(Color(0xFF43A047), Color(0xFF1E88E5), Color(0xFF8E24AA)) // Grn, Blu, Purp
                          
                          (2 downTo 0).forEach { laneIdx ->
-                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
+                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
                                  Text(laneLabels[laneIdx], style = MaterialTheme.typography.labelSmall, color = laneColors[laneIdx], modifier = Modifier.width(40.dp))
                                  
                                      val lanePattern = config.rhythms[laneIdx]
                                      Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
-                                         lanePattern.forEachIndexed { step, isActive ->
+                                         // Force 16 steps display
+                                         val displaySteps = if (lanePattern.size < 16) lanePattern + List(16 - lanePattern.size) { false } else lanePattern
+                                         displaySteps.take(16).forEachIndexed { step, isActive ->
                                              Box(
                                                  modifier = Modifier
-                                                     .size(32.dp)
+                                                     .weight(1f) // Distribute equally
+                                                     .aspectRatio(1f) // Square
+                                                     .padding(1.dp) // Minimal padding
                                                      .background(
                                                          if (isActive) laneColors[laneIdx] else Color.DarkGray,
-                                                         RoundedCornerShape(4.dp)
+                                                         RoundedCornerShape(2.dp)
                                                      )
                                                      .clickable {
                                                          val newLane = lanePattern.toMutableList()
-                                                         newLane[step] = !newLane[step]
-                                                         val newRhythms = config.rhythms.toMutableList()
-                                                         newRhythms[laneIdx] = newLane
-                                                         
-                                                         val newConfig = config.copy(rhythms = newRhythms)
-                                                         val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
-                                                         onStateChange(state.copy(tracks = newTracks))
-                                                          nativeLib.setArpConfig(
-                                                              state.selectedTrackIndex, 
-                                                              newConfig.mode.ordinal, 
-                                                              newConfig.octaves, 
-                                                              newConfig.inversion, 
-                                                              newConfig.isLatched, 
-                                                              newConfig.isMutated,
-                                                              newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), 
-                                                              newConfig.randomSequence.toIntArray()
-                                                          )
+                                                         // Pad if needed to prevents crash
+                                                         while (newLane.size <= step) newLane.add(false)
+                                                         if (step < newLane.size) {
+                                                            newLane[step] = !newLane[step]
+                                                            val newRhythms = config.rhythms.toMutableList()
+                                                            newRhythms[laneIdx] = newLane.take(16) // Ensure size cap
+                                                            
+                                                            val newConfig = config.copy(rhythms = newRhythms)
+                                                            val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                                            onStateChange(state.copy(tracks = newTracks))
+                                                            nativeLib.setArpConfig(
+                                                                state.selectedTrackIndex, 
+                                                                newConfig.mode.ordinal, 
+                                                                newConfig.octaves, 
+                                                                newConfig.inversion, 
+                                                                newConfig.isLatched, 
+                                                                newConfig.isMutated,
+                                                                newRhythms.map { it.toBooleanArray() }.toTypedArray(), 
+                                                                newConfig.randomSequence.toIntArray()
+                                                            )
+                                                         }
                                                      }
                                              )
                                          }
                                      }
                              }
+                             if (laneIdx > 0) {
+                                Divider(thickness = 1.dp, color = Color.DarkGray, modifier = Modifier.padding(bottom = 12.dp))
+                             }
                          }
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        // Rhythm Randomizer (Updates all lanes)
-                        Button(
-                            onClick = {
-                                val newRhythms = List(3) { lane ->
-                                    val density = if (lane == 0) 0.7 else 0.4
-                                    List(8) { Math.random() < density }
-                                }
-                                val newConfig = track.arpConfig.copy(rhythms = newRhythms)
-                                val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
-                                onStateChange(state.copy(tracks = newTracks))
-                                nativeLib.setArpConfig(
-                                    state.selectedTrackIndex, 
-                                    newConfig.mode.ordinal, 
-                                    newConfig.octaves, 
-                                    newConfig.inversion,
-                                    newConfig.isLatched,
-                                    newConfig.isMutated,
-                                    newRhythms.map { it.toBooleanArray() }.toTypedArray(), 
-                                    newConfig.randomSequence.toIntArray()
-                                )
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("RANDOMIZE RHYTHMS", color = Color.White) }
                     }
                 }
             }
@@ -6262,9 +6596,11 @@ fun RecordingStrip(
                     )
                 }
                 if (showLoadDialog) {
-                    val defaultDir = if (track.engineType == EngineType.GRANULAR) {
-                        File(PersistenceManager.getLoomFolder(context), "granular").apply { if (!exists()) mkdirs() }
-                    } else PersistenceManager.getLoomFolder(context)
+                    val defaultDir = when(track.engineType) {
+                        EngineType.GRANULAR -> File(PersistenceManager.getLoomFolder(context), "granular").apply { if (!exists()) mkdirs() }
+                        EngineType.SAMPLER -> File(PersistenceManager.getLoomFolder(context), "samples").apply { if (!exists()) mkdirs() }
+                        else -> PersistenceManager.getLoomFolder(context)
+                    }
 
                     NativeFileDialog(
                         directory = defaultDir, 
@@ -6324,31 +6660,63 @@ fun RecordingStrip(
                 initialValue = 1f, targetValue = 1.15f,
                 animationSpec = infiniteRepeatable(tween(400), RepeatMode.Reverse)
             )
-            
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .graphicsLayer { if (isRecording) { scaleX = animScale; scaleY = animScale } }
-                    .background(if (isRecording) Color.Red else Color.Red.copy(alpha = 0.3f), CircleShape)
-                    .border(2.dp, Color.Red, CircleShape)
-                    .pointerInput(trackIndex) {
-                        detectTapGestures(
-                            onPress = {
-                                try {
-                                    onStartRecording()
-                                    awaitRelease()
-                                } finally {
-                                    onStopRecording()
-                                }
-                            }
-                        )
-                    },
-                contentAlignment = Alignment.Center
+
+            // Record Button Row (Lock + Button)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                if (isRecording) {
-                    Box(modifier = Modifier.size(16.dp).background(Color.White, RoundedCornerShape(2.dp)))
-                } else {
-                    Box(modifier = Modifier.size(20.dp).background(Color.Red, CircleShape))
+                // LOCK TOGGLE (Moved here)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("LOCK", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
+                    androidx.compose.material3.Switch(
+                        checked = state.isRecordingLocked,
+                        onCheckedChange = { locked ->
+                            onStateChange(state.copy(isRecordingLocked = locked))
+                            nativeLib?.setRecordingLocked(locked)
+                        },
+                        modifier = Modifier.scale(0.6f).height(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .graphicsLayer { if (isRecording) { scaleX = animScale; scaleY = animScale } }
+                        .background(if (isRecording) Color.Red else Color.Red.copy(alpha = 0.3f), CircleShape)
+                        .border(2.dp, Color.Red, CircleShape)
+                        .pointerInput(trackIndex, state.isRecordingLocked, isRecording) {
+                            detectTapGestures(
+                                onPress = {
+                                    if (state.isRecordingLocked) {
+                                        if (isRecording) {
+                                            // UNLOCK AND STOP
+                                            onStateChange(state.copy(isRecordingLocked = false))
+                                            nativeLib?.setRecordingLocked(false)
+                                            onStopRecording()
+                                        } else {
+                                            onStartRecording()
+                                        }
+                                    } else {
+                                        try {
+                                            onStartRecording()
+                                            awaitRelease()
+                                        } finally {
+                                            onStopRecording()
+                                        }
+                                    }
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isRecording) {
+                        Box(modifier = Modifier.size(16.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                    } else {
+                        Box(modifier = Modifier.size(20.dp).background(Color.Red, CircleShape))
+                    }
                 }
             }
         }
@@ -6453,38 +6821,9 @@ fun RecordingStrip(
 @Composable
 fun EffectsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
     Row(modifier = Modifier.fillMaxSize()) {
-        // Mixer Sidebar (Simplified)
-        Column(
-            modifier = Modifier
-                .width(100.dp)
-                .fillMaxHeight()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("MIXER", style = MaterialTheme.typography.labelMedium, color = Color.Gray, modifier = Modifier.padding(vertical = 8.dp))
-            state.tracks.forEachIndexed { i, track ->
-                val isSelected = state.selectedTrackIndex == i
-                val engineColor = getEngineColor(track.engineType)
-                Box(
-                    modifier = Modifier
-                        .padding(bottom = 8.dp)
-                        .size(50.dp)
-                        .background(
-                            if (isSelected) engineColor else Color.DarkGray,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .clickable { onStateChange(state.copy(selectedTrackIndex = i)) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    when (track.engineType) {
-                        EngineType.AUDIO_IN -> Icon(Icons.Default.Mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                        EngineType.SOUNDFONT -> Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                        else -> Text("${i + 1}", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
+        // Mixer Sidebar Removed
+        
+        // Pedalboard Grid
 
         // Pedalboard Grid
         LazyVerticalStaggeredGrid(
@@ -6585,7 +6924,7 @@ fun EffectsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 Pedal("OVERDRIVE", Color.Red, state, 0, onStateChange, nativeLib) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         GlobalKnob("DRIVE", 0.3f, 540, state, onStateChange, nativeLib)
-                        GlobalKnob("MIX", 1.0f, 541, state, onStateChange, nativeLib)
+                        GlobalKnob("DIST", 1.0f, 541, state, onStateChange, nativeLib)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         GlobalKnob("LEVEL", 0.5f, 542, state, onStateChange, nativeLib)
@@ -6653,6 +6992,13 @@ fun EffectsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     1 -> "TAPE"
                                     2 -> "P-PONG"
                                     else -> "REVERSE"
+                                }
+                            })
+                            GlobalKnob("MODE", 0.0f, 526, state, onStateChange, nativeLib, valueFormatter = { v ->
+                                when((v * 2.9f).toInt()) {
+                                    0 -> "LP"
+                                    1 -> "HP"
+                                    else -> "BP"
                                 }
                             })
                         }
@@ -6860,27 +7206,44 @@ fun Pedal(
             Spacer(modifier = Modifier.height(12.dp))
             
             // Per-track SEND knob (Power/Volume)
-            Knob(
-                label = "PWR/VOL",
-                initialValue = 0.0f,
-                parameterId = -1,
-                state = state,
-                onStateChange = onStateChange,
-                nativeLib = nativeLib,
-                knobSize = 36.dp,
-                overrideValue = sendLevel, // Crucial: sync with external state
-                onValueChangeOverride = { newValue ->
-                    nativeLib.setParameter(latestState.selectedTrackIndex, 2000 + (fxIdx * 10), newValue)
-                    val newTracks = latestState.tracks.mapIndexed { i, t ->
-                        if (i == latestState.selectedTrackIndex) {
-                            val newSends = t.fxSends.toMutableList()
-                            newSends[fxIdx] = newValue
-                            t.copy(fxSends = newSends)
-                        } else t
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                // Per-track SEND knob (Power/Volume)
+                Knob(
+                    label = "SEND",
+                    initialValue = 0.0f,
+                    parameterId = -1,
+                    state = state,
+                    onStateChange = onStateChange,
+                    nativeLib = nativeLib,
+                    knobSize = 32.dp,
+                    overrideValue = sendLevel,
+                    onValueChangeOverride = { newValue ->
+                        nativeLib.setParameter(latestState.selectedTrackIndex, 2000 + (fxIdx * 10), newValue)
+                        val newTracks = latestState.tracks.mapIndexed { i, t ->
+                            if (i == latestState.selectedTrackIndex) {
+                                val newSends = t.fxSends.toMutableList()
+                                newSends[fxIdx] = newValue
+                                t.copy(fxSends = newSends)
+                            } else t
+                        }
+                        latestOnStateChange(latestState.copy(tracks = newTracks))
                     }
-                    latestOnStateChange(latestState.copy(tracks = newTracks))
-                }
-            )
+                )
+
+                // Global MIX Knob (Wet/Dry Return Level)
+                Knob(
+                    label = "MIX",
+                    initialValue = 1.0f,
+                    parameterId = 3000 + fxIdx, // Mapped to mFxMixLevels in AudioEngine
+                    state = state,
+                    onStateChange = onStateChange,
+                    nativeLib = nativeLib,
+                    knobSize = 32.dp
+                )
+            }
             
             Spacer(modifier = Modifier.height(8.dp))
             content()
@@ -7019,22 +7382,32 @@ fun AssignableKnobsPanel(state: GrooveboxState, onStateChange: (GrooveboxState) 
                         onValueChangeOverride = { newVal ->
                              val newValues = latestState.knobValues.toMutableList().apply { set(i, newVal) }
                              
-                             if (routing != null && routing.targetType == 1) {
-                                 // Update Native Engine
-                                 nativeLib.setParameter(latestState.selectedTrackIndex, routing.targetId, newVal)
-                                 
-                                 // Update UI State (Track Parameters)
-                                 val updatedTracks = latestState.tracks.mapIndexed { idx, t ->
-                                     if (idx == latestState.selectedTrackIndex) {
-                                         val newParams = t.parameters.toMutableMap()
-                                         newParams[routing.targetId] = newVal
-                                         t.copy(parameters = newParams)
-                                     } else t
+                                 if (routing != null && routing.targetType == 1) {
+                                     val isAutoLocking = latestState.isRecording && latestState.isPlaying
+                                     val isLockingMode = latestState.isParameterLocking || isAutoLocking
+                                     
+                                     if (isLockingMode) {
+                                         nativeLib.setParameterPreview(latestState.selectedTrackIndex, routing.targetId, newVal)
+                                         // P-Lock
+                                         val targetIdx = if (isAutoLocking) latestState.currentStep else latestState.lockingTarget?.second
+                                         if (targetIdx != null) {
+                                             nativeLib.setParameterLock(latestState.selectedTrackIndex, targetIdx, routing.targetId, newVal)
+                                         }
+                                         latestOnStateChange(latestState.copy(knobValues = newValues))
+                                     } else {
+                                         nativeLib.setParameter(latestState.selectedTrackIndex, routing.targetId, newVal)
+                                         val updatedTracks = latestState.tracks.mapIndexed { idx, t ->
+                                             if (idx == latestState.selectedTrackIndex) {
+                                                 val newParams = t.parameters.toMutableMap()
+                                                 newParams[routing.targetId] = newVal
+                                                 t.copy(parameters = newParams)
+                                             } else t
+                                         }
+                                         latestOnStateChange(latestState.copy(knobValues = newValues, tracks = updatedTracks))
+                                     }
+                                 } else {
+                                     latestOnStateChange(latestState.copy(knobValues = newValues))
                                  }
-                                 latestOnStateChange(latestState.copy(knobValues = newValues, tracks = updatedTracks))
-                             } else {
-                                 latestOnStateChange(latestState.copy(knobValues = newValues))
-                             }
                         }
                     )
                     

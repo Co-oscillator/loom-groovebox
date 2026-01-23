@@ -6,11 +6,42 @@
 #include <cmath>
 #include <vector>
 
+namespace DelayDetails {
+class TinyAllPass {
+public:
+  void setBufferSize(int size) {
+    mBuffer.assign(size, 0.0f);
+    mSize = size;
+  }
+  float process(float input, float feedback) {
+    float delayed = mBuffer[mReadPos];
+    float out = -input + delayed;
+    // Anti-denormal injection for internal feedback loop
+    float newVal = input + delayed * feedback;
+    mBuffer[mReadPos] = newVal + 1.0e-18f;
+    if (std::abs(mBuffer[mReadPos]) < 1.0e-18f)
+      mBuffer[mReadPos] = 0.0f;
+
+    mReadPos = (mReadPos + 1) % mSize;
+    return out;
+  }
+
+private:
+  std::vector<float> mBuffer;
+  int mSize = 0;
+  int mReadPos = 0;
+};
+} // namespace DelayDetails
+
 class DelayFx {
 public:
   DelayFx(int maxDelayFrames = 192000) {
     mBufferL.assign(maxDelayFrames, 0.0f);
     mBufferR.assign(maxDelayFrames, 0.0f);
+    for (int i = 0; i < 3; ++i) {
+      mDiffL[i].setBufferSize(150 + i * 77);
+      mDiffR[i].setBufferSize(163 + i * 81);
+    }
   }
 
   void setDelay(float frames) {
@@ -18,15 +49,26 @@ public:
       mTargetDelayFrames = frames;
   }
   void setDelayTime(float value) {
-    mTargetDelayFrames = value * ((float)mBufferL.size() - 2.0f);
+    // User requested max 1500ms
+    float maxFrames = 1.5f * 48000.0f; // 72000
+    mTargetDelayFrames = value * maxFrames;
     if (mTargetDelayFrames < 1.0f)
       mTargetDelayFrames = 1.0f;
   }
 
-  void setFeedback(float feedback) { mTargetFeedback = feedback; }
+  void setFeedback(float feedback) {
+    mTargetFeedback = feedback;
+    // TAPE mode usually needs a slight boost for self-oscillation but
+    // 1.1f might be too hot with the 1.5f drive boost.
+    // We'll scale it in the process loop instead.
+  }
   void setMix(float mix) { mTargetMix = mix; }
   void setFilterMix(float mix) { mTargetFilterMix = mix; }
   void setFilterResonance(float res) { mTargetResonance = res; }
+
+  void setFilterMode(int mode) {
+    mFilterMode = (mode < 0) ? 0 : (mode > 2 ? 2 : mode);
+  }
 
   void setFilter(float filterMix, float resonance) {
     mTargetFilterMix = filterMix;
@@ -90,12 +132,12 @@ public:
     if (safeDelay > bufferSize - 2.0f)
       safeDelay = bufferSize - 2.0f;
 
-    float rp = (float)mWriteIndex - safeDelay;
-    while (rp < 0)
+    // mWriteIndex points to the NEXT write.
+    // Recent sample is at mWriteIndex - 1.
+    float rp = (float)mWriteIndex - 1.0f - safeDelay;
+    while (rp < 0.0f)
       rp += bufferSize;
 
-    // Final clamp to ensure i0/i1 are always valid regardless of floating point
-    // edge cases
     int i0 = static_cast<int>(rp);
     if (i0 < 0)
       i0 = 0;
@@ -117,7 +159,7 @@ public:
       delayedR = fast_tanh(delayedR * 1.5f);
     }
 
-    // Filter Logic (Per Channel)
+    // Filter Logic (Per Channel SVF)
     auto processFilter = [&](float input, float &z1, float &z2, float g,
                              float k) {
       float a1 = 1.0f / (1.0f + g * (g + k));
@@ -128,23 +170,25 @@ public:
       float v2 = z2 + a2 * z1 + a3 * v3;
       z1 = 2.0f * v1 - z1;
       z2 = 2.0f * v2 - z2;
-      if (std::abs(z1) < 1.0e-9f)
+      if (std::abs(z1) < 1.0e-18f)
         z1 = 0.0f;
-      if (std::abs(z2) < 1.0e-9f)
+      if (std::abs(z2) < 1.0e-18f)
         z2 = 0.0f;
 
-      if (mTargetFilterMix < 0.45f)
+      switch (mFilterMode) {
+      case 0:
         return v2; // LP
-      if (mTargetFilterMix > 0.55f)
+      case 1:
         return input - k * v1 - v2; // HP
-      return input;                 // Dry
+      case 2:
+        return v1; // BP
+      default:
+        return v2;
+      }
     };
 
-    float cutoff = 20000.0f;
-    if (mFilterMix < 0.45f)
-      cutoff = 100.0f * powf(200.0f, mFilterMix / 0.45f);
-    else if (mFilterMix > 0.55f)
-      cutoff = 40.0f * powf(200.0f, (mFilterMix - 0.55f) / 0.45f);
+    // Cutoff mapping: 20Hz to 20kHz
+    float cutoff = 20.0f + (mFilterMix * mFilterMix * 19980.0f);
     cutoff = std::max(20.0f, std::min(sampleRate * 0.45f, cutoff));
 
     float g = tanf(M_PI * cutoff / sampleRate);
@@ -155,35 +199,17 @@ public:
 
     // Cross-Feedback / Ping-Pong
     float nextL = 0, nextR = 0;
+    float currentFb = mFeedback;
+    if (mType == 1)
+      currentFb *= 0.95f; // Slight reduction for Tape to compensate drive
+
     if (mType == 2) { // Ping-Pong
-      // For Ping-Pong, we alternate which side the input is injected into
-      // every delay cycle? No, better to just inject into one side and let it
-      // bounce. But if input is stereo, we want both. Traditional Ping-Pong:
-      // Mono In -> Left -> (delay) -> Right -> (delay) -> Left... Here: Send
-      // inL to Left, inR to Right, but cross-feedback ensures swap. To get
-      // stereo width from even a mono source:
-      nextL = inL + filteredR * mFeedback;
-      nextR = inR + filteredL * mFeedback;
-
-      // If practically mono input, we need an initial offset to start the
-      // ping-pong. We'll use a simple trick: if it's Ping-Pong and we're
-      // starting or every few cycles, nudge one side. Or better: just delay the
-      // right channel's read by a few samples? No, let's just use the 'Type 2'
-      // swap and ensure it doesn't stay mono. If we only add input to one side
-      // at a time, it will definitively ping-pong.
-      if (mPingPongCounter == 0) {
-        nextR = filteredL * mFeedback; // Only Left gets input
-      } else {
-        nextL = filteredR * mFeedback; // Only Right gets input
-      }
-
-      // Update counter: flip every delay period?
-      // Use mWriteIndex == 0 as a simple flip trigger
-      if (mWriteIndex == 0)
-        mPingPongCounter = !mPingPongCounter;
+      float monoIn = (inL + inR) * 0.707f;
+      nextL = monoIn + filteredR * currentFb;
+      nextR = filteredL * currentFb;
     } else {
-      nextL = inL + filteredL * mFeedback;
-      nextR = inR + filteredR * mFeedback;
+      nextL = inL + filteredL * currentFb;
+      nextR = inR + filteredR * currentFb;
     }
 
     // Denormal prevention
@@ -199,9 +225,25 @@ public:
     else
       mWriteIndex = 0;
 
-    outL = (inL * (1.0f - mMix)) + (filteredL * mMix);
-    outR = (inR * (1.0f - mMix)) + (filteredR * mMix);
+    // Diffusion Smear (Lushness)
+    for (int i = 0; i < 3; i++) {
+      filteredL = mDiffL[i].process(filteredL, 0.5f);
+      filteredR = mDiffR[i].process(filteredR, 0.5f);
+    }
+
+    outL = filteredL * mMix;
+    outR = filteredR * mMix;
+
+    // Silence tracking
+    if (std::abs(outL) < 1e-9f && std::abs(outR) < 1e-9f) {
+      if (mSilentCounter < 48000)
+        mSilentCounter++;
+    } else {
+      mSilentCounter = 0;
+    }
   }
+
+  bool isSilent() const { return mSilentCounter >= 48000; }
 
   float process(float input, float sampleRate = 48000.0f) {
     float l = 0, r = 0;
@@ -225,6 +267,9 @@ private:
   float mSvfZ1L = 0.0f, mSvfZ2L = 0.0f;
   float mSvfZ1R = 0.0f, mSvfZ2R = 0.0f;
   int mType = 0;
+  int mFilterMode = 0; // 0=LP, 1=HP, 2=BP
+  DelayDetails::TinyAllPass mDiffL[3], mDiffR[3];
+  uint32_t mSilentCounter = 48000;
 };
 
 #endif // DELAY_FX_H

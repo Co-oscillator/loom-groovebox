@@ -35,14 +35,15 @@ public:
     mPhase += (2.0f * M_PI * mRate) / sampleRate;
     if (mPhase > 2.0f * M_PI) {
       mPhase -= 2.0f * M_PI;
-      // Add slight random variation to rate for more "authentic" wobble
-      std::uniform_real_distribution<float> dist(-0.05f, 0.05f);
+      // Add more random variation to rate for more "authentic" wobble
+      // Increased from 0.05 to 0.2 for more instability
+      std::uniform_real_distribution<float> dist(-0.2f, 0.2f);
       mRandomOffset = dist(mRandEngine);
     }
 
     float mod = sinf(mPhase + mRandomOffset);
-    // Reduced intensity: 2.5ms instead of 8.0ms for more subtle wobble
-    float targetDelay = (10.0f + mod * mDepth * 2.5f);
+    // Increased intensity: 8.0ms max depth (was 2.5ms) for clear pitch wobble
+    float targetDelay = (10.0f + mod * mDepth * 8.0f);
     mSmoothedDelay += 0.005f * (targetDelay - mSmoothedDelay);
     float delaySamples = mSmoothedDelay * (sampleRate / 1000.0f);
 
@@ -57,7 +58,9 @@ public:
     mBuffer[mWritePos] = input;
     mWritePos = (mWritePos + 1) % mBuffer.size();
 
-    return input * (1.0f - mMix) + tap * mMix;
+    // Insert Logic: Return tap - input to replace dry signal
+    float wet = input * (1.0f - mMix) + tap * mMix;
+    return wet - input;
   }
 
 private:

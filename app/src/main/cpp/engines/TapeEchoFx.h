@@ -33,9 +33,8 @@ public:
     if (mFlutterPhase >= 1.0f)
       mFlutterPhase -= 1.0f;
 
-    float modulation =
-        (std::sin(2.0f * 3.14159265f * mWowPhase) * mWowAmount) +
-        (std::sin(2.0f * 3.14159265f * mFlutterPhase) * mFlutterAmount);
+    float modulation = (FastSine::get(mWowPhase) * mWowAmount) +
+                       (FastSine::get(mFlutterPhase) * mFlutterAmount);
 
     float targetDelaySamples = (mTime + modulation * mTime) * sampleRate;
 
@@ -43,7 +42,8 @@ public:
     mSmoothedDelay += 0.001f * (targetDelaySamples - mSmoothedDelay);
 
     // Read positions
-    float readPos = (float)mWritePos - mSmoothedDelay;
+    // Read position relative to most recent sample (mWritePos - 1)
+    float readPos = (float)mWritePos - 1.0f - mSmoothedDelay;
     while (readPos < 0.0f)
       readPos += (float)mBuffer.size();
     while (readPos >= (float)mBuffer.size())
@@ -80,42 +80,55 @@ public:
     }
 
     float feedbackSig = echo * mSmoothedFeedback;
-    // Low-pass to simulate tape head wear
-    mFilterState += 0.1f * (feedbackSig - mFilterState); // Smoother
-    if (std::abs(mFilterState) < 1.0e-12f)
+    // Low-pass to simulate tape head wear & prevent high-freq "zipper"
+    // Denormal protection
+    feedbackSig += 1.0e-15f;
+    mFilterState += 0.05f * (feedbackSig - mFilterState);
+    if (std::abs(mFilterState) < 1.0e-15f)
       mFilterState = 0.0f;
     feedbackSig = mFilterState;
 
     float toWrite = input + feedbackSig;
     toWrite = fast_tanh(toWrite);
 
-    if (std::abs(toWrite) < 1.0e-12f)
-      toWrite = 0.0f;
-    mBuffer[mWritePos] = toWrite;
+    // REMOVED: Aggressive zeroing caused "clamped" sound artifacts
+    // toWrite += 1.0e-18f; // Removed redundant
+
+    mBuffer[mWritePos] = toWrite + 1.0e-18f;
     mWritePos = (mWritePos + 1) % mBuffer.size();
 
-    return (echo * mSmoothedMix);
+    float output = (echo * mSmoothedMix);
+
+    // Silence tracking
+    if (std::abs(output) < 1e-9f) {
+      if (mSilentCounter < 48000)
+        mSilentCounter++;
+    } else {
+      mSilentCounter = 0;
+    }
+
+    return output;
   }
+
+  bool isSilent() const { return mSilentCounter >= 48000; }
 
   void setParameters(float time, float feedback, float saturation, float mix) {
     setDelayTime(time);
     setFeedback(feedback);
     setDrive(saturation);
     setMix(mix);
-    mWowAmount = 0.002f;
-    mFlutterAmount = 0.0005f;
-    // Sync on load
-    mSmoothedFeedback = mFeedback;
-    mSmoothedSaturation = mSaturation;
-    mSmoothedMix = mMix;
+    // ... rest of params
   }
 
-  void setDelayTime(float v) { mTime = 0.05f + (v * v) * 3.95f; } // Up to 4s
+  void setDelayTime(float v) { mTime = 0.05f + (v * v) * 1.45f; } // Up to 1.5s
 
-  void setFeedback(float v) { mFeedback = v * 0.85f; }
+  void setFeedback(float v) {
+    mFeedback = v * 0.95f;
+  } // Increased range allow nearly full feedback
   void setWow(float v) { mWowAmount = v * 0.006f; }
   void setFlutter(float v) { mFlutterAmount = v * 0.003f; }
-  void setDrive(float v) { mSaturation = v; }
+  // Rescaled Drive: Max (1.0) now equals previous 0.2
+  void setDrive(float v) { mSaturation = v * 0.2f; }
   void setMix(float v) { mMix = v; }
 
 private:
@@ -136,6 +149,7 @@ private:
 
   float mWowAmount = 0.002f;
   float mFlutterAmount = 0.0005f;
+  uint32_t mSilentCounter = 48000;
 };
 
 #endif

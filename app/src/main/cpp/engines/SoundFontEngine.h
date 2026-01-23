@@ -2,13 +2,14 @@
 #define SOUNDFONT_ENGINE_H
 
 #include "../libs/tsf.h"
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
 class SoundFontEngine {
 public:
-  SoundFontEngine() : mTsf(nullptr) {}
+  SoundFontEngine() : mTsf(nullptr), mMutex(std::make_unique<std::mutex>()) {}
 
   ~SoundFontEngine() {
     if (mTsf)
@@ -16,14 +17,16 @@ public:
   }
 
   void load(const std::string &path) {
-    std::lock_guard<std::mutex> lock(mMutex);
-    if (mTsf)
-      tsf_close(mTsf);
-    mTsf = tsf_load_filename(path.c_str());
-    if (mTsf) {
-      tsf_set_output(mTsf, TSF_STEREO_INTERLEAVED, 48000, 0.0f);
-      tsf_channel_set_pitchrange(mTsf, 0, 24.0f); // +/- 2 octaves
-      mBufferPos = 128;                           // Force reload
+    if (mMutex) {
+      std::lock_guard<std::mutex> lock(*mMutex);
+      if (mTsf)
+        tsf_close(mTsf);
+      mTsf = tsf_load_filename(path.c_str());
+      if (mTsf) {
+        tsf_set_output(mTsf, TSF_STEREO_INTERLEAVED, 48000, 0.0f);
+        tsf_channel_set_pitchrange(mTsf, 0, 24.0f); // +/- 2 octaves
+        mBufferPos = 128;                           // Force reload
+      }
     }
   }
 
@@ -37,10 +40,12 @@ public:
   void setGlide(float g) { mGlide = g; }
 
   void setPreset(int presetIndex) {
-    std::lock_guard<std::mutex> lock(mMutex);
-    if (mTsf && presetIndex >= 0 && presetIndex < tsf_get_presetcount(mTsf)) {
-      tsf_note_off_all(mTsf);
-      tsf_channel_set_presetindex(mTsf, 0, presetIndex);
+    if (mMutex) {
+      std::lock_guard<std::mutex> lock(*mMutex);
+      if (mTsf && presetIndex >= 0 && presetIndex < tsf_get_presetcount(mTsf)) {
+        tsf_note_off_all(mTsf);
+        tsf_channel_set_presetindex(mTsf, 0, presetIndex);
+      }
     }
   }
 
@@ -73,8 +78,8 @@ public:
   }
 
   void render(float *left, float *right, int numFrames) {
-    std::lock_guard<std::mutex> lock(mMutex);
-    if (mTsf) {
+    if (mMutex && mTsf) {
+      std::lock_guard<std::mutex> lock(*mMutex);
       if (mGlide > 0.001f) {
         float glideTimeSamples = mGlide * mSampleRate * 0.5f;
         float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
@@ -158,7 +163,7 @@ private:
   float mInternalBuffer[128]; // 64 stereo frames
   int mBufferPos = 128;
   int mBufferFrames = 128;
-  std::mutex mMutex;
+  std::unique_ptr<std::mutex> mMutex;
 };
 
 #endif // SOUNDFONT_ENGINE_H

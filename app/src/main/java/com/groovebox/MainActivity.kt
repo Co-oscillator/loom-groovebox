@@ -6456,7 +6456,7 @@ fun ArpSettingsSheet(
                          
                          (2 downTo 0).forEach { laneIdx ->
                              if (laneIdx < 2) {
-                                 androidx.compose.material3.HorizontalDivider(
+                                 Divider(
                                      modifier = Modifier.padding(horizontal = 40.dp),
                                      thickness = 1.dp,
                                      color = Color.Black.copy(alpha = 0.5f)

@@ -3435,7 +3435,7 @@ fun GranularParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (G
                     Knob("JITTER", 0.0f, 411, state, onStateChange, nativeLib, knobSize = 44.dp)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("REVERSE", 0.0f, 412, state, onStateChange, nativeLib, knobSize = 44.dp)
+                    Knob("REVERSE", 0.0f, 420, state, onStateChange, nativeLib, knobSize = 44.dp)
                     Knob("PITCH", 0.5f, 410, state, onStateChange, nativeLib, knobSize = 44.dp)
                     Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 44.dp)
                 }
@@ -6218,27 +6218,78 @@ fun ArpSettingsSheet(
                     
                     // Mode Selection
                     Text("MODE", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ArpMode.values().forEach { mode ->
-                            val isSelected = config.mode == mode
-                            Button(
-                                onClick = {
-                                    val newConfig = config.copy(mode = mode)
-                                    val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
-                                    onStateChange(state.copy(tracks = newTracks))
-                                    nativeLib.setArpConfig(
-                                        state.selectedTrackIndex, 
-                                        mode.ordinal, 
-                                        newConfig.octaves, 
-                                        newConfig.inversion, 
-                                        newConfig.isLatched, 
-                                        newConfig.isMutated,
-                                        newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
-                                        newConfig.randomSequence.toIntArray()
-                                    )
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Cyan else Color.DarkGray)
-                            ) { Text(mode.name, color = if (isSelected) Color.Black else Color.White) }
+                    // Mode Selection (2 Rows of 5)
+                    Text("MODE", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                    val allModes = ArpMode.values()
+                    val row1 = allModes.take(5)
+                    val row2 = allModes.drop(5)
+                    
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { // SpaceBetween for full width
+                            row1.forEach { mode ->
+                                val isSelected = config.mode == mode
+                                Button(
+                                    onClick = {
+                                        val newConfig = config.copy(mode = mode)
+                                        val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                        onStateChange(state.copy(tracks = newTracks))
+                                        nativeLib.setArpConfig(
+                                            state.selectedTrackIndex, 
+                                            mode.ordinal, 
+                                            newConfig.octaves, 
+                                            newConfig.inversion, 
+                                            newConfig.isLatched, 
+                                            newConfig.isMutated,
+                                            newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
+                                            newConfig.randomSequence.toIntArray()
+                                        )
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp), // Compact padding
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Cyan else Color.DarkGray),
+                                    modifier = Modifier.weight(1f).padding(horizontal = 2.dp) // Equal width
+                                ) { 
+                                    Text(
+                                        mode.name.replace("_", " "), 
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    ) 
+                                }
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            row2.forEach { mode ->
+                                val isSelected = config.mode == mode
+                                Button(
+                                    onClick = {
+                                        val newConfig = config.copy(mode = mode)
+                                        val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                        onStateChange(state.copy(tracks = newTracks))
+                                        nativeLib.setArpConfig(
+                                            state.selectedTrackIndex, 
+                                            mode.ordinal, 
+                                            newConfig.octaves, 
+                                            newConfig.inversion, 
+                                            newConfig.isLatched, 
+                                            newConfig.isMutated,
+                                            newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
+                                            newConfig.randomSequence.toIntArray()
+                                        )
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Cyan else Color.DarkGray),
+                                    modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
+                                ) { 
+                                    Text(
+                                        mode.name.replace("_", " "), 
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    ) 
+                                }
+                            }
                         }
                     }
                     

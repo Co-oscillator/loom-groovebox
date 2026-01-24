@@ -4,7 +4,7 @@ enum class EngineType {
     SUBTRACTIVE, FM, SAMPLER, GRANULAR, WAVETABLE, FM_DRUM, ANALOG_DRUM, MIDI, AUDIO_IN, SOUNDFONT
 }
 
-enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM }
+enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM, BACH, BROWNIAN, CONVERGE }
 
 data class ArpConfig(
     val mode: ArpMode = ArpMode.OFF,

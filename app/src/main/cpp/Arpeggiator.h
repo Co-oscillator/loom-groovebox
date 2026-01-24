@@ -13,7 +13,11 @@ enum class ArpMode {
   UP_DOWN = 3,
   STAGGER_UP = 4,
   STAGGER_DOWN = 5,
-  RANDOM = 6
+  STAGGER_DOWN = 5,
+  RANDOM = 6,
+  BACH = 7,
+  BROWNIAN = 8,
+  CONVERGE = 9
 };
 
 class Arpeggiator {
@@ -287,6 +291,53 @@ private:
                      std::mt19937(std::random_device()()));
       }
       break;
+    case ArpMode::BACH: {
+      // 3 steps forward, 1 step back
+      if (expanded.empty())
+        break;
+      int size = expanded.size();
+      // Generate a loop that covers the progression
+      // Approx length: size * 1.5
+      for (int i = 0; i < size + 4; ++i) { // Safety margin
+        int groupSize = 3;
+        int baseShift = i / groupSize;
+        int internalStep = i % groupSize;
+        int idx = (baseShift + internalStep) % size;
+        mSequence.push_back(expanded[idx]);
+      }
+      break;
+    }
+    case ArpMode::CONVERGE: {
+      // 0, Max, 1, Max-1...
+      if (expanded.empty())
+        break;
+      int size = expanded.size();
+      for (int i = 0; i < size; ++i) {
+        int offset = i / 2;
+        int idx = (i % 2 == 0) ? offset : (size - 1 - offset);
+        if (idx >= 0 && idx < size) {
+          mSequence.push_back(expanded[idx]);
+        }
+      }
+      break;
+    }
+    case ArpMode::BROWNIAN: {
+      // Random walk simulation (pre-calc for loop stability)
+      if (expanded.empty())
+        break;
+      int size = expanded.size();
+      int current = 0;
+      std::mt19937 rng(std::random_device{}());
+      std::uniform_int_distribution<int> dist(-1, 1);
+
+      // Generate a nice long walk
+      for (int i = 0; i < 32; ++i) {
+        mSequence.push_back(expanded[current]);
+        int move = dist(rng);
+        current = std::clamp(current + move, 0, size - 1);
+      }
+      break;
+    }
     default:
       break;
     }

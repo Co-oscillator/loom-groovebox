@@ -1042,17 +1042,14 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       break;
     case 6: // Tape Wobble
       if (subId == 0) {
-        mTapeWobbleFxL.setRate(value);
-        mTapeWobbleFxR.setRate(value);
+        mTapeWobbleFx.setRate(value);
       } else if (subId == 1) {
-        mTapeWobbleFxL.setDepth(value);
-        mTapeWobbleFxR.setDepth(value);
+        mTapeWobbleFx.setDepth(value);
       } else if (subId == 2) {
-        mTapeWobbleFxL.setSaturation(value);
-        mTapeWobbleFxR.setSaturation(value);
+        mTapeWobbleFx.setSaturation(value);
       } else if (subId == 3) {
-        mTapeWobbleFxL.setMix(value);
-        mTapeWobbleFxR.setMix(value);
+      } else if (subId == 3) {
+        mTapeWobbleFx.setMix(value);
         mFxMixLevels[4] = value;
       }
       break;
@@ -1188,11 +1185,10 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       else if (subId == 2)
         mAutoPannerFx.setDepth(value);
       else if (subId == 3) {
-        mAutoPannerFx.setMix(value);
-        mFxMixLevels[12] =
-            value; // Moved from 10 to 12 to avoid LP LFO collision
-      } else if (subId == 4) {
         mAutoPannerFx.setShape(value);
+      } else if (subId == 4) {
+        mAutoPannerFx.setMix(1.0f); // Always Wet Internal
+        mFxMixLevels[12] = value;   // Global Return Level
       }
       break;
     case 3: // Octaver
@@ -1222,11 +1218,12 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       mAutoPannerFx.setRate(value);
     else if (subId == 2)
       mAutoPannerFx.setDepth(value);
-    else if (subId == 3) {
-      mAutoPannerFx.setMix(value);
-      mFxMixLevels[12] = value;
-    } else if (subId == 4)
+    else if (subId == 3)
       mAutoPannerFx.setShape(value);
+    else if (subId == 4) {
+      mAutoPannerFx.setMix(1.0f); // Always wet internally
+      mFxMixLevels[12] = value;   // Global Return Level
+    }
   }
 }
 
@@ -1849,8 +1846,7 @@ void AudioEngine::setPlaying(bool playing) {
     mHpLfoL.setCutoff(0.0f);
     mHpLfoR.setCutoff(0.0f);
     mReverbFx.clear();
-    mTapeWobbleFxL.clear();
-    mTapeWobbleFxR.clear();
+    mTapeWobbleFx.clear();
     mPhaserFxL.clear();
     mPhaserFxR.clear();
     mChorusFxL.clear();
@@ -2751,10 +2747,20 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       }
 
       float finalVol = track.smoothedVolume * track.gainReduction;
-      float trackOutputL = rawSampleL * finalVol;
-      float trackOutputR = rawSampleR * finalVol;
 
-      // Pre-Fader Signal calculation for Sends (allows Dry Kill)
+      // Special Handling for AutoPanner (Bus 12)
+      // Acts as a "Routing" knob: 0% = Main Mix, 100% = AutoPanner Bus
+      // This prevents phase cancellation by removing the dry signal as it
+      // enters the Panner.
+      float pannerSend = track.smoothedFxSends[12];
+      float dryScale = 1.0f - pannerSend;
+      if (dryScale < 0.0f)
+        dryScale = 0.0f;
+
+      float trackOutputL = rawSampleL * finalVol * dryScale;
+      float trackOutputR = rawSampleR * finalVol * dryScale;
+
+      // Pre-Fader Signal calculation for Sands (allows Dry Kill)
       // We apply Gain Reduction and Punch, but NOT Track Volume
       float preFaderL = rawSampleL * track.gainReduction;
       float preFaderR = rawSampleR * track.gainReduction;
@@ -2875,8 +2881,10 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     }
 
     if (std::abs(fxBusesL[4]) > 0.00001f || std::abs(fxBusesR[4]) > 0.00001f) {
-      routeFx(4, mTapeWobbleFxL.process(fxBusesL[4], sampleRate),
-              mTapeWobbleFxR.process(fxBusesR[4], sampleRate), true); // Delta
+      // Use new Stereo Process API
+      float wL = 0, wR = 0;
+      mTapeWobbleFx.processStereo(fxBusesL[4], fxBusesR[4], wL, wR, sampleRate);
+      routeFx(4, wL, wR, true); // Delta
     }
 
     if (std::abs(fxBusesL[5]) > 1.0e-12f || std::abs(fxBusesR[5]) > 1.0e-12f ||

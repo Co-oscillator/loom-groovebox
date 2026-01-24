@@ -8,7 +8,8 @@
 class TapeWobbleFx {
 public:
   TapeWobbleFx(int maxDelay = 2048) {
-    mBuffer.resize(maxDelay, 0.0f);
+    mBufferL.resize(maxDelay, 0.0f);
+    mBufferR.resize(maxDelay, 0.0f);
     mRandEngine.seed(std::random_device{}());
   }
 
@@ -25,60 +26,73 @@ public:
   }
 
   void clear() {
-    std::fill(mBuffer.begin(), mBuffer.end(), 0.0f);
+    std::fill(mBufferL.begin(), mBufferL.end(), 0.0f);
+    std::fill(mBufferR.begin(), mBufferR.end(), 0.0f);
     mWritePos = 0;
     mPhase = 0.0f;
   }
 
-  float process(float input, float sampleRate) {
-    // Slow modulation for tape wobble
+  // Process stereo block (linked wobble)
+  void processStereo(float inL, float inR, float &outL, float &outR,
+                     float sampleRate) {
+    // Shared modulation update (once per stereo pair)
     mPhase += (2.0f * M_PI * mRate) / sampleRate;
     if (mPhase > 2.0f * M_PI) {
       mPhase -= 2.0f * M_PI;
-      // Add more random variation to rate for more "authentic" wobble
-      // Increased from 0.05 to 0.2 for more instability
       std::uniform_real_distribution<float> dist(-0.2f, 0.2f);
       mRandomOffset = dist(mRandEngine);
     }
 
     float mod = sinf(mPhase + mRandomOffset);
-    // Increased intensity: 8.0ms max depth (was 2.5ms) for clear pitch wobble
     float targetDelay = (10.0f + mod * mDepth * 8.0f);
     mSmoothedDelay += 0.005f * (targetDelay - mSmoothedDelay);
     float delaySamples = mSmoothedDelay * (sampleRate / 1000.0f);
 
-    float tap = getInterpolatedTap(delaySamples);
+    float tapL = getInterpolatedTap(mBufferL, mWritePos, delaySamples);
+    float tapR = getInterpolatedTap(mBufferR, mWritePos,
+                                    delaySamples); // Same delay samples
 
-    // Apply Saturation (Tape Crunch)
     if (mSaturation > 0.0f) {
-      float drive = 1.0f + mSaturation * 3.0f; // Slightly less aggressive
-      tap = std::tanh(tap * drive) / std::tanh(drive);
+      float drive = 1.0f + mSaturation * 3.0f;
+      tapL = std::tanh(tapL * drive) / std::tanh(drive);
+      tapR = std::tanh(tapR * drive) / std::tanh(drive);
     }
 
-    mBuffer[mWritePos] = input;
-    mWritePos = (mWritePos + 1) % mBuffer.size();
+    mBufferL[mWritePos] = inL;
+    mBufferR[mWritePos] = inR;
+    mWritePos = (mWritePos + 1) % mBufferL.size();
 
-    // Insert Logic: Return tap - input to replace dry signal
-    float wet = input * (1.0f - mMix) + tap * mMix;
-    return wet - input;
+    float wetL = inL * (1.0f - mMix) + tapL * mMix;
+    float wetR = inR * (1.0f - mMix) + tapR * mMix;
+
+    // Return delta (Wet - Dry) for additive mixer
+    outL = wetL - inL;
+    outR = wetR - inR;
+  }
+
+  // Mono fallback (unused but kept for API compat if needed)
+  float process(float input, float sampleRate) {
+    // Not safe to use if interleaved with processStereo due to phase updates
+    return 0.0f;
   }
 
 private:
-  float getInterpolatedTap(float delaySamples) {
-    float readPos = (float)mWritePos - delaySamples;
+  float getInterpolatedTap(const std::vector<float> &buffer, int writePos,
+                           float delaySamples) {
+    float readPos = (float)writePos - delaySamples;
     while (readPos < 0)
-      readPos += mBuffer.size();
-    while (readPos >= mBuffer.size()) // Safety
-      readPos -= mBuffer.size();
+      readPos += buffer.size();
+    while (readPos >= buffer.size())
+      readPos -= buffer.size();
 
     int i1 = (int)readPos;
-    int i2 = (i1 + 1) % mBuffer.size();
+    int i2 = (i1 + 1) % buffer.size();
     float frac = readPos - i1;
-
-    return mBuffer[i1] * (1.0f - frac) + mBuffer[i2] * frac;
+    return buffer[i1] * (1.0f - frac) + buffer[i2] * frac;
   }
 
-  std::vector<float> mBuffer;
+  std::vector<float> mBufferL;
+  std::vector<float> mBufferR;
   int mWritePos = 0;
   float mPhase = 0.0f;
   float mRate = 0.5f;

@@ -2612,7 +2612,16 @@ fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange:
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Knob("SHP 1", 0f, 104, state, onStateChange, nativeLib, knobSize = 48.dp)
                         Knob("SHP 2", 0f, 105, state, onStateChange, nativeLib, knobSize = 48.dp)
-                        Knob("SUB SHP", 0f, 155, state, onStateChange, nativeLib, knobSize = 48.dp)
+                        Knob("SUB SHP", 0f, 155, state, onStateChange, nativeLib, knobSize = 48.dp, valueFormatter = { v ->
+                            val i = (v * 3.99f).toInt()
+                            when(i) {
+                                0 -> "SIN"
+                                1 -> "TRI"
+                                2 -> "SAW"
+                                3 -> "SQR"
+                                else -> "SIN"
+                            }
+                        })
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Knob("DETUNE", 0.1f, 106, state, onStateChange, nativeLib, knobSize = 48.dp)
@@ -6465,7 +6474,7 @@ fun ArpSettingsSheet(
                                  verticalAlignment = Alignment.CenterVertically, 
                                  modifier = Modifier
                                      .fillMaxWidth()
-                                     .padding(vertical = 4.dp)
+                                     .padding(vertical = 2.dp) // Reduced vertical padding
                              ) {
                                  Text(laneLabels[laneIdx], style = MaterialTheme.typography.labelSmall, color = laneColors[laneIdx], modifier = Modifier.width(40.dp))
                                  
@@ -6477,7 +6486,7 @@ fun ArpSettingsSheet(
                                          Box(
                                              modifier = Modifier
                                                  .weight(1f) // Distribute equally
-                                                 .aspectRatio(1.2f) // Slightly taller than wide for better touch
+                                                 .aspectRatio(1.2f) 
                                                  .background(
                                                      if (isActive) laneColors[laneIdx] else Color.DarkGray,
                                                      RoundedCornerShape(2.dp)
@@ -6510,13 +6519,7 @@ fun ArpSettingsSheet(
                                      }
                                  }
                              }
-                             if (laneIdx > 0) {
-                                 Divider(
-                                     thickness = 1.dp, 
-                                     color = Color.Black.copy(alpha = 0.5f), 
-                                     modifier = Modifier.padding(vertical = 4.dp)
-                                 )
-                             }
+                             // No Divider here - clean spacing only
                           }
                         
                         Spacer(modifier = Modifier.height(16.dp))

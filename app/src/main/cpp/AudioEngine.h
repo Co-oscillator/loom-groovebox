@@ -310,7 +310,7 @@ private:
   PhaserFx mPhaserFxL, mPhaserFxR;
   OverdriveFx mOverdriveFxL, mOverdriveFxR;
   BitcrusherFx mBitcrusherFxL, mBitcrusherFxR;
-  TapeWobbleFx mTapeWobbleFxL, mTapeWobbleFxR;
+  TapeWobbleFx mTapeWobbleFx; // Stereo Linked!
   FlangerFx mFlangerFxL, mFlangerFxR;
   AutoPannerFx mAutoPannerFx; // This one is native stereo
   TapeEchoFx mTapeEchoFxL, mTapeEchoFxR;

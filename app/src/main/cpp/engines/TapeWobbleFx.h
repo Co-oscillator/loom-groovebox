@@ -10,7 +10,9 @@ public:
   TapeWobbleFx(int maxDelay = 2048) {
     mBufferL.resize(maxDelay, 0.0f);
     mBufferR.resize(maxDelay, 0.0f);
+    mBufferR.resize(maxDelay, 0.0f);
     mRandEngine.seed(std::random_device{}());
+    mDist = std::uniform_real_distribution<float>(-0.2f, 0.2f);
   }
 
   void setRate(float v) { mRate = v; }
@@ -39,13 +41,13 @@ public:
     mPhase += (2.0f * M_PI * mRate) / sampleRate;
     if (mPhase > 2.0f * M_PI) {
       mPhase -= 2.0f * M_PI;
-      std::uniform_real_distribution<float> dist(-0.2f, 0.2f);
-      mRandomOffset = dist(mRandEngine);
+      mRandomOffset = mDist(mRandEngine);
     }
 
     float mod = sinf(mPhase + mRandomOffset);
     float targetDelay = (10.0f + mod * mDepth * 8.0f);
-    mSmoothedDelay += 0.005f * (targetDelay - mSmoothedDelay);
+    // Smoother transition: 0.005 -> 0.0005 (reduce crackle)
+    mSmoothedDelay += 0.0005f * (targetDelay - mSmoothedDelay);
     float delaySamples = mSmoothedDelay * (sampleRate / 1000.0f);
 
     float tapL = getInterpolatedTap(mBufferL, mWritePos, delaySamples);
@@ -101,7 +103,9 @@ private:
   float mMix = 0.5f;
   float mSmoothedDelay = 10.0f;
   float mRandomOffset = 0.0f;
+  float mRandomOffset = 0.0f;
   std::mt19937 mRandEngine;
+  std::uniform_real_distribution<float> mDist;
 };
 
 #endif // TAPE_WOBBLE_FX_H

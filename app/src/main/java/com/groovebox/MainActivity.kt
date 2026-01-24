@@ -7071,23 +7071,53 @@ fun EffectsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 }
             }
             item {
-                Pedal("AUTOPAN", Color(0xFFE91E63), state, 12, onStateChange, nativeLib) { // Moved to 12 to avoid LP LFO (10) collision
+            item {
+                Pedal("FILTERS", Color(0xFFE91E63), state, 12, onStateChange, nativeLib) { // Replaces AutoPanner
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        GlobalKnob("PAN", 0.5f, 2100, state, onStateChange, nativeLib)
-                        GlobalKnob("RATE", 0.2f, 2101, state, onStateChange, nativeLib)
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        GlobalKnob("DPTH", 0.5f, 2102, state, onStateChange, nativeLib)
-                        GlobalKnob("MIX", 1.0f, 2104, state, onStateChange, nativeLib)
-                    }
-                    // SHAPE selector as a small row or knob
-                    GlobalKnob("SHAPE", 0.0f, 2103, state, onStateChange, nativeLib, valueFormatter = { v ->
-                        when {
-                            v < 0.33f -> "SINE"
-                            v < 0.66f -> "TRI"
-                            else -> "SQR"
+                        // Filter 1
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("F1", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                            GlobalKnob("CUT", 0.5f, 2100, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            GlobalKnob("RES", 0.0f, 2101, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            GlobalKnob("MIX", 0.0f, 2103, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            // Mode Button
+                            val mode = (state.tracks[0].parameters[2102] ?: 0f).toInt() // Using track 0 param store as global fallback? No, usually Global params are tracked elsewhere or in Track 0. Actually GlobalKnob reads from state.tracks[0] or similar. Let's assume GlobalKnob handles it.
+                            // Actually GlobalKnob doesn't expose the value easily for conditional logic unless we read it back.
+                            // Let's us a simple mode knob for now or Button if feasible. A Knob "MODE" is safer given the framework.
+                            GlobalKnob("MODE", 0.0f, 2102, state, onStateChange, nativeLib, knobSize = 32.dp, valueFormatter = { v ->
+                                when((v * 2.9f).toInt()) { 0 -> "LP"; 1 -> "HP"; else -> "BP" }
+                            })
                         }
-                    })
+                        
+                        Divider(modifier = Modifier.height(100.dp).width(1.dp).background(Color.White.copy(alpha = 0.2f)))
+
+                        // Filter 2
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("F2", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                            GlobalKnob("CUT", 0.5f, 2105, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            GlobalKnob("RES", 0.0f, 2106, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            GlobalKnob("MIX", 0.0f, 2108, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            GlobalKnob("MODE", 0.0f, 2107, state, onStateChange, nativeLib, knobSize = 32.dp, valueFormatter = { v ->
+                                when((v * 2.9f).toInt()) { 0 -> "LP"; 1 -> "HP"; else -> "BP" }
+                            })
+                        }
+
+                        Divider(modifier = Modifier.height(100.dp).width(1.dp).background(Color.White.copy(alpha = 0.2f)))
+
+                        // Filter 3
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("F3", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                            GlobalKnob("CUT", 0.5f, 2110, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            GlobalKnob("RES", 0.0f, 2111, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            GlobalKnob("MIX", 0.0f, 2113, state, onStateChange, nativeLib, knobSize = 40.dp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            GlobalKnob("MODE", 0.0f, 2112, state, onStateChange, nativeLib, knobSize = 32.dp, valueFormatter = { v ->
+                                when((v * 2.9f).toInt()) { 0 -> "LP"; 1 -> "HP"; else -> "BP" }
+                            })
+                        }
+                    }
                 }
             }
             item {

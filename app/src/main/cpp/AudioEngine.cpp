@@ -1187,8 +1187,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       else if (subId == 3) {
         mAutoPannerFx.setShape(value);
       } else if (subId == 4) {
-        mAutoPannerFx.setMix(1.0f); // Always Wet Internal
-        mFxMixLevels[12] = value;   // Global Return Level
+        mFxMixLevels[12] = 1.0f; // Force 1.0 for Filter Chain
       }
       break;
     case 3: // Octaver
@@ -1209,21 +1208,41 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       break;
     }
   }
-  // Global Auto-Panner (2100-2104)
-  else if (parameterId >= 2100 && parameterId < 2105) {
-    int subId = parameterId % 10;
-    if (subId == 0)
-      mAutoPannerFx.setPan(value);
-    else if (subId == 1)
-      mAutoPannerFx.setRate(value);
-    else if (subId == 2)
-      mAutoPannerFx.setDepth(value);
-    else if (subId == 3)
-      mAutoPannerFx.setShape(value);
-    else if (subId == 4) {
-      mAutoPannerFx.setMix(1.0f); // Always wet internally
-      mFxMixLevels[12] = value;   // Global Return Level
+  // Multi-Filter Pedals (2100-2114) - Replaces AutoPanner
+  // IDs 2100-2104: Filter 1
+  // IDs 2105-2109: Filter 2
+  // IDs 2110-2114: Filter 3
+  else if (parameterId >= 2100 && parameterId < 2115) {
+    int filterIdx = (parameterId - 2100) / 5;
+    int subId = (parameterId - 2100) % 5;
+    if (filterIdx >= 0 && filterIdx < 3) {
+      if (subId == 0) { // Cutoff
+        mFilterPedalL[filterIdx].setCutoff(value);
+        mFilterPedalR[filterIdx].setCutoff(value);
+      } else if (subId == 1) { // Resonance
+        mFilterPedalL[filterIdx].setResonance(value);
+        mFilterPedalR[filterIdx].setResonance(value);
+      } else if (subId == 2) { // Mode
+        mFilterPedalL[filterIdx].setMode(value);
+        mFilterPedalR[filterIdx].setMode(value);
+      } else if (subId == 3) { // Mix
+        mFilterPedalL[filterIdx].setMix(value);
+        mFilterPedalR[filterIdx].setMix(value);
+        // Only Filter 1 Mix acts as the Global Send Level?
+        // Actually, the Send Knob (Bus 12) controls signal INTO the chain.
+        // The Pedal Mixes control wet/dry of EACH stage.
+        // But for convenience, let's say ID 2103 (Filter 1 Mix) sets the chain
+        // level? No, let's keep Send 12 as input level. The Mix knobs are
+        // per-pedal. We need to ensure Bus 12 Level is tracked. Let's use ID
+        // 2104 (Filter 1 Extra) as global level if needed, or just rely on
+        // Send. For now: local mix.
+      } else if (subId == 4) {
+        // Unused or Extra
+      }
     }
+    // Shared Global Level logic? No, Bus 12 send is enough.
+    // Ensure mFxMixLevels[12] is 1.0 so the Send works as Routing.
+    mFxMixLevels[12] = 1.0f;
   }
 }
 
@@ -1853,6 +1872,10 @@ void AudioEngine::setPlaying(bool playing) {
     mChorusFxR.clear();
     mFlangerFxL.clear();
     mFlangerFxR.clear();
+    for (int i = 0; i < 3; ++i) {
+      mFilterPedalL[i].clear();
+      mFilterPedalR[i].clear();
+    }
     mHpLfoL.reset(mSampleRate);
     mHpLfoR.reset(mSampleRate);
     mLpLfoL.reset(mSampleRate);
@@ -2937,11 +2960,17 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
 
     if (std::abs(fxBusesL[12]) > 0.00001f ||
         std::abs(fxBusesR[12]) > 0.00001f) {
-      float sL = 0, sR = 0;
-      // FIX: Do NOT sync AutoPanner phase to LP LFO. This froze the panner if
-      // LP LFO was idle. mAutoPannerFx.setPhase(mLpLfoL.getPhase());
-      mAutoPannerFx.process(fxBusesL[12], fxBusesR[12], sL, sR, sampleRate);
-      routeFx(12, sL, sR, false); // Wet (Full Signal)
+      // Triple Filter Chain
+      float sL = fxBusesL[12];
+      float sR = fxBusesR[12];
+
+      for (int i = 0; i < 3; ++i) {
+        sL = mFilterPedalL[i].process(sL, sampleRate);
+        sR = mFilterPedalR[i].process(sR, sampleRate);
+      }
+
+      routeFx(12, sL, sR,
+              false); // Wet (Full Signal, since Send 12 was routed dry-kill)
     }
 
     if (std::abs(fxBusesL[13]) > 0.00001f ||

@@ -312,7 +312,8 @@ private:
   BitcrusherFx mBitcrusherFxL, mBitcrusherFxR;
   TapeWobbleFx mTapeWobbleFx; // Stereo Linked!
   FlangerFx mFlangerFxL, mFlangerFxR;
-  AutoPannerFx mAutoPannerFx; // This one is native stereo
+  SimpleFilterFx mFilterPedalL[3]; // 3 Stereo Pairs of Filters
+  SimpleFilterFx mFilterPedalR[3];
   TapeEchoFx mTapeEchoFxL, mTapeEchoFxR;
   OctaverFx mOctaverFxL, mOctaverFxR;
 

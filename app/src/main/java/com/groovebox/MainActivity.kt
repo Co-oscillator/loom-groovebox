@@ -204,7 +204,14 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
             soundFontMapping = newTrack.soundFontMapping ?: emptyMap(),
             lastSamplePath = newTrack.lastSamplePath ?: "",
             activeWavetableName = newTrack.activeWavetableName ?: "Basic",
-            mutatedNotes = newTrack.mutatedNotes ?: emptyMap()
+            mutatedNotes = newTrack.mutatedNotes ?: emptyMap(),
+            arpConfig = if (newTrack.arpConfig.rhythms[0].size < 16) {
+                newTrack.arpConfig.copy(rhythms = listOf(
+                    List(16) { true },
+                    List(16) { false },
+                    List(16) { false }
+                ))
+            } else newTrack.arpConfig
         )
     }
     
@@ -6453,64 +6460,64 @@ fun ArpSettingsSheet(
                          // We display Lane 2 first (Top), so we want label "UP 2".
                          // laneLabels[2] is "UP 2", laneLabels[0] is "ROOT".
                          val laneColors = listOf(Color(0xFF43A047), Color(0xFF1E88E5), Color(0xFF8E24AA)) // Grn, Blu, Purp
-                         
-                         (2 downTo 0).forEach { laneIdx ->
-                             if (laneIdx < 2) {
-                                 Divider(
-                                     modifier = Modifier.padding(horizontal = 40.dp),
-                                     thickness = 1.dp,
-                                     color = Color.Black.copy(alpha = 0.5f)
-                                 )
-                             }
-                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                                                  (2 downTo 0).forEach { laneIdx ->
+                             Row(
+                                 verticalAlignment = Alignment.CenterVertically, 
+                                 modifier = Modifier
+                                     .fillMaxWidth()
+                                     .padding(vertical = 4.dp)
+                             ) {
                                  Text(laneLabels[laneIdx], style = MaterialTheme.typography.labelSmall, color = laneColors[laneIdx], modifier = Modifier.width(40.dp))
                                  
-                                     val lanePattern = config.rhythms[laneIdx]
-                                     Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
-                                         // Force 16 steps display
-                                         val displaySteps = if (lanePattern.size < 16) lanePattern + List(16 - lanePattern.size) { false } else lanePattern
-                                         displaySteps.take(16).forEachIndexed { step, isActive ->
-                                             Box(
-                                                 modifier = Modifier
-                                                     .weight(1f) // Distribute equally
-                                                     .aspectRatio(1f) // Square
-                                                     .padding(1.dp) // Minimal padding
-                                                     .background(
-                                                         if (isActive) laneColors[laneIdx] else Color.DarkGray,
-                                                         RoundedCornerShape(2.dp)
-                                                     )
-                                                     .clickable {
-                                                         val newLane = lanePattern.toMutableList()
-                                                         // Pad if needed to prevents crash
-                                                         while (newLane.size <= step) newLane.add(false)
-                                                         if (step < newLane.size) {
-                                                            newLane[step] = !newLane[step]
-                                                            val newRhythms = config.rhythms.toMutableList()
-                                                            newRhythms[laneIdx] = newLane.take(16) // Ensure size cap
-                                                            
-                                                            val newConfig = config.copy(rhythms = newRhythms)
-                                                            val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
-                                                            onStateChange(state.copy(tracks = newTracks))
-                                                            nativeLib.setArpConfig(
-                                                                state.selectedTrackIndex, 
-                                                                newConfig.mode.ordinal, 
-                                                                newConfig.octaves, 
-                                                                newConfig.inversion, 
-                                                                newConfig.isLatched, 
-                                                                newConfig.isMutated,
-                                                                newRhythms.map { it.toBooleanArray() }.toTypedArray(), 
-                                                                newConfig.randomSequence.toIntArray()
-                                                            )
-                                                         }
+                                 val lanePattern = config.rhythms.getOrElse(laneIdx) { List(16) { false } }
+                                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                     // Force 16 steps display
+                                     val displaySteps = if (lanePattern.size < 16) lanePattern + List(16 - lanePattern.size) { false } else lanePattern
+                                     displaySteps.take(16).forEachIndexed { step, isActive ->
+                                         Box(
+                                             modifier = Modifier
+                                                 .weight(1f) // Distribute equally
+                                                 .aspectRatio(1.2f) // Slightly taller than wide for better touch
+                                                 .background(
+                                                     if (isActive) laneColors[laneIdx] else Color.DarkGray,
+                                                     RoundedCornerShape(2.dp)
+                                                 )
+                                                 .clickable {
+                                                     val newLane = lanePattern.toMutableList()
+                                                     while (newLane.size <= step) newLane.add(false)
+                                                     if (step < newLane.size) {
+                                                        newLane[step] = !newLane[step]
+                                                        val newRhythms = config.rhythms.toMutableList()
+                                                        while(newRhythms.size <= laneIdx) newRhythms.add(List(16) { false })
+                                                        newRhythms[laneIdx] = newLane.take(16)
+                                                        
+                                                        val newConfig = config.copy(rhythms = newRhythms)
+                                                        val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                                        onStateChange(state.copy(tracks = newTracks))
+                                                        nativeLib.setArpConfig(
+                                                            state.selectedTrackIndex, 
+                                                            newConfig.mode.ordinal, 
+                                                            newConfig.octaves, 
+                                                            newConfig.inversion, 
+                                                            newConfig.isLatched, 
+                                                            newConfig.isMutated,
+                                                            newRhythms.map { it.toBooleanArray() }.toTypedArray(), 
+                                                            newConfig.randomSequence.toIntArray()
+                                                        )
                                                      }
-                                             )
-                                         }
+                                                 }
+                                         )
                                      }
+                                 }
                              }
                              if (laneIdx > 0) {
-                                Divider(thickness = 1.dp, color = Color.DarkGray, modifier = Modifier.padding(bottom = 12.dp))
+                                 Divider(
+                                     thickness = 1.dp, 
+                                     color = Color.Black.copy(alpha = 0.5f), 
+                                     modifier = Modifier.padding(vertical = 4.dp)
+                                 )
                              }
-                         }
+                          }
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         

@@ -3306,12 +3306,12 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
             ParameterGroup("Routing & Dynamics", titleSize = 10) {
                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Knob("ALGO", 0.0f, 150, state, onStateChange, nativeLib, knobSize = 32.dp)
+                        Knob("ALGO", 0.0f, 150, state, onStateChange, nativeLib, knobSize = 28.dp)
                     }
-                    Knob("FBK", 0.0f, 154, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("DRIVE", 0.0f, 159, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("BRT", 0.5f, 157, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 32.dp)
+                    Knob("FBK", 0.0f, 154, state, onStateChange, nativeLib, knobSize = 28.dp)
+                    Knob("DRIVE", 0.0f, 159, state, onStateChange, nativeLib, knobSize = 28.dp)
+                    Knob("BRT", 0.5f, 157, state, onStateChange, nativeLib, knobSize = 28.dp)
+                    Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 28.dp)
                 }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -3335,17 +3335,17 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                 Text(when(currentMode) { 0 -> "LP"; 1 -> "HP"; else -> "BP" }, fontSize = 8.sp, color = Color.White)
                             }
                         }
-                        Knob("FILT", 0.5f, 151, state, onStateChange, nativeLib, knobSize = 32.dp)
-                        Knob("RES", 0.0f, 152, state, onStateChange, nativeLib, knobSize = 32.dp)
-                        Knob("DET", 0.0f, 158, state, onStateChange, nativeLib, knobSize = 32.dp)
+                        Knob("FILT", 0.5f, 151, state, onStateChange, nativeLib, knobSize = 28.dp)
+                        Knob("RES", 0.0f, 152, state, onStateChange, nativeLib, knobSize = 28.dp)
+                        Knob("DET", 0.0f, 158, state, onStateChange, nativeLib, knobSize = 28.dp)
                     }
                 }
                 ParameterGroup("Amp Envelope", modifier = Modifier.weight(1f), titleSize = 10) {
                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                         Knob("A", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 32.dp)
-                         Knob("D", 0.1f, 101, state, onStateChange, nativeLib, knobSize = 32.dp)
-                         Knob("S", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 32.dp)
-                         Knob("R", 0.5f, 103, state, onStateChange, nativeLib, knobSize = 32.dp)
+                         Knob("A", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 28.dp)
+                         Knob("D", 0.1f, 101, state, onStateChange, nativeLib, knobSize = 28.dp)
+                         Knob("S", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 28.dp)
+                         Knob("R", 0.5f, 103, state, onStateChange, nativeLib, knobSize = 28.dp)
                      }
                 }
             }
@@ -3591,7 +3591,7 @@ fun SoundFontParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
             },
             isSave = false,
             trackIndex = trackIndex,
-            extensions = listOf("sf2", "sf3", "SF2", "SF3"),
+            extensions = null, // Allow ALL files to debug visibility
             title = "LOAD SOUNDFONT"
         )
     }
@@ -7981,7 +7981,7 @@ fun NativeFileDialog(
     extraOptions: List<Pair<String, String>> = emptyList(),
     onExport: ((Int, String, String) -> Unit)? = null,
     trackIndex: Int = -1,
-    extensions: List<String> = listOf("wav"),
+    extensions: List<String>? = listOf("wav"),
     title: String? = null,
     state: GrooveboxState? = null
 ) {
@@ -7993,7 +7993,7 @@ fun NativeFileDialog(
     
     val files: List<String> = remember(currentDir, refreshKey, currentExtensions) { 
         currentDir.listFiles { file -> 
-            currentExtensions.any { ext -> file.extension.equals(ext, ignoreCase = true) } 
+            currentExtensions?.any { ext -> file.extension.equals(ext, ignoreCase = true) } ?: true
         }?.sortedBy { it.name }?.map { it.name } ?: emptyList()
     }
 
@@ -8035,7 +8035,7 @@ fun NativeFileDialog(
                                     "wavetables" -> listOf("wav", "wt")
                                     "samples", "granular", "recordings" -> listOf("wav")
                                     "sessions" -> listOf("gbx")
-                                    "soundfonts" -> listOf("sf2")
+                                    "soundfonts" -> listOf("sf2", "sf3", "SF2", "SF3")
                                     else -> listOf("wav")
                                 }
                                 refreshKey++ 

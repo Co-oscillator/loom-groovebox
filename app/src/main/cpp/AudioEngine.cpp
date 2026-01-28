@@ -1110,7 +1110,6 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       } else if (subId == 2) {
         mPhaserFxL.setMix(value);
         mPhaserFxR.setMix(value);
-        mFxMixLevels[3] = value;
       } else if (subId == 3) {
         mPhaserFxL.setIntensity(value);
         mPhaserFxR.setIntensity(value);
@@ -1126,7 +1125,6 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       } else if (subId == 3) {
       } else if (subId == 3) {
         mTapeWobbleFx.setMix(value);
-        mFxMixLevels[4] = value;
       }
       break;
     case 7: // Slicer
@@ -1231,7 +1229,6 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       } else if (subId == 2) {
         mFlangerFxL.setMix(value);
         mFlangerFxR.setMix(value);
-        mFxMixLevels[11] = value;
       } else if (subId == 3) {
         mFlangerFxL.setFeedback(value);
         mFlangerFxR.setFeedback(value);
@@ -1251,7 +1248,6 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       } else if (subId == 2) {
         mTapeEchoFxL.setMix(value);
         mTapeEchoFxR.setMix(value);
-        mFxMixLevels[13] = value;
       } else if (subId == 3) {
         mTapeEchoFxL.setDrive(value);
         mTapeEchoFxR.setDrive(value);
@@ -1271,7 +1267,6 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       if (subId == 0) {
         mOctaverFxL.setMix(value);
         mOctaverFxR.setMix(value);
-        mFxMixLevels[14] = value;
       } else if (subId == 1) {
         mOctaverFxL.setMode(value);
         mOctaverFxR.setMode(value);
@@ -1306,7 +1301,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       } else if (subId == 3) {                 // Global Mix
         mFilterPedalL[filterIdx].setMix(1.0f); // Always wet internally
         mFilterPedalR[filterIdx].setMix(1.0f);
-        mFxMixLevels[bus] = value;
+        // mFxMixLevels[bus] = value; // REMOVED: Caused silence when mix=0
       }
     }
   }

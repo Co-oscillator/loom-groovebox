@@ -34,54 +34,37 @@ public:
 
   // Process mono sample
   float process(float input, float sampleRate) {
-    if (mMix <= 0.001f)
+    if (mMix <= 0.001f || sampleRate <= 0.0f)
       return input;
 
     // Smooth parameters
     mCutoff += 0.002f * (mTargetCutoff - mCutoff);
     mResonance += 0.002f * (mTargetResonance - mResonance);
 
-    // SVF Algorithm (Chamberlin / State Variable)
-    // Stability limit: f < sampleRate / 6
-    float f = std::clamp(mCutoff, 20.0f, sampleRate / 6.0f);
-
-    // Pre-warp factor mostly relevant near Nyquist, simplified here:
-    // f = 2 * sin(PI * freq / sampleRate) for better tuning match
-    float g = 2.0f * std::sin((float)M_PI * f / sampleRate);
+    float f_clipped = std::clamp(mCutoff, 20.0f, sampleRate / 6.0f);
+    float g = std::tan((float)M_PI * f_clipped / sampleRate);
     float q = 1.0f / mResonance;
+    float d = 1.0f / (1.0f + g * (g + q));
 
-    // 2x Oversampling loop? No, simple single sample step for efficiency
-    // Use standard SVF form:
-    // low = low + f * band
-    // high = input - low - q*band
-    // band = band + f * high
-
-    float low, high, band, notch;
-
-    // We run the filter structure:
-    mLow = mLow + g * mBand;
-    mHigh = input - mLow - q * mBand;
-    mBand = mBand + g * mHigh;
-
-    // Extra stability check (if things blow up)
-    if (!std::isfinite(mLow))
-      mLow = 0.0f;
-    if (!std::isfinite(mBand))
-      mBand = 0.0f;
+    float hp = (input - (q + g) * mState1 - mState2) * d;
+    float bp = g * hp + mState1;
+    mState1 = g * hp + bp;
+    float lp = g * bp + mState2;
+    mState2 = g * bp + lp;
 
     float wet = 0.0f;
     switch (mMode) {
     case LP:
-      wet = mLow;
+      wet = lp;
       break;
     case HP:
-      wet = mHigh;
+      wet = hp;
       break;
     case BP:
-      wet = mBand;
+      wet = bp;
       break;
     default:
-      wet = mLow;
+      wet = lp;
       break;
     }
 
@@ -89,9 +72,8 @@ public:
   }
 
   void clear() {
-    mLow = 0.0f;
-    mBand = 0.0f;
-    mHigh = 0.0f;
+    mState1 = 0.0f;
+    mState2 = 0.0f;
   }
 
 private:
@@ -102,10 +84,9 @@ private:
   float mMix = 0.0f;
   Mode mMode = LP;
 
-  // Filter State
-  float mLow = 0.0f;
-  float mBand = 0.0f;
-  float mHigh = 0.0f;
+  // Filter State (TPT form)
+  float mState1 = 0.0f;
+  float mState2 = 0.0f;
 };
 
 #endif // SIMPLE_FILTER_FX_H

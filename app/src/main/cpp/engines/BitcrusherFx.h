@@ -6,7 +6,9 @@
 class BitcrusherFx {
 public:
   void setBits(float v) {
-    mBits = 1.0f + v * 15.0f; // 1 to 16 bits
+    // 0.0 -> 16 bits (transparency)
+    // 1.0 -> 1 bit (max crush)
+    mBits = 16.0f - (v * 15.0f);
   }
   void setDownsample(float v) {
     mDownsample = 1 + (int)(v * 31.0f); // 1x to 32x downsampling

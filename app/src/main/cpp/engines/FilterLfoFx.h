@@ -16,6 +16,7 @@ public:
   void setDepth(float v) { mDepth = v; }
   void setShape(float v) { mShape = v; }
   void setCutoff(float v) { mCutoff = v; }
+  void setMode(int mode) { mMode = static_cast<FilterLfoMode>(mode); }
   void setResonance(float v) { mResonance = v; }
 
   void syncFrom(const FilterLfoFx &other) {
@@ -73,19 +74,20 @@ public:
         break;
       }
 
-      float mod = lfoValue * mDepth;
-      float currentCutoff = mCutoff + mod;
-      currentCutoff = std::max(0.001f, std::min(0.999f, currentCutoff));
-
-      mSmoothedCutoff += 0.04f * (currentCutoff - mSmoothedCutoff);
-      mSmoothedRes += 0.04f * (mResonance - mSmoothedRes);
-
-      float targetFreq = 10.0f * powf(2000.0f, mSmoothedCutoff);
-      targetFreq = std::min(targetFreq, sampleRate * 0.45f);
-
-      mSvf.setParams(targetFreq, std::max(0.1f, mSmoothedRes * 4.0f),
-                     sampleRate);
+      mTargetMod = lfoValue * mDepth;
     }
+
+    // Per-sample smoothing and filter update
+    float currentCutoff = mCutoff + mTargetMod;
+    currentCutoff = std::max(0.001f, std::min(0.999f, currentCutoff));
+
+    mSmoothedCutoff += 0.01f * (currentCutoff - mSmoothedCutoff);
+    mSmoothedRes += 0.01f * (mResonance - mSmoothedRes);
+
+    float targetFreq = 10.0f * powf(2000.0f, mSmoothedCutoff);
+    targetFreq = std::min(targetFreq, sampleRate * 0.45f);
+
+    mSvf.setParams(targetFreq, std::max(0.1f, mSmoothedRes * 4.0f), sampleRate);
 
     TSvf::Type type =
         (mMode == FilterLfoMode::LowPass) ? TSvf::LowPass : TSvf::HighPass;
@@ -115,6 +117,7 @@ private:
   TSvf mSvf;
   float mSmoothedCutoff = 0.5f;
   float mSmoothedRes = 0.0f;
+  float mTargetMod = 0.0f;
   uint32_t mControlCounter = 0;
 };
 

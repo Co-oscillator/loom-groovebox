@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
@@ -42,11 +44,19 @@ fun RoutingScreen(
     onStateChange: (GrooveboxState) -> Unit,
     nativeLib: NativeLib
 ) {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp
+    val screenHeight = configuration.screenHeightDp
+    val screenRatio = screenWidth.toFloat() / screenHeight.toFloat()
+    
+    val isTablet = minOf(screenWidth, screenHeight) >= 600
+    val isPhoneLandscape = screenRatio > 1.4f && screenHeight < 600
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Section 1: Modulation Bank (6 LFOs)
         Text("MODULATION BANK (6 LFOs)", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Row(
-            modifier = Modifier.fillMaxWidth().height(160.dp),
+            modifier = Modifier.fillMaxWidth().height(if (isPhoneLandscape) 140.dp else 180.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             (0 until 6).forEach { index ->
@@ -90,66 +100,28 @@ fun RoutingScreen(
         
         // Section 2: Patch Bay (Macros)
         Text("PATCH BAY (MACROS)", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        // Grid Layout: 2 Columns of 3
-        Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            // Row 1: 0, 1
-            Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-               listOf(0, 1).forEach { idx ->
-                   Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                       MacroUnit(
-                           index = idx,
-                           macroState = state.macros[idx],
-                           grooveboxState = state,
-                           onUpdate = { newState ->
-                               val newMacros = state.macros.toMutableList()
-                               newMacros[idx] = newState
-                               onStateChange(state.copy(macros = newMacros))
-                               nativeLib.setMacroSource(idx, newState.sourceType, newState.sourceIndex)
-                           },
-                           onStateChange = onStateChange
-                       )
-                   }
-               }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            // Row 2: 2, 3
-            Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-               listOf(2, 3).forEach { idx ->
-                   Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                       MacroUnit(
-                           index = idx,
-                           macroState = state.macros[idx],
-                           grooveboxState = state,
-                           onUpdate = { newState ->
-                               val newMacros = state.macros.toMutableList()
-                               newMacros[idx] = newState
-                               onStateChange(state.copy(macros = newMacros))
-                               nativeLib.setMacroSource(idx, newState.sourceType, newState.sourceIndex)
-                           },
-                           onStateChange = onStateChange
-                       )
-                   }
-               }
-            }
-             Spacer(modifier = Modifier.height(4.dp))
-            // Row 3: 4, 5
-            Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-               listOf(4, 5).forEach { idx ->
-                   Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                       MacroUnit(
-                           index = idx,
-                           macroState = state.macros[idx],
-                           grooveboxState = state,
-                           onUpdate = { newState ->
-                               val newMacros = state.macros.toMutableList()
-                               newMacros[idx] = newState
-                               onStateChange(state.copy(macros = newMacros))
-                               nativeLib.setMacroSource(idx, newState.sourceType, newState.sourceIndex)
-                           },
-                           onStateChange = onStateChange
-                       )
-                   }
-               }
+        
+        // Adaptive Grid: 3 columns on tablet, 2 on phone landscape, 1 on phone portrait
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(if (isTablet) 2 else if (isPhoneLandscape) 2 else 1),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(state.macros) { idx, macro ->
+                MacroUnit(
+                    index = idx,
+                    macroState = macro,
+                    grooveboxState = state,
+                    onUpdate = { newState ->
+                        val newMacros = state.macros.toMutableList()
+                        newMacros[idx] = newState
+                        onStateChange(state.copy(macros = newMacros))
+                        nativeLib.setMacroSource(idx, newState.sourceType, newState.sourceIndex)
+                    },
+                    onStateChange = onStateChange,
+                    isTablet = isTablet
+                )
             }
         }
 
@@ -168,7 +140,6 @@ fun LfoModule(
     isLearning: Boolean,
     onUpdate: (LfoState) -> Unit,
     onToggleLearn: () -> Unit,
-    // Pass main state for Knobs
     appState: GrooveboxState,
     onStateChange: (GrooveboxState) -> Unit,
     nativeLib: NativeLib
@@ -178,105 +149,105 @@ fun LfoModule(
         border = if (isLearning) BorderStroke(2.dp, Color.Yellow) else null,
         modifier = Modifier.fillMaxWidth().fillMaxHeight()
     ) {
-        Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            // Header
+        Column(modifier = Modifier.padding(2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("LFO ${index + 1}", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("LFO ${index + 1}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                 
-                // Target Display / Learn Button
                 Button(
                     onClick = onToggleLearn,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isLearning) Color.Yellow else Color.DarkGray
                     ),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    modifier = Modifier.height(24.dp)
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    modifier = Modifier.height(18.dp)
                 ) {
                     Text(
-                        if (isLearning) "TAP TARGET..." else lfoState.targetLabel.take(12),
-                        fontSize = 10.sp,
+                        if (isLearning) "TAP..." else lfoState.targetLabel.take(8),
+                        fontSize = 8.sp,
                         color = if (isLearning) Color.Black else Color.Cyan
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            // Row 1
             
-            // Knobs Row 1
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                GlobalKnob("RATE", lfoState.rate, 2300 + index*10 + 0, appState, onStateChange, nativeLib, 
-                    onValueChangeOverride = { onUpdate(lfoState.copy(rate = it)) })
-                GlobalKnob("DPTH", lfoState.depth, 2301 + index*10 + 1, appState, onStateChange, nativeLib, 
-                    onValueChangeOverride = { onUpdate(lfoState.copy(depth = it)) })
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Box(modifier = Modifier.weight(1f)) {
+                    GlobalKnob("RATE", lfoState.rate, 2300 + index*10 + 0, appState, onStateChange, nativeLib, 
+                        onValueChangeOverride = { v -> onUpdate(lfoState.copy(rate = v)) }, knobSize = 32.dp)
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    GlobalKnob("DPTH", lfoState.depth, 2301 + index*10 + 1, appState, onStateChange, nativeLib, 
+                        onValueChangeOverride = { v -> onUpdate(lfoState.copy(depth = v)) }, knobSize = 32.dp)
+                }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Knobs Row 2
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                // Shape Knob (Stepped)
-                GlobalKnob("SHAPE", lfoState.shape / 4.0f, 2302 + index*10 + 2, appState, onStateChange, nativeLib, 
-                    onValueChangeOverride = { 
-                        val shapeIdx = (it * 4).toInt().coerceIn(0, 4)
-                        onUpdate(lfoState.copy(shape = shapeIdx)) 
-                    },
-                    valueFormatter = { 
-                        listOf("SIN", "TRI", "SQR", "SAW", "RND")[(it * 4.4).toInt().coerceIn(0, 4)]
-                    }
-                )
-                
-                // Intensity (Amount)
-                GlobalKnob("AMT", lfoState.intensity, 2303 + index*10 + 3, appState, onStateChange, nativeLib, 
-                    onValueChangeOverride = { onUpdate(lfoState.copy(intensity = it)) })
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Box(modifier = Modifier.weight(1f)) {
+                    GlobalKnob("SHAPE", lfoState.shape / 4.0f, 2302 + index*10 + 2, appState, onStateChange, nativeLib, 
+                        onValueChangeOverride = { v ->
+                            val shapeIdx = (v * 4).toInt().coerceIn(0, 4)
+                            onUpdate(lfoState.copy(shape = shapeIdx)) 
+                        },
+                        valueFormatter = { v ->
+                            listOf("SIN", "TRI", "SQR", "SAW", "RND")[(v * 4.4).toInt().coerceIn(0, 4)]
+                        }, knobSize = 32.dp
+                    )
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    GlobalKnob("AMT", lfoState.intensity, 2303 + index*10 + 3, appState, onStateChange, nativeLib, 
+                        onValueChangeOverride = { v -> onUpdate(lfoState.copy(intensity = v)) }, knobSize = 32.dp)
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MacroUnit(
     index: Int,
     macroState: MacroState,
     grooveboxState: GrooveboxState,
     onUpdate: (MacroState) -> Unit,
-    onStateChange: (GrooveboxState) -> Unit
+    onStateChange: (GrooveboxState) -> Unit,
+    isTablet: Boolean
 ) {
+    val containerColor = Color(0xFF2A2A2A)
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A)),
-        modifier = Modifier.fillMaxWidth().fillMaxHeight()
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        modifier = Modifier.fillMaxWidth().height(if (isTablet) 140.dp else 72.dp)
     ) {
+        val spacing = if (isTablet) 16.dp else 8.dp
         Row(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(spacing)
         ) {
-            // 1. Controller Circle (Left)
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(end = 8.dp)
-            ) {
+            // 1. Controller Block (Source) - Purple Button
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 var showSourceMenu by remember { mutableStateOf(false) }
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFBB86FC))
-                        .clickable { showSourceMenu = true },
-                    contentAlignment = Alignment.Center
+                Button(
+                    onClick = { showSourceMenu = true },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBB86FC)),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    modifier = Modifier.size(width = 60.dp, height = if (isTablet) 36.dp else 40.dp)
                 ) {
                     Text(
                         macroState.sourceLabel.ifEmpty { "SRC" }, 
-                        fontSize = 9.sp, 
-                        textAlign = TextAlign.Center, 
+                        fontSize = if (isTablet) 10.sp else 11.sp, 
                         color = Color.Black,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(2.dp)
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
                     )
-                     DropdownMenu(expanded = showSourceMenu, onDismissRequest = { showSourceMenu = false }) {
+                    DropdownMenu(expanded = showSourceMenu, onDismissRequest = { showSourceMenu = false }) {
                         val options = listOf("None") + 
                                       (1..4).map { "Strip $it" } + 
                                       (1..4).map { "Knob $it" } + 
@@ -299,74 +270,131 @@ fun MacroUnit(
                         }
                     }
                 }
-                Text("CTRL", fontSize = 8.sp, color = Color.Gray)
+                Text("CTRL ${index + 1}", fontSize = 8.sp, color = Color.Gray)
             }
 
-            // 2. Middle: Arrows pointing Right
-             Column(
-                verticalArrangement = Arrangement.SpaceAround,
-                modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = 4.dp)
-            ) {
-                 macroState.targets.forEachIndexed { tIdx, target ->
-                     Box(
-                         modifier = Modifier
-                             .fillMaxWidth()
-                             .height(24.dp)
-                             .clickable { 
-                                  // Toggle Inversion logic
-                                  val newTargets = macroState.targets.toMutableList()
-                                  newTargets[tIdx] = newTargets[tIdx].copy(isInverted = !target.isInverted)
-                                  onUpdate(macroState.copy(targets = newTargets))
-                             },
-                         contentAlignment = Alignment.Center
-                     ) {
-                         // Line
-                         Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(if(target.enabled) Color.Cyan else Color.Gray))
-                         // Arrow Head
-                         Icon(
-                             Icons.Default.ArrowForward, 
-                             contentDescription = "Flow", 
-                             tint = if (target.isInverted) Color.Red else (if(target.enabled) Color.Cyan else Color.Gray),
-                             modifier = Modifier.align(Alignment.CenterEnd).size(16.dp).rotate(if (target.isInverted) 180f else 0f)
-                         )
-                     }
-                 }
-            }
+            if (isTablet) {
+                // TABLET SPECIFIC: Column of 3 arrows, Column of 3 targets
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    macroState.targets.forEachIndexed { tIdx, target ->
+                        IconButton(
+                            onClick = {
+                                val newTargets = macroState.targets.toMutableList()
+                                newTargets[tIdx] = target.copy(isInverted = !target.isInverted)
+                                onUpdate(macroState.copy(targets = newTargets))
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = "Polarity",
+                                tint = if (target.targetId == -1) Color.DarkGray else if (target.isInverted) Color.Red else Color.Cyan,
+                                modifier = Modifier.rotate(if (target.isInverted) 180f else 0f)
+                            )
+                        }
+                    }
+                }
 
-            // 3. Right: Vertical Target Stack
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.width(100.dp) // Fixed width for lozenges
-            ) {
-                macroState.targets.forEachIndexed { tIdx, target ->
-                    val isLeaningThis = grooveboxState.macroLearnActive && grooveboxState.macroLearnMacroIndex == index && grooveboxState.macroLearnTargetIndex == tIdx
-                    Button(
-                        onClick = {
-                             // Toggle Learn Mode
-                             if (grooveboxState.macroLearnActive && isLeaningThis) {
-                                  onStateChange(grooveboxState.copy(macroLearnActive = false, macroLearnMacroIndex = -1, macroLearnTargetIndex = -1))
-                             } else {
-                                  onStateChange(grooveboxState.copy(macroLearnActive = true, macroLearnMacroIndex = index, macroLearnTargetIndex = tIdx))
-                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isLeaningThis) Color.Yellow else Color.DarkGray
-                        ),
-                        shape = RoundedCornerShape(50), // Lozenge
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        modifier = Modifier.fillMaxWidth().height(28.dp)
-                    ) {
-                         Text(
-                            if (isLeaningThis) "TAP..." else target.targetLabel.take(10),
-                            fontSize = 10.sp,
-                            color = if (isLeaningThis) Color.Black else Color.White,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    macroState.targets.forEachIndexed { tIdx, target ->
+                        val isLearning = grooveboxState.macroLearnActive && grooveboxState.macroLearnMacroIndex == index && grooveboxState.macroLearnTargetIndex == tIdx
+                        val engineColor = if (target.targetId != -1) {
+                             // Extract engine color from target info if possible, or use a default
+                             // Since we don't have the engine info easily here, we just use a heuristic or the user's request:
+                             // "Red for FM drum, gold for sampler, etc"
+                             // We'll use getEngineColor helper if available in scope
+                             getEngineColorForTarget(target.targetId)
+                        } else Color.Gray
+
+                        Button(
+                            onClick = {
+                                if (isLearning) {
+                                    onStateChange(grooveboxState.copy(macroLearnActive = false, macroLearnMacroIndex = -1, macroLearnTargetIndex = -1))
+                                } else if (target.targetId != -1) {
+                                    val newTargets = macroState.targets.toMutableList()
+                                    newTargets[tIdx] = target.copy(targetId = -1, targetLabel = "None", enabled = false)
+                                    onUpdate(macroState.copy(targets = newTargets))
+                                } else {
+                                    onStateChange(grooveboxState.copy(macroLearnActive = true, macroLearnMacroIndex = index, macroLearnTargetIndex = tIdx))
+                                }
+                            },
+                            shape = RoundedCornerShape(4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (isLearning) Color.Yellow else engineColor),
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            modifier = Modifier.fillMaxWidth().height(24.dp)
+                        ) {
+                            Text(
+                                if (isLearning) "TAP..." else target.targetLabel.take(8),
+                                fontSize = 10.sp,
+                                color = if (isLearning) Color.Black else Color.White,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            } else {
+                // PHONE: Flat Row of Targets
+                Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.Gray.copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
+                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    macroState.targets.forEachIndexed { tIdx, target ->
+                        val isLearning = grooveboxState.macroLearnActive && grooveboxState.macroLearnMacroIndex == index && grooveboxState.macroLearnTargetIndex == tIdx
+                        Box(
+                            modifier = Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(4.dp))
+                                .background(if (isLearning) Color.Yellow else Color.DarkGray)
+                                .border(if (target.targetId != -1) 1.dp else 0.dp, if (target.isInverted) Color.Red else Color.Cyan, RoundedCornerShape(4.dp))
+                                .combinedClickable(
+                                    onClick = {
+                                        if (isLearning) onStateChange(grooveboxState.copy(macroLearnActive = false))
+                                        else if (target.targetId != -1) {
+                                            val newTargets = macroState.targets.toMutableList()
+                                            newTargets[tIdx] = target.copy(targetId = -1, targetLabel = "None", enabled = false)
+                                            onUpdate(macroState.copy(targets = newTargets))
+                                        } else onStateChange(grooveboxState.copy(macroLearnActive = true, macroLearnMacroIndex = index, macroLearnTargetIndex = tIdx))
+                                    },
+                                    onLongClick = {
+                                        val newTargets = macroState.targets.toMutableList()
+                                        newTargets[tIdx] = target.copy(isInverted = !target.isInverted)
+                                        onUpdate(macroState.copy(targets = newTargets))
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (target.targetId != -1) {
+                                    Icon(
+                                        Icons.Default.ArrowForward,
+                                        contentDescription = null,
+                                        tint = if (target.isInverted) Color.Red else Color.Cyan,
+                                        modifier = Modifier.size(10.dp).rotate(if (target.isInverted) 180f else 0f)
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                }
+                                Text(if (isLearning) "TAP..." else target.targetLabel.take(6), fontSize = 9.sp, color = if (isLearning) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+// Helper to resolve engine color for a target parameter
+fun getEngineColorForTarget(targetId: Int): Color {
+    return when {
+         targetId in 0..99 -> Color.White // Generic / Standard (Vol, Pan, Sends)
+         targetId in 100..199 -> Color(0xFFE91E63) // Subtractive (Pink)
+         targetId in 200..299 -> Color(0xFFF44336) // FM Drum (Red)
+         targetId in 300..399 -> Color(0xFFFFC107) // Sampler (Gold)
+         targetId in 400..499 -> Color(0xFFFF9800) // Granular (Orange) - Note: check real ranges
+         targetId in 1700..1799 -> Color(0xFFFF9800) // Granular (Real range?)
+         targetId in 1800..1899 -> Color(0xFF4CAF50) // Wavetable (Green)
+         targetId in 4000..4999 -> Color(0xFF2196F3) // Analog Drum (Blue)
+         targetId in 500..599 -> Color(0xFF00BCD4) // Global FX (Teal/Cyan)
+         else -> Color.Gray
     }
 }
 
@@ -375,7 +403,8 @@ fun FxChainEditor(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
     val fxNames = listOf(
         0 to "Overdrive", 1 to "Bitcrush", 2 to "Chorus", 3 to "Phaser", 4 to "Wobble",
         5 to "Delay", 6 to "Reverb", 7 to "Slicer", 8 to "Compressor",
-        9 to "HP LFO", 10 to "LP LFO", 11 to "Flanger", 12 to "Auto-Pan", 13 to "TapeEcho", 14 to "Octaver"
+        9 to "HP LFO", 10 to "LP LFO", 11 to "Flanger", 12 to "Filter 1", 13 to "TapeEcho", 14 to "Octaver",
+        15 to "Filter 2", 16 to "Filter 3"
     )
 
     // Serial Chain: Slot 0 -> Slot 1 -> Slot 2 -> Slot 3 -> Slot 4
@@ -408,9 +437,11 @@ fun FxChainEditor(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 9 -> Color(0xFF00BFFF) // HP LFO (Deep Sky Blue)
                 10 -> Color(0xFFFF4500) // LP LFO (Orange Red)
                 11 -> Color(0xFF9C27B0) // Flanger (Purple)
-                12 -> Color(0xFF009688) // Auto-Pan (Teal)
+                12 -> Color(0xFF009688) // Filter 1 (Teal)
                 13 -> Color(0xFFB8860B) // TapeEcho (Dark Goldenrod)
                 14 -> Color(0xFF3F51B5) // Octaver (Indigo)
+                15 -> Color(0xFFE91E63) // Filter 2
+                16 -> Color(0xFFE91E63) // Filter 3
                 else -> Color.White
             }
             
@@ -482,8 +513,8 @@ fun updateNativeFxChain(nativeLib: NativeLib, slots: List<Int>) {
     // setFxChain(B, C)
     // setFxChain(C, -1)
     
-    // First, clear all existing mappings (reset all 15 FX to -1)
-    for (i in 0 until 15) {
+    // First, clear all existing mappings (reset all 17 FX to -1)
+    for (i in 0 until 17) {
         nativeLib.setFxChain(i, -1)
     }
     

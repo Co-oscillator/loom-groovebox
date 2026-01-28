@@ -28,6 +28,7 @@
 #include "engines/OverdriveFx.h"
 #include "engines/PhaserFx.h"
 #include "engines/SamplerEngine.h"
+#include "engines/SimpleFilterFx.h"
 #include "engines/SlicerFx.h"
 #include "engines/SoundFontEngine.h"
 #include "engines/SubtractiveEngine.h"
@@ -223,8 +224,9 @@ private:
     Sequencer drumSequencers[16];
     Arpeggiator arpeggiator;
     EnvelopeFollower follower;
-    float fxSends[15] = {0.0f}; // Increased to 15 for new FX
-    float smoothedFxSends[15] = {0.0f};
+    float fxSends[17] = {0.0f}; // Increased to 17 for separate Filter pedals
+    float smoothedFxSends[17] = {0.0f};
+    float fxMix[17] = {0.0f};
 
     bool isActive = false;
     float currentFrequency = 440.0f;
@@ -335,10 +337,10 @@ public:
 
   // FX Chaining (Soft Routing)
   // Maps SourceFX Index -> DestinationFX Index. -1 means Master Mix.
-  int mFxChainDest[15];
+  int mFxChainDest[17];
   // Feedback buffers for backward-chaining effects (1-sample latency)
-  float mFxFeedbacksL[15] = {0.0f};
-  float mFxFeedbacksR[15] = {0.0f};
+  float mFxFeedbacksL[17] = {0.0f};
+  float mFxFeedbacksR[17] = {0.0f};
 
   // FX Split Filter LFO Effects (Slots 9/10)
   FilterLfoFx mHpLfoL{FilterLfoMode::HighPass};
@@ -349,9 +351,9 @@ public:
   int mSidechainSourceTrack = -1;
   int mSidechainSourceDrumIdx = -1;
   float mMasterVolume = 0.8f;
-  float mFxMixLevels[15] = {
-      1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-      1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0
+  float mFxMixLevels[17] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                            1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                            1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0
   float mInputRingBuffer[8192] = {0.0f};
   std::atomic<uint32_t> mInputWritePtr{0};
   uint32_t mInputReadPtr = 0;

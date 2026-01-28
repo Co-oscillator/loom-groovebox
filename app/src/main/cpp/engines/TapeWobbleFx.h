@@ -103,7 +103,6 @@ private:
   float mMix = 0.5f;
   float mSmoothedDelay = 10.0f;
   float mRandomOffset = 0.0f;
-  float mRandomOffset = 0.0f;
   std::mt19937 mRandEngine;
   std::uniform_real_distribution<float> mDist;
 };

@@ -13,11 +13,11 @@ enum class ArpMode {
   UP_DOWN = 3,
   STAGGER_UP = 4,
   STAGGER_DOWN = 5,
-  STAGGER_DOWN = 5,
   RANDOM = 6,
   BACH = 7,
   BROWNIAN = 8,
-  CONVERGE = 9
+  CONVERGE = 9,
+  DIVERGE = 10
 };
 
 class Arpeggiator {
@@ -315,6 +315,21 @@ private:
       for (int i = 0; i < size; ++i) {
         int offset = i / 2;
         int idx = (i % 2 == 0) ? offset : (size - 1 - offset);
+        if (idx >= 0 && idx < size) {
+          mSequence.push_back(expanded[idx]);
+        }
+      }
+      break;
+    }
+    case ArpMode::DIVERGE: {
+      // Inner -> Outer
+      if (expanded.empty())
+        break;
+      int size = expanded.size();
+      int center = size / 2;
+      for (int i = 0; i < size; ++i) {
+        int offset = (i + 1) / 2;
+        int idx = center + (offset * ((i % 2 == 1) ? -1 : 1));
         if (idx >= 0 && idx < size) {
           mSequence.push_back(expanded[idx]);
         }

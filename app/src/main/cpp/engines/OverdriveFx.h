@@ -45,9 +45,8 @@ public:
     float lpAlpha = 0.05f + mTone * 0.6f;
     mLastOutput += lpAlpha * (mixed - mLastOutput);
 
-    // Output Level + Slight Boost
-    float out = mLastOutput * mLevel * 1.2f *
-                mMix; // Internal Mix ignored effectively if we want pure insert
+    // Output Level + Strong Boost for volume parity
+    float out = mLastOutput * mLevel * 2.8f * mMix;
     // RETURNS (WET - INPUT) for Insert Behavior in Parallel Chain
     return std::tanh(out) - input;
   }

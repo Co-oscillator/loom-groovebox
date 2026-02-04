@@ -14,10 +14,10 @@ public:
   }
 
   float process(float input, float sampleRate) {
-    if (mMix <= 0.001f)
-      return 0.0f;
     if (!std::isfinite(input))
       input = 0.0f;
+    if (mMix <= 0.001f)
+      return input;
 
     // Write to circular buffer
     mBuffer[mWritePos] = input;
@@ -121,7 +121,10 @@ public:
     if (mWritePos >= mBuffer.size())
       mWritePos = 0;
 
-    return std::tanh(wet) * mMix;
+    float out = std::tanh(wet);
+    if (!std::isfinite(out))
+      out = 0.0f;
+    return input * (1.0f - mMix) + out * mMix;
   }
 
   void setParameters(float mix, float detune, float unison, float mode) {

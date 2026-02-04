@@ -348,10 +348,47 @@ Java_com_groovebox_NativeLib_getWaveform(JNIEnv *env, jobject thiz,
   return env->NewFloatArray(0);
 }
 
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_groovebox_NativeLib_getFxSends(JNIEnv *env, jobject thiz,
+                                        jint track_index) {
+  if (engine) {
+    float buffer[17];
+    engine->getFxSends(track_index, buffer);
+    jfloatArray result = env->NewFloatArray(17);
+    env->SetFloatArrayRegion(result, 0, 17, buffer);
+    return result;
+  }
+  return env->NewFloatArray(0);
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL Java_com_groovebox_NativeLib_getFxMix(
+    JNIEnv *env, jobject thiz, jint track_index) {
+  if (engine) {
+    float buffer[17];
+    engine->getFxMix(track_index, buffer);
+    jfloatArray result = env->NewFloatArray(17);
+    env->SetFloatArrayRegion(result, 0, 17, buffer);
+    return result;
+  }
+  return env->NewFloatArray(0);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setSlices(
     JNIEnv *env, jobject thiz, jint track_index, jintArray starts,
     jintArray ends) {
-  // TODO: Implement internal slice mapping if needed by passing to engine
+  if (engine) {
+    jint *pStarts = env->GetIntArrayElements(starts, nullptr);
+    jint *pEnds = env->GetIntArrayElements(ends, nullptr);
+    jsize len = env->GetArrayLength(starts);
+
+    std::vector<int> vStarts(pStarts, pStarts + len);
+    std::vector<int> vEnds(pEnds, pEnds + len);
+
+    engine->setSlices(track_index, vStarts, vEnds);
+
+    env->ReleaseIntArrayElements(starts, pStarts, JNI_ABORT);
+    env->ReleaseIntArrayElements(ends, pEnds, JNI_ABORT);
+  }
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_trimSample(

@@ -16,26 +16,20 @@ object PersistenceManager {
     private const val LOOM_ROOT = "Loom"
 
     fun getLoomFolder(context: Context): File {
-        try {
-            // Priority 1: SD Card Root (visible to user)
-            val root = File(android.os.Environment.getExternalStorageDirectory(), LOOM_ROOT)
-            if (root.exists() || root.mkdirs()) return root
-            
-            // Priority 2: Public Documents (visible to user, more standard)
-            val docs = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), LOOM_ROOT)
-            if (docs.exists() || docs.mkdirs()) return docs
-            
-            // Priority 3: App External Files (visible to user via Android/data)
-            val appExt = context.getExternalFilesDir(null)
-            if (appExt != null) {
-                val loom = File(appExt, LOOM_ROOT)
-                if (loom.exists() || loom.mkdirs()) return loom
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        // Force App-Specific External Storage for reliability & C++ access
+        // Path: /Android/data/com.groovebox/files/Loom/
+        // Accessible via USB, but sandboxed from other apps.
+        val externalFiles = context.getExternalFilesDir(null)
+        val loomDir = File(externalFiles ?: context.filesDir, "Loom")
+        
+        if (!loomDir.exists()) {
+             try {
+                 loomDir.mkdirs()
+             } catch (e: Exception) {
+                 e.printStackTrace()
+             }
         }
-        // Last resort: context.filesDir (Internal, not visible without root)
-        return context.filesDir
+        return loomDir
     }
 
     private fun getProjectsDir(context: Context): File {
@@ -244,7 +238,7 @@ object PersistenceManager {
             val assets = context.assets.list(dirName) ?: return
             for (assetName in assets) {
                 val outFile = File(destDir, assetName)
-                if (!outFile.exists()) {
+                if (!outFile.exists() || outFile.length() < 1024) {
                     context.assets.open("$dirName/$assetName").use { input ->
                         FileOutputStream(outFile).use { output ->
                             input.copyTo(output)

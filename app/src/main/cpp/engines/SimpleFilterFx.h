@@ -34,6 +34,8 @@ public:
 
   // Process mono sample
   float process(float input, float sampleRate) {
+    if (!std::isfinite(input))
+      input = 0.0f;
     if (mMix <= 0.001f || sampleRate <= 0.0f)
       return input;
 
@@ -68,7 +70,10 @@ public:
       break;
     }
 
-    return input * (1.0f - mMix) + wet * mMix;
+    float out = input * (1.0f - mMix) + wet * mMix;
+    if (!std::isfinite(out))
+      out = 0.0f;
+    return out;
   }
 
   void clear() {

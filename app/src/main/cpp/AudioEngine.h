@@ -127,6 +127,8 @@ public:
   void getStepActiveStates(int trackIndex, bool *out, int maxSize);
   std::vector<Step> getSequencerSteps(int trackIndex);
   std::vector<float> getAllTrackParameters(int trackIndex); // New sync method
+  void getFxSends(int trackIndex, float *dest);
+  void getFxMix(int trackIndex, float *dest);
   std::vector<float> getSamplerSlicePoints(int trackIndex);
   std::vector<float> getRecordedSampleData(int trackIndex,
                                            float targetSampleRate);
@@ -141,6 +143,8 @@ public:
   void setInputDevice(int deviceId);
   void setTrackActive(int trackIndex, bool active);
   void setTrackPan(int trackIndex, float pan);
+  void setSlices(int trackIndex, const std::vector<int> &starts,
+                 const std::vector<int> &ends);
 
   // Audio Export
   void renderToWav(int numCycles, const std::string &path);
@@ -169,24 +173,52 @@ public:
   int fetchMidiEvents(int *outBuffer, int maxEvents);
 
 private:
+  void updateGlobalParameter(int parameterId, float value);
   void enqueueMidiEvent(int type, int channel, int data1, int data2);
   std::vector<MidiMessage> mMidiQueue;
   std::mutex mMidiLock;
 
   // Command Queue for Race-Free UI->Audio Communication
   struct AudioCommand {
-    enum Type { NOTE_ON, NOTE_OFF, PARAM_SET, GLOBAL_PARAM_SET };
+    enum Type {
+      NOTE_ON,
+      NOTE_OFF,
+      PARAM_SET,
+      GLOBAL_PARAM_SET,
+      SET_ENGINE_TYPE,
+      SET_TRACK_VOLUME,
+      SET_TRACK_PAN,
+      SET_TRACK_ACTIVE,
+      SET_TEMPO,
+      SET_PATTERN_LENGTH,
+      SET_STEP,
+      SET_ARP_RATE,
+      SET_SWING,
+      SET_SLICES
+    };
     Type type;
     int trackIndex;
-    int data1;     // note, or paramId
-    float value;   // velocity, or paramValue
-    int extraData; // extra
+    int data1;                    // note, or paramId
+    int data2;                    // Second data field (e.g. stepIndex)
+    float value;                  // velocity, or paramValue
+    bool bValue;                  // Boolean value
+    std::vector<int> notes;       // For SET_STEP
+    float velocity;               // For SET_STEP
+    int ratchet;                  // For SET_STEP
+    bool punch;                   // For SET_STEP
+    float probability;            // For SET_STEP
+    float gate;                   // For SET_STEP
+    bool isSkipped;               // For SET_STEP
+    std::vector<int> sliceStarts; // For SET_SLICES
+    std::vector<int> sliceEnds;   // For SET_SLICES
+    int extraData;                // extra
   };
   std::vector<AudioCommand> mCommandQueue;
   std::mutex mCommandLock;
 
   void processCommands();
 
+  std::atomic<bool> mFirstRun{true};
   std::atomic<float> mCpuLoad{0.0f};
   std::shared_ptr<oboe::AudioStream> mStream;
   std::shared_ptr<oboe::AudioStream> mInputStream;
@@ -226,7 +258,9 @@ private:
     EnvelopeFollower follower;
     float fxSends[17] = {0.0f}; // Increased to 17 for separate Filter pedals
     float smoothedFxSends[17] = {0.0f};
-    float fxMix[17] = {0.0f};
+    float fxMix[17] = {
+        1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0f!
 
     bool isActive = false;
     float currentFrequency = 440.0f;
@@ -290,7 +324,7 @@ private:
   int mGlobalStepIndex = 0;
   int mPatternLength = 16;
   float mSwing = 0.0f;
-
+  long mStartupFrames = 10000; // Wait ~200ms at 48k
   double mSampleRate = 44100.0;
   std::recursive_mutex mLock;
   void triggerNoteLocked(int trackIndex, int note, int velocity,

@@ -107,7 +107,10 @@ public:
       mSilentCounter = 0;
     }
 
-    return output;
+    float wet = output;
+    if (!std::isfinite(wet))
+      wet = 0.0f;
+    return input * (1.0f - mSmoothedMix) + wet;
   }
 
   bool isSilent() const { return mSilentCounter >= 48000; }
@@ -120,7 +123,9 @@ public:
     // ... rest of params
   }
 
-  void setDelayTime(float v) { mTime = 0.05f + (v * v) * 1.45f; } // Up to 1.5s
+  void setDelayTime(float v) {
+    mTime = 0.05f + (v * v) * 2.95f;
+  } // Up to 3.0s (0.05 + 2.95)
 
   void setFeedback(float v) {
     mFeedback = v * 0.95f;

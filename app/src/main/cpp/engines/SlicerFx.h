@@ -5,10 +5,11 @@
 
 class SlicerFx {
 public:
-  // Input v is 0.0 - 1.0 from GUI.
-  void setRate1(float v) { mRate1 = 0.02f + (v * v * v) * 16.0f; }
-  void setRate2(float v) { mRate2 = 0.02f + (v * v * v) * 16.0f; }
-  void setRate3(float v) { mRate3 = 0.02f + (v * v * v) * 16.0f; }
+  // Input v is typically the rate multiplier (e.g. 1.0, 2.0, 4.0) passed from
+  // AudioEngine
+  void setRate1(float v) { mRate1 = v; }
+  void setRate2(float v) { mRate2 = v; }
+  void setRate3(float v) { mRate3 = v; }
 
   void setActive1(bool v) { mActive1 = v; }
   void setActive2(bool v) { mActive2 = v; }
@@ -56,10 +57,8 @@ public:
         activeGain *= (1.0f - mDepth);
     }
 
-    // Insert Logic: return (activeGain - 1) * input
-    // If gain is 1, return 0 (Add nothing).
-    // If gain is 0, return -input (Cancel dry).
-    return input * (activeGain - 1.0f);
+    // Standard Amplitude Modulation: return input * gain
+    return input * activeGain;
   }
 
 private:

@@ -98,7 +98,7 @@ public:
       mFilterAmt = value;
       break;
     case 120:
-      mGated = (value > 0.5f);
+      mGated = (value < 0.5f); // 0=Gated (Default), 1=Open
       break;
     case 121:
       mGain = value;
@@ -136,6 +136,16 @@ public:
         v.svf.setParams(1000.0f, 0.7f, 48000.0f); // Default safe point
         return 0.0f;
       }
+    } else {
+      // OPEN MODE:
+      // 1. Bypass Amp Envelope entirely (Unity Gain env)
+      env = 1.0f;
+      // 2. Bypass Filter Envelope modulation (Static Filter)
+      //    User wants input -> Filter -> FX without trigger.
+      //    If we set fEnv = 1.0, the Cutoff is modulated to max (or min if amt
+      //    negative). If we set fEnv = 0.0, the Cutoff is set purely by the
+      //    Cutoff Knob. This matches standard "Gate Open" behavior on synths.
+      fEnv = 0.0f;
     }
 
     float out = fast_tanh(dcBlocked * mGain * env);

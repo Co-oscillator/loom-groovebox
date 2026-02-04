@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <jni.h>
+#include <sys/resource.h>
 
 #if defined(__i386__) || defined(__x86_64__)
 #include <xmmintrin.h>
@@ -72,6 +73,7 @@ AudioEngine::AudioEngine() {
   for (int i = 0; i < 17; ++i) {
     mFxMixLevels[i] = 1.0f;
     mFxChainDest[i] = -1;
+
     mFxFeedbacksL[i] = 0.0f;
     mFxFeedbacksR[i] = 0.0f;
   }
@@ -81,8 +83,13 @@ AudioEngine::AudioEngine() {
     mFilterPedalL[i].clear();
     mFilterPedalR[i].clear();
     mFilterPedalL[i].setMix(1.0f);
+    mFilterPedalR[i].clear();
+    mFilterPedalL[i].setMix(1.0f);
     mFilterPedalR[i].setMix(1.0f);
   }
+  mFxMixLevels[12] = 1.0f; // Filter 1 Bus
+  mFxMixLevels[15] = 1.0f; // Filter 2 Bus
+  mFxMixLevels[16] = 1.0f; // Filter 3 Bus
 
   // Initialize other FX Mixes to 1.0 (Since we use per-track sends/mixes now)
   mChorusFxL.setMix(1.0f);
@@ -121,7 +128,8 @@ void AudioEngine::initTrack(int i) {
   std::fill(std::begin(mTracks[i].fxSends), std::end(mTracks[i].fxSends), 0.0f);
   std::fill(std::begin(mTracks[i].smoothedFxSends),
             std::end(mTracks[i].smoothedFxSends), 0.0f);
-  std::fill(std::begin(mTracks[i].fxMix), std::end(mTracks[i].fxMix), 0.0f);
+  std::fill(std::begin(mTracks[i].fxMix), std::end(mTracks[i].fxMix),
+            1.0f); // Default to Unity!
 
   // Initialize defaults
   mTracks[i].subtractiveEngine.setSustain(1.0f);
@@ -135,10 +143,10 @@ void AudioEngine::initTrack(int i) {
   mTracks[i].analogDrumEngine.resetToDefaults();
 
   // FM Drum Defaults
-  for (int k = 0; k < 4; k++) {
-    mTracks[i].fmDrumEngine.setParameter(k, 0, 0.5f); // Pitch
-    mTracks[i].fmDrumEngine.setParameter(k, 1, 0.5f); // Tone
-    mTracks[i].fmDrumEngine.setParameter(k, 2, 0.4f); // Decay
+  for (int k = 0; k < 8; k++) {
+    mTracks[i].fmDrumEngine.setParameter(k, 0, 0.5f);  // Pitch
+    mTracks[i].fmDrumEngine.setParameter(k, 1, 0.5f);  // Tone
+    mTracks[i].fmDrumEngine.setParameter(k, 2, 0.20f); // Decay (User Default)
   }
 
   // Sync parameters array with audible defaults so UI doesn't zero them out
@@ -217,9 +225,9 @@ void AudioEngine::initTrack(int i) {
     // Initialize 8 drums (Kick, Snare, Tom, HH, OpenHH, Cymbal, Perc, Noise)
     for (int drum = 0; drum < 8; ++drum) {
       int baseId = 200 + (drum * 10);
-      setParameter(i, baseId + 5, 0.7f); // Gain
-      setParameter(i, baseId + 2, 0.4f); // Decay
-      setParameter(i, baseId + 1, 0.5f); // Tone/Feedback
+      setParameter(i, baseId + 5, 0.7f);  // Gain
+      setParameter(i, baseId + 2, 0.20f); // Decay
+      setParameter(i, baseId + 1, 0.5f);  // Tone/Feedback
     }
   } else if (type == 4) { // Wavetable
     mTracks[i].wavetableEngine.resetToDefaults();
@@ -312,11 +320,6 @@ void AudioEngine::setupTracks() {
     mTracks.emplace_back();
     initTrack(i); // FORCE RESTORE PATCH STATE ON STARTUP
   }
-
-  // Explicitly clear all sequencers and set default volumes/pan on setup
-  for (int i = 0; i < 8; ++i) {
-    initTrack(i);
-  }
 }
 
 void AudioEngine::restoreTrackPreset(int trackIndex) {
@@ -363,6 +366,11 @@ bool AudioEngine::start() {
   for (int i = 0; i < 3; ++i) {
     mFilterPedalL[i].clear();
     mFilterPedalR[i].clear();
+    // Force Open State so they aren't silent
+    mFilterPedalL[i].setCutoff(1.0f);
+    mFilterPedalR[i].setCutoff(1.0f);
+    mFilterPedalL[i].setMix(1.0f);
+    mFilterPedalR[i].setMix(1.0f);
   }
 
   // Input stream for recording
@@ -608,38 +616,24 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
 
 // Internal Param Logic
 void AudioEngine::setParameter(int trackIndex, int parameterId, float value) {
-  if (trackIndex < 0 || trackIndex >= mTracks.size())
-    return;
-  if (parameterId < 0 || parameterId >= 2500)
-    return;
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  // Update state (Base Value)
-  mTracks[trackIndex].parameters[parameterId] = value;
-  // Also update Applied Value so it takes effect immediately (until next step
-  // reset)
-  mTracks[trackIndex].appliedParameters[parameterId] = value;
-  mTracks[trackIndex].mParametersDirty = true;
+  AudioCommand cmd;
+  cmd.type = (trackIndex == -1) ? AudioCommand::GLOBAL_PARAM_SET
+                                : AudioCommand::PARAM_SET;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = parameterId;
+  cmd.value = value;
 
-  // Push to engine
-  updateEngineParameter(trackIndex, parameterId, value);
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
 }
 
 void AudioEngine::setParameterPreview(int trackIndex, int parameterId,
                                       float value) {
-  if (trackIndex < 0 || trackIndex >= mTracks.size())
-    return;
-  if (parameterId < 0 || parameterId >= 2500)
-    return;
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  // Update only Applied Value (Temporary sound change)
-  mTracks[trackIndex].appliedParameters[parameterId] = value;
-  updateEngineParameter(trackIndex, parameterId, value);
+  setParameter(trackIndex, parameterId, value);
 }
 
 void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
                                         float value) {
-  if (!std::isfinite(value))
-    return;
 
   // Global Parameters (trackIndex = -1)
   if (trackIndex == -1) {
@@ -647,77 +641,67 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
     if (parameterId >= 3000 && parameterId < 3015) {
       int fxIdx = parameterId - 3000;
       mFxMixLevels[fxIdx] = value;
-      return;
+      // CRITICAL: Persist Mix Levels to Track 0
+      if (mTracks.size() > 0)
+        mTracks[0].parameters[parameterId] = value;
+      // NO RETURN: Let it fall through if needed (though global might not need
+      // fallthrough if track 0 is updated directly)
+    }
+  }
+
+  // Filter Pedals (2200+) - Global but callable from Track 0
+  if (parameterId >= 2200 && parameterId < 2300) {
+    int filterIdx = -1;
+    int subParam = -1;
+
+    if (parameterId >= 2200 && parameterId < 2205) { // 2200-2204: Filter 1
+      filterIdx = 0;
+      subParam = parameterId - 2200;
+    } else if (parameterId >= 2205 &&
+               parameterId < 2210) { // 2205-2209: Filter 2
+      filterIdx = 1;
+      subParam = parameterId - 2205;
+    } else if (parameterId >= 2210 &&
+               parameterId < 2215) { // 2210-2214: Filter 3
+      filterIdx = 2;
+      subParam = parameterId - 2210;
     }
 
-    // Filter Pedals (2100+)
-    if (parameterId >= 2100 && parameterId < 2200) {
-      int filterIdx = -1;
-      int subParam = -1;
-
-      if (parameterId >= 2100 && parameterId < 2104) {
-        filterIdx = 0;
-        subParam = parameterId - 2100;
-      } else if (parameterId >= 2110 && parameterId < 2114) {
-        filterIdx = 1;
-        subParam = parameterId - 2110;
-      } else if (parameterId >= 2120 && parameterId < 2124) {
-        filterIdx = 2;
-        subParam = parameterId - 2120;
-      }
-
-      if (filterIdx != -1) {
-        if (subParam == 0) { // Cutoff
-          mFilterPedalL[filterIdx].setCutoff(value);
-          mFilterPedalR[filterIdx].setCutoff(value);
-        } else if (subParam == 1) { // Resonance
-          mFilterPedalL[filterIdx].setResonance(value);
-          mFilterPedalR[filterIdx].setResonance(value);
-        } else if (subParam == 2) { // Mode
-          mFilterPedalL[filterIdx].setMode(value);
-          mFilterPedalR[filterIdx].setMode(value);
-        } else if (subParam == 3) { // Mix
-          mFilterPedalL[filterIdx].setMix(value);
-          mFilterPedalR[filterIdx].setMix(value);
-          mFxMixLevels[12 + (filterIdx == 0 ? 0 : (filterIdx == 1 ? 3 : 4))] =
-              value; // Update global mix for render loop (slots 12, 15, 16)
+    if (filterIdx != -1) {
+      if (subParam == 0) { // Cutoff
+        mFilterPedalL[filterIdx].setCutoff(value);
+        mFilterPedalR[filterIdx].setCutoff(value);
+      } else if (subParam == 1) { // Resonance
+        mFilterPedalL[filterIdx].setResonance(value);
+        mFilterPedalR[filterIdx].setResonance(value);
+      } else if (subParam == 2) { // Mode
+        // Button sends 0.0, 1.0, 2.0 directly
+        mFilterPedalL[filterIdx].setMode(value);
+        mFilterPedalR[filterIdx].setMode(value);
+      } else if (subParam == 3) { // Mix
+        mFilterPedalL[filterIdx].setMix(value);
+        mFilterPedalR[filterIdx].setMix(value);
+        int bus = 12 + (filterIdx == 0 ? 0 : (filterIdx == 1 ? 3 : 4));
+        mFxMixLevels[bus] = value;
+        for (auto &t : mTracks) {
+          t.fxSends[bus] = 1.0f;
+          t.fxMix[bus] = 1.0f;
+          t.smoothedFxSends[bus] = 1.0f;
         }
-        return;
       }
+      // NO RETURN: Let it fall through to update mParameters array for UI
+      // Persistence
     }
+  }
 
-    if (parameterId ==
-        2220) { // Changed from 2103 to avoid Filter 1 Mix collision
-      mLpLfoL.setShape(value);
-      mLpLfoR.setShape(value);
-    }
-    // Handle Global Effects & Arp (500-599) even if trackIndex is -1
-    else if (parameterId >= 500 && parameterId < 600) {
-      int fxId = (parameterId - 500) / 10;
-      int subId = parameterId % 10;
-      if (fxId == 0) { // Reverb
-        if (subId == 0)
-          mReverbFx.setSize(value);
-        else if (subId == 1)
-          mReverbFx.setDamping(value);
-        else if (subId == 2)
-          mReverbFx.setModDepth(value);
-        else if (subId == 3) {
-          mReverbFx.setMix(1.0f); // Always wet, track mix handles balance
-          mFxMixLevels[6] = 1.0f;
-        } else if (subId == 4)
-          mReverbFx.setPreDelay(value);
-        else if (subId == 5)
-          mReverbFx.setType(static_cast<int>(value * 3.9f));
-        else if (subId == 6)
-          mReverbFx.setTone(value);
-      }
-      // Add other global FX here if they need trackIndex -1 support
-    }
+  // Global Parameters (trackIndex = -1) Continued...
+  if (trackIndex == -1) {
+    updateGlobalParameter(parameterId, value);
     return;
   }
 
   if (trackIndex < 0 || trackIndex >= mTracks.size())
+
     return;
   if (parameterId < 0 || parameterId >= 2500)
     return;
@@ -735,7 +719,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       if (subId == 0) {
         track.fxSends[fxIndex] = value;
       } else if (subId == 1) {
-        track.fxMix[fxIndex] = value;
+        track.fxMix[fxIndex] = 1.0f; // FORCE UNITY (Ignore 0.0 from sync)
       }
     }
     return;
@@ -787,7 +771,9 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.soundFontEngine.setParameter(6, value);
       break;
     case 7:
-      track.subtractiveEngine.setLfoRate(value);
+      // Cubic Scaling for Synth LFO too
+      track.subtractiveEngine.setLfoRate(0.01f +
+                                         (value * value * value) * 49.99f);
       track.soundFontEngine.setParameter(7, value);
       break;
     case 8:
@@ -799,8 +785,16 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
   // ADSR / Internal Params (100-149)
   else if (parameterId >= 100 && parameterId < 150) {
     switch (parameterId) {
+    case 120:
+      mTracks[trackIndex].audioInEngine.setParameter(120, value);
+      if (value >= 0.5f) { // Open Mode
+        // Force track active immediately (Wake Up)
+        mTracks[trackIndex].isActive = true;
+        mTracks[trackIndex].mSilenceFrames = 0;
+      }
+      break;
     case 123: // Audio In Filter Mode
-      track.audioInEngine.setParameter(123, value);
+      mTracks[trackIndex].audioInEngine.setParameter(123, value);
       break;
     case 100:
       track.subtractiveEngine.setAttack(value);
@@ -988,218 +982,15 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.wavetableEngine.setParameter(31, value);
   }
   // LP LFO (Pedal 10)
-  else if (parameterId >= 490 && parameterId < 500) {
-    int subId = parameterId % 10;
-    if (subId == 0) {
-      mLpLfoL.setRate(value);
-      mLpLfoR.setRate(value);
-    } else if (subId == 1) {
-      mLpLfoL.setDepth(value);
-      mLpLfoR.setDepth(value);
-    } else if (subId == 2) {
-      mLpLfoL.setShape(value);
-      mLpLfoR.setShape(value);
-    } else if (subId == 3) {
-      mLpLfoL.setCutoff(value);
-      mLpLfoR.setCutoff(value);
-    } else if (subId == 4) {
-      mLpLfoL.setResonance(value);
-      mLpLfoR.setResonance(value);
-    }
+  if (parameterId >= 490 && parameterId < 500) {
+    updateGlobalParameter(parameterId, value);
   }
   // Global Effects & Arp (500-599)
   else if (parameterId >= 500 && parameterId < 600) {
-    int fxId = (parameterId - 500) / 10;
-    int subId = parameterId % 10;
-    switch (fxId) {
-    case 0: // Reverb
-      if (subId == 0)
-        mReverbFx.setSize(value);
-      else if (subId == 1)
-        mReverbFx.setDamping(value);
-      else if (subId == 2)
-        mReverbFx.setModDepth(value);
-      else if (subId == 3) {
-        mReverbFx.setMix(value);
-        mFxMixLevels[6] = value;
-      } else if (subId == 4)
-        mReverbFx.setPreDelay(value);
-      else if (subId == 5)
-        mReverbFx.setType(static_cast<int>(value * 3.9f));
-      else if (subId == 6)
-        mReverbFx.setTone(value);
-      break;
-    case 1: // Chorus
-      if (subId == 0) {
-        mChorusFxL.setRate(value);
-        mChorusFxR.setRate(value);
-      } else if (subId == 1) {
-        mChorusFxL.setDepth(value);
-        mChorusFxR.setDepth(value);
-      } else if (subId == 2) {
-        mChorusFxL.setMix(value);
-        mChorusFxR.setMix(value);
-        mFxMixLevels[2] = value;
-      } else if (subId == 3) {
-        mChorusFxL.setVoices(value);
-        mChorusFxR.setVoices(value);
-      }
-      break;
-    case 2: // Delay
-      if (subId == 0)
-        mDelayFx.setDelayTime(value);
-      else if (subId == 1)
-        mDelayFx.setFeedback(value);
-      else if (subId == 2) {
-        mDelayFx.setMix(value);
-        mFxMixLevels[5] = value;
-      } else if (subId == 3)
-        mDelayFx.setFilterMix(value);
-      else if (subId == 4)
-        mDelayFx.setFilterResonance(value);
-      else if (subId == 5)
-        mDelayFx.setType(static_cast<int>(value * 3.9f));
-      else if (subId == 6)
-        mDelayFx.setFilterMode(static_cast<int>(value * 2.9f));
-      break;
-    case 3: // Bitcrusher
-      if (subId == 0) {
-        mBitcrusherFxL.setBits(value);
-        mBitcrusherFxR.setBits(value);
-      } else if (subId == 1) {
-        mBitcrusherFxL.setRate(value);
-        mBitcrusherFxR.setRate(value);
-      } else if (subId == 2) {
-        mBitcrusherFxL.setMix(value);
-        mBitcrusherFxR.setMix(value);
-        mFxMixLevels[1] = value;
-      }
-      break;
-    case 4: // Overdrive
-      if (subId == 0) {
-        mOverdriveFxL.setDrive(value);
-        mOverdriveFxR.setDrive(value);
-      } else if (subId == 1) {
-        // Repurposed MIX knob as DISTORTION
-        mOverdriveFxL.setDistortion(value);
-        mOverdriveFxR.setDistortion(value);
-        // Ensure Mix is 1.0 internally
-        mOverdriveFxL.setMix(1.0f);
-        mOverdriveFxR.setMix(1.0f);
-        // Send Level to mixer is handled by LEVEL knob?
-        // Note: mFxMixLevels[0] was set by this knob (MIX).
-        // Since we repurposed it, we'll set mix level to 1.0 fixed or
-        // perhaps bind it to Level (SubId 2) if desired.
-        // For now, let's just default it to 1.0 here to ensure sound passes.
-        mFxMixLevels[0] = 1.0f;
-      } else if (subId == 2) {
-        mOverdriveFxL.setLevel(value);
-        mOverdriveFxR.setLevel(value);
-      } else if (subId == 3) {
-        mOverdriveFxL.setTone(value);
-        mOverdriveFxR.setTone(value);
-      }
-      break;
-    case 5: // Phaser
-      if (subId == 0) {
-        mPhaserFxL.setRate(value);
-        mPhaserFxR.setRate(value);
-      } else if (subId == 1) {
-        mPhaserFxL.setDepth(value);
-        mPhaserFxR.setDepth(value);
-      } else if (subId == 2) {
-        mPhaserFxL.setMix(value);
-        mPhaserFxR.setMix(value);
-      } else if (subId == 3) {
-        mPhaserFxL.setIntensity(value);
-        mPhaserFxR.setIntensity(value);
-      }
-      break;
-    case 6: // Tape Wobble
-      if (subId == 0) {
-        mTapeWobbleFx.setRate(value);
-      } else if (subId == 1) {
-        mTapeWobbleFx.setDepth(value);
-      } else if (subId == 2) {
-        mTapeWobbleFx.setSaturation(value);
-      } else if (subId == 3) {
-      } else if (subId == 3) {
-        mTapeWobbleFx.setMix(value);
-      }
-      break;
-    case 7: // Slicer
-      if (subId < 3) {
-        // Map 0-1 knob to discrete rates: 1, 2, 3, 4, 5, 6, 8, 12, 16
-        float rates[] = {1.0f, 2.0f, 3.0f,  4.0f, 5.0f,
-                         6.0f, 8.0f, 12.0f, 16.0f};
-        int idx = (int)(value * 8.99f);
-        float r = rates[idx];
-        if (subId == 0) {
-          mSlicerFxL.setRate1(r);
-          mSlicerFxR.setRate1(r);
-        } else if (subId == 1) {
-          mSlicerFxL.setRate2(r);
-          mSlicerFxR.setRate2(r);
-        } else if (subId == 2) {
-          mSlicerFxL.setRate3(r);
-          mSlicerFxR.setRate3(r);
-        }
-      } else if (subId == 3) {
-        bool v = (value > 0.5f);
-        mSlicerFxL.setActive1(v);
-        mSlicerFxR.setActive1(v);
-      } else if (subId == 4) {
-        bool v = (value > 0.5f);
-        mSlicerFxL.setActive2(v);
-        mSlicerFxR.setActive2(v);
-      } else if (subId == 5) {
-        bool v = (value > 0.5f);
-        mSlicerFxL.setActive3(v);
-        mSlicerFxR.setActive3(v);
-      } else if (subId == 6) {
-        // DEPTH knob
-        mSlicerFxL.setDepth(value);
-        mSlicerFxR.setDepth(value);
-        mFxMixLevels[7] = 1.0f; // Bus Mix should be full for Slicer
-      }
-      break;
-    case 8: // Compressor
-      if (subId == 0)
-        mCompressorFx.setThreshold(value);
-      else if (subId == 1)
-        mCompressorFx.setRatio(value);
-      else if (subId == 2)
-        mCompressorFx.setAttack(value);
-      else if (subId == 3)
-        mCompressorFx.setRelease(value);
-      else if (subId == 4)
-        mCompressorFx.setMakeup(value);
-      else if (subId == 5)
-        mSidechainSourceTrack = static_cast<int>(value);
-      else if (subId == 6)
-        mSidechainSourceDrumIdx = static_cast<int>(value);
-      break;
-    case 9: // HP LFO (Pedal 9)
-      if (subId == 0) {
-        mHpLfoL.setRate(value);
-        mHpLfoR.setRate(value);
-      } else if (subId == 1) {
-        mHpLfoL.setDepth(value);
-        mHpLfoR.setDepth(value);
-      } else if (subId == 2) {
-        mHpLfoL.setShape(value);
-        mHpLfoR.setShape(value);
-      } else if (subId == 3) {
-        mHpLfoL.setCutoff(value);
-        mHpLfoR.setCutoff(value);
-      } else if (subId == 4) {
-        mHpLfoL.setResonance(value);
-        mHpLfoR.setResonance(value);
-      } else if (subId == 5) { // ADDED MIX for HP LFO
-        mFxMixLevels[9] = value;
-      }
-      break;
-    }
+    updateGlobalParameter(parameterId, value);
+    // CRITICAL: Persist All Global FX (500-599) to Track 0
+    if (mTracks.size() > 0)
+      mTracks[0].parameters[parameterId] = value;
   }
   // Analog Drum (600-699)
   else if (parameterId >= 600 && parameterId < 700) {
@@ -1216,95 +1007,14 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
   }
   // Extra Global FX (1500-1599)
   else if (parameterId >= 1500 && parameterId < 1600) {
-    int fxId = (parameterId - 1500) / 10;
-    int subId = parameterId % 10;
-    switch (fxId) {
-    case 0: // Flanger
-      if (subId == 0) {
-        mFlangerFxL.setRate(value);
-        mFlangerFxR.setRate(value);
-      } else if (subId == 1) {
-        mFlangerFxL.setDepth(value);
-        mFlangerFxR.setDepth(value);
-      } else if (subId == 2) {
-        mFlangerFxL.setMix(value);
-        mFlangerFxR.setMix(value);
-      } else if (subId == 3) {
-        mFlangerFxL.setFeedback(value);
-        mFlangerFxR.setFeedback(value);
-      } else if (subId == 4) {
-        float delay = value * 0.02f;
-        mFlangerFxL.setDelay(delay);
-        mFlangerFxR.setDelay(delay);
-      }
-      break;
-    case 1: // TapeEcho
-      if (subId == 0) {
-        mTapeEchoFxL.setDelayTime(value);
-        mTapeEchoFxR.setDelayTime(value);
-      } else if (subId == 1) {
-        mTapeEchoFxL.setFeedback(value);
-        mTapeEchoFxR.setFeedback(value);
-      } else if (subId == 2) {
-        mTapeEchoFxL.setMix(value);
-        mTapeEchoFxR.setMix(value);
-      } else if (subId == 3) {
-        mTapeEchoFxL.setDrive(value);
-        mTapeEchoFxR.setDrive(value);
-      } else if (subId == 4) {
-        mTapeEchoFxL.setWow(value);
-        mTapeEchoFxR.setWow(value);
-      } else if (subId == 5) {
-        mTapeEchoFxL.setFlutter(value);
-        mTapeEchoFxR.setFlutter(value);
-      }
-      break;
-      //    case 2: // Auto-Panner (Replaced by Filter Chain - logic handled in
-      //    global block)
-      //      // Legacy ID handling removed
-      //      break;
-    case 3: // Octaver
-      if (subId == 0) {
-        mOctaverFxL.setMix(value);
-        mOctaverFxR.setMix(value);
-      } else if (subId == 1) {
-        mOctaverFxL.setMode(value);
-        mOctaverFxR.setMode(value);
-      } else if (subId == 2) {
-        mOctaverFxL.setUnison(value);
-        mOctaverFxR.setUnison(value);
-      } else if (subId == 3) {
-        mOctaverFxL.setDetune(value);
-        mOctaverFxR.setDetune(value);
-      }
-      break;
-    }
+    updateGlobalParameter(parameterId, value);
+    if (mTracks.size() > 0)
+      mTracks[0].parameters[parameterId] = value;
   }
   // Multi-Filter Pedals (2100-2114) - Replaces AutoPanner
   // IDs 2100-2104: Filter 1
   // IDs 2105-2109: Filter 2
   // IDs 2110-2114: Filter 3
-  else if (parameterId >= 2100 && parameterId < 2115) {
-    int filterIdx = (parameterId - 2100) / 5;
-    int subId = (parameterId - 2100) % 5;
-    int bus = (filterIdx == 0) ? 12 : (filterIdx == 1) ? 15 : 16;
-    if (filterIdx >= 0 && filterIdx < 3) {
-      if (subId == 0) { // Cutoff
-        mFilterPedalL[filterIdx].setCutoff(value);
-        mFilterPedalR[filterIdx].setCutoff(value);
-      } else if (subId == 1) { // Resonance
-        mFilterPedalL[filterIdx].setResonance(value);
-        mFilterPedalR[filterIdx].setResonance(value);
-      } else if (subId == 2) { // Mode
-        mFilterPedalL[filterIdx].setMode(value);
-        mFilterPedalR[filterIdx].setMode(value);
-      } else if (subId == 3) {                 // Global Mix
-        mFilterPedalL[filterIdx].setMix(1.0f); // Always wet internally
-        mFilterPedalR[filterIdx].setMix(1.0f);
-        // mFxMixLevels[bus] = value; // REMOVED: Caused silence when mix=0
-      }
-    }
-  }
 }
 
 // End of updateEngineParameter
@@ -1327,11 +1037,457 @@ void AudioEngine::processCommands() {
       releaseNoteLocked(cmd.trackIndex, cmd.data1, false);
       break;
     case AudioCommand::PARAM_SET:
-      setParameter(cmd.trackIndex, cmd.data1,
-                   cmd.value); // Call the new setParameter
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        mTracks[cmd.trackIndex].parameters[cmd.data1] = cmd.value;
+        mTracks[cmd.trackIndex].appliedParameters[cmd.data1] = cmd.value;
+        mTracks[cmd.trackIndex].mParametersDirty = true;
+        updateEngineParameter(cmd.trackIndex, cmd.data1, cmd.value);
+      }
       break;
     case AudioCommand::GLOBAL_PARAM_SET:
+      updateGlobalParameter(cmd.data1, cmd.value);
       break;
+    case AudioCommand::SET_ENGINE_TYPE:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        mTracks[cmd.trackIndex].engineType = cmd.data1;
+        initTrack(cmd.trackIndex); // initTrack should be safe if it doesn't
+                                   // resize vectors
+      }
+      break;
+    case AudioCommand::SET_TRACK_VOLUME:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        mTracks[cmd.trackIndex].volume = cmd.value;
+        if (cmd.value > 0.001f) {
+          mTracks[cmd.trackIndex].isActive = true;
+          mTracks[cmd.trackIndex].mSilenceFrames = 0;
+        }
+      }
+      break;
+    case AudioCommand::SET_TRACK_PAN:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size())
+        mTracks[cmd.trackIndex].pan = cmd.value;
+      break;
+    case AudioCommand::SET_TRACK_ACTIVE:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size())
+        mTracks[cmd.trackIndex].isActive = cmd.bValue;
+      break;
+    case AudioCommand::SET_TEMPO:
+      mBpm = cmd.value;
+      break;
+    case AudioCommand::SET_PATTERN_LENGTH:
+      mPatternLength = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
+      // Propagate to all track sequencers
+      {
+        int pages = (mPatternLength + 15) / 16;
+        for (int i = 0; i < (int)mTracks.size(); ++i) {
+          mTracks[i].sequencer.setConfiguration(pages, 16);
+          for (int d = 0; d < 16; ++d)
+            mTracks[i].drumSequencers[d].setConfiguration(pages, 16);
+        }
+      }
+      break;
+    case AudioCommand::SET_STEP:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        Step step;
+        step.isSkipped = cmd.isSkipped;
+        for (int n : cmd.notes) {
+          step.addNote(n, cmd.velocity, 0.0f);
+        }
+        step.active = cmd.bValue;
+        step.ratchet = cmd.ratchet;
+        step.punch = cmd.punch;
+        step.probability = cmd.probability;
+        step.gate = cmd.gate;
+
+        int firstNote = cmd.notes.empty() ? 60 : cmd.notes[0];
+        int drumIdx = -1;
+        bool isSamplerChops =
+            (mTracks[cmd.trackIndex].engineType == 2 &&
+             mTracks[cmd.trackIndex].samplerEngine.getPlayMode() == 2);
+
+        if (mTracks[cmd.trackIndex].engineType == 5 ||
+            mTracks[cmd.trackIndex].engineType == 6 || isSamplerChops) {
+          if (firstNote >= 60)
+            drumIdx = firstNote - 60;
+          else if (firstNote >= 0 && firstNote < 16)
+            drumIdx = firstNote;
+          else if (firstNote >= 35) {
+            if (firstNote == 35 || firstNote == 36)
+              drumIdx = 0;
+            else if (firstNote == 38 || firstNote == 40)
+              drumIdx = 1;
+            else if (firstNote == 39)
+              drumIdx = 2; // Clap
+            else if (firstNote == 41 || firstNote == 43 || firstNote == 45)
+              drumIdx = 2; // Toms
+            else if (firstNote == 42 || firstNote == 44 || firstNote == 46)
+              drumIdx = 3; // Hats
+            else if (firstNote == 49)
+              drumIdx = 5; // Crash
+            else
+              drumIdx = (firstNote % 8);
+          }
+        }
+
+        if (drumIdx >= 0 && drumIdx < 16) {
+          mTracks[cmd.trackIndex].drumSequencers[drumIdx].setStep(cmd.data1,
+                                                                  step);
+        } else {
+          mTracks[cmd.trackIndex].sequencer.setStep(cmd.data1, step);
+        }
+      }
+      break;
+    case AudioCommand::SET_ARP_RATE:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        mTracks[cmd.trackIndex].mArpRate = cmd.value;
+        mTracks[cmd.trackIndex].mArpDivisionMode = cmd.data1;
+      }
+      break;
+    case AudioCommand::SET_SWING:
+      mSwing = cmd.value;
+      for (auto &track : mTracks) {
+        track.sequencer.setSwing(mSwing);
+      }
+      break;
+    case AudioCommand::SET_SLICES:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        std::vector<float> points;
+        for (size_t i = 0; i < cmd.sliceStarts.size(); ++i) {
+          points.push_back(static_cast<float>(cmd.sliceStarts[i]) / 48000.0f);
+        }
+        mTracks[cmd.trackIndex].samplerEngine.setSlicePoints(points);
+      }
+      break;
+    }
+  }
+}
+
+// Consolidated Global Parameter Logic
+void AudioEngine::updateGlobalParameter(int parameterId, float value) {
+  // LP LFO (490-499)
+  if (parameterId >= 490 && parameterId < 500) {
+    int subId = parameterId % 10;
+    if (subId == 0) {
+      mLpLfoL.setRate(value);
+      mLpLfoR.setRate(value);
+    } else if (subId == 1) {
+      mLpLfoL.setDepth(value);
+      mLpLfoR.setDepth(value);
+    } else if (subId == 2) {
+      mLpLfoL.setShape(value);
+      mLpLfoR.setShape(value);
+    } else if (subId == 3) {
+      mLpLfoL.setCutoff(value);
+      mLpLfoR.setCutoff(value);
+    } else if (subId == 4) {
+      mLpLfoL.setResonance(value);
+      mLpLfoR.setResonance(value);
+    }
+  }
+  // Handle Global Effects & Arp (500-599)
+  else if (parameterId >= 500 && parameterId < 600) {
+    int fxId = (parameterId - 500) / 10;
+    int subId = parameterId % 10;
+    switch (fxId) {
+    case 0: // Reverb (Slot 6)
+      if (subId == 0)
+        mReverbFx.setSize(value);
+      else if (subId == 1)
+        mReverbFx.setDamping(value);
+      else if (subId == 2)
+        mReverbFx.setModDepth(value);
+      else if (subId == 3) {     // MIX
+        mReverbFx.setMix(value); // Internal Mix
+        mFxMixLevels[6] = 1.0f;  // Pass through routeFx at unity
+      } else if (subId == 4)
+        mReverbFx.setPreDelay(value);
+      else if (subId == 5)
+        mReverbFx.setType(static_cast<int>(value * 3.9f));
+      else if (subId == 6)
+        mReverbFx.setTone(value);
+      break;
+    case 1: // Chorus (Slot 2)
+      if (subId == 0) {
+        mChorusFxL.setRate(value);
+        mChorusFxR.setRate(value);
+      } else if (subId == 1) {
+        mChorusFxL.setDepth(value);
+        mChorusFxR.setDepth(value);
+      } else if (subId == 2) { // MIX
+        mChorusFxL.setMix(value);
+        mChorusFxR.setMix(value);
+        mFxMixLevels[2] = 1.0f;
+      } else if (subId == 3) {
+        mChorusFxL.setVoices(value);
+        mChorusFxR.setVoices(value);
+      }
+      break;
+    case 2: // Delay (Slot 5)
+      if (subId == 0)
+        mDelayFx.setDelayTime(value);
+      else if (subId == 1)
+        mDelayFx.setFeedback(value);
+      else if (subId == 2) { // MIX
+        mDelayFx.setMix(value);
+        mFxMixLevels[5] = 1.0f;
+      } else if (subId == 3)
+        mDelayFx.setFilterMix(value);
+      else if (subId == 4)
+        mDelayFx.setFilterResonance(value);
+      else if (subId == 5)
+        mDelayFx.setType(static_cast<int>(value * 3.9f));
+      else if (subId == 6)
+        mDelayFx.setFilterMode(static_cast<int>(value * 2.9f));
+      break;
+    case 3: // Bitcrusher (Slot 1)
+      if (subId == 0) {
+        mBitcrusherFxL.setBits(value);
+        mBitcrusherFxR.setBits(value);
+      } else if (subId == 1) {
+        mBitcrusherFxL.setRate(value);
+        mBitcrusherFxR.setRate(value);
+      } else if (subId == 2) { // MIX
+        mBitcrusherFxL.setMix(value);
+        mBitcrusherFxR.setMix(value);
+        mFxMixLevels[1] = 1.0f;
+        // FORCE SEND for Bitcrusher
+        for (auto &t : mTracks) {
+          t.fxSends[1] = 1.0f;
+          t.fxMix[1] = 1.0f;
+          t.smoothedFxSends[1] = 1.0f;
+        }
+      }
+      break;
+    case 4: // Overdrive (Slot 0)
+      if (subId == 0) {
+        mOverdriveFxL.setDrive(value);
+        mOverdriveFxR.setDrive(value);
+      } else if (subId == 1) { // DISTORTION (Acts as Mix/Enable)
+        mOverdriveFxL.setDistortion(value);
+        mOverdriveFxR.setDistortion(value);
+        // Ensure enabled
+        mOverdriveFxL.setMix(1.0f);
+        mOverdriveFxR.setMix(1.0f);
+        mFxMixLevels[0] = 1.0f;
+        // FORCE SEND for Overdrive
+        for (auto &t : mTracks) {
+          t.fxSends[0] = 1.0f;
+          t.fxMix[0] = 1.0f;
+          t.smoothedFxSends[0] = 1.0f;
+        }
+      } else if (subId == 2) {
+        mOverdriveFxL.setLevel(value);
+        mOverdriveFxR.setLevel(value);
+      } else if (subId == 3) {
+        mOverdriveFxL.setTone(value);
+        mOverdriveFxR.setTone(value);
+      }
+      break;
+    case 5: // Phaser (Slot 3)
+      if (subId == 0) {
+        mPhaserFxL.setRate(value);
+        mPhaserFxR.setRate(value);
+      } else if (subId == 1) {
+        mPhaserFxL.setDepth(value);
+        mPhaserFxR.setDepth(value);
+      } else if (subId == 2) { // MIX
+        mPhaserFxL.setMix(value);
+        mPhaserFxR.setMix(value);
+        mFxMixLevels[3] = 1.0f;
+        // FORCE SEND for Phaser
+        for (auto &t : mTracks) {
+          t.fxSends[3] = 1.0f;
+          t.fxMix[3] = 1.0f;
+          t.smoothedFxSends[3] = 1.0f;
+        }
+      } else if (subId == 3) {
+        mPhaserFxL.setIntensity(value);
+        mPhaserFxR.setIntensity(value);
+      }
+      break;
+    case 6: // Tape Wobble (Slot 4)
+      if (subId == 0)
+        mTapeWobbleFx.setRate(value);
+      else if (subId == 1)
+        mTapeWobbleFx.setDepth(value);
+      else if (subId == 2)
+        mTapeWobbleFx.setSaturation(value);
+      else if (subId == 3) { // MIX
+        mTapeWobbleFx.setMix(value);
+        mFxMixLevels[4] = 1.0f;
+        // FORCE SEND for Tape Wobble
+        for (auto &t : mTracks) {
+          t.fxSends[4] = 1.0f;
+          t.fxMix[4] = 1.0f;
+          t.smoothedFxSends[4] = 1.0f;
+        }
+      }
+      break;
+    case 7: // Slicer (Slot 7)
+      if (subId < 3) {
+        float rates1[] = {0.015625f, 0.03125f, 0.0625f, 0.125f,
+                          0.25f,     0.5f,     1.0f,    2.0f};
+        float rates2[] = {0.046875f, 0.09375f, 0.1875f, 0.375f,
+                          0.75f,     1.5f,     3.0f,    6.0f};
+        float rates3[] = {0.1f, 0.2f, 0.4f, 0.8f, 1.6f, 3.2f, 6.4f, 12.8f};
+        if (subId == 0) {
+          int idx = static_cast<int>(value * 7.99f);
+          mSlicerFxL.setRate1(rates1[idx]);
+          mSlicerFxR.setRate1(rates1[idx]);
+          mSlicerFxL.setActive1(true);
+          mSlicerFxR.setActive1(true);
+        } else if (subId == 1) {
+          int idx = static_cast<int>(value * 7.99f);
+          mSlicerFxL.setRate2(rates2[idx]);
+          mSlicerFxR.setRate2(rates2[idx]);
+          mSlicerFxL.setActive2(true);
+          mSlicerFxR.setActive2(true);
+        } else if (subId == 2) {
+          int idx = static_cast<int>(value * 7.99f);
+          mSlicerFxL.setRate3(rates3[idx]);
+          mSlicerFxR.setRate3(rates3[idx]);
+          mSlicerFxL.setActive3(true);
+          mSlicerFxR.setActive3(true);
+        }
+      } else if (subId == 3) {
+        bool v = (value > 0.5f);
+        mSlicerFxL.setActive1(v);
+        mSlicerFxR.setActive1(v);
+      } else if (subId == 4) {
+        bool v = (value > 0.5f);
+        mSlicerFxL.setActive2(v);
+        mSlicerFxR.setActive2(v);
+      } else if (subId == 5) {
+        bool v = (value > 0.5f);
+        mSlicerFxL.setActive3(v);
+        mSlicerFxR.setActive3(v);
+      } else if (subId == 6) { // DEPTH -> Acts as Mix
+        mSlicerFxL.setDepth(value);
+        mSlicerFxR.setDepth(value);
+        mFxMixLevels[7] = 1.0f;
+        // FORCE SEND for Slicer
+        for (auto &t : mTracks) {
+          t.fxSends[7] = 1.0f;
+          t.fxMix[7] = 1.0f;
+          t.smoothedFxSends[7] = 1.0f;
+        }
+      }
+      break;
+    case 8: // Compressor
+      if (subId == 0)
+        mCompressorFx.setThreshold(value);
+      else if (subId == 1)
+        mCompressorFx.setRatio(value);
+      else if (subId == 2)
+        mCompressorFx.setAttack(value);
+      else if (subId == 3)
+        mCompressorFx.setRelease(value);
+      else if (subId == 4)
+        mCompressorFx.setMakeup(value);
+      else if (subId == 5)
+        mSidechainSourceTrack = static_cast<int>(value);
+      else if (subId == 6)
+        mSidechainSourceDrumIdx = static_cast<int>(value);
+      break;
+    case 9: // HP LFO
+      if (subId == 0) {
+        mHpLfoL.setRate(value);
+        mHpLfoR.setRate(value);
+      } else if (subId == 1) {
+        mHpLfoL.setDepth(value);
+        mHpLfoR.setDepth(value);
+      } else if (subId == 2) {
+        mHpLfoL.setShape(value);
+        mHpLfoR.setShape(value);
+      } else if (subId == 3) {
+        mHpLfoL.setCutoff(value);
+        mHpLfoR.setCutoff(value);
+      } else if (subId == 4) {
+        mHpLfoL.setResonance(value);
+        mHpLfoR.setResonance(value);
+      } else if (subId == 5) { // ADDED MIX for HP LFO
+        // Removed coupling
+      }
+      break;
+    }
+  }
+  // Handle Extra Global FX (1500-1599)
+  else if (parameterId >= 1500 && parameterId < 1600) {
+    int fxId = (parameterId - 1500) / 10;
+    int subId = parameterId % 10;
+    switch (fxId) {
+    case 0: // Flanger (Slot 11) - Insert Style
+      if (subId == 0) {
+        mFlangerFxL.setRate(value);
+        mFlangerFxR.setRate(value);
+      } else if (subId == 1) {
+        mFlangerFxL.setDepth(value);
+        mFlangerFxR.setDepth(value);
+      } else if (subId == 2) { // MIX
+        mFlangerFxL.setMix(value);
+        mFlangerFxR.setMix(value);
+        mFxMixLevels[11] = 1.0f;
+        // FORCE SEND for Flanger
+        for (auto &t : mTracks) {
+          t.fxSends[11] = 1.0f;
+          t.fxMix[11] = 1.0f;
+          t.smoothedFxSends[11] = 1.0f;
+        }
+      } else if (subId == 3) {
+        mFlangerFxL.setFeedback(value);
+        mFlangerFxR.setFeedback(value);
+      } else if (subId == 4) {
+        float d = value * 0.02f;
+        mFlangerFxL.setDelay(d);
+        mFlangerFxR.setDelay(d);
+      }
+      break;
+    case 1: // Echo (Slot 13)
+      if (subId == 0) {
+        mTapeEchoFxL.setDelayTime(value);
+        mTapeEchoFxR.setDelayTime(value);
+      } else if (subId == 1) {
+        mTapeEchoFxL.setFeedback(value);
+        mTapeEchoFxR.setFeedback(value);
+      } else if (subId == 2) { // MIX
+        mTapeEchoFxL.setMix(value);
+        mTapeEchoFxR.setMix(value);
+        mFxMixLevels[13] = 1.0f;
+      }
+      break;
+    case 2: // Octaver (Slot 14)
+      // Based on previous code: 0=Mix, 1=Mode, 2=Unison, 3=Detune?
+      // Let's check the header I just viewed (hypothetically)
+      // If header says: setMix,    case 2: // Octaver (Slot 14)
+      if (subId == 0) { // MIX
+        mOctaverFxL.setMix(value);
+        mOctaverFxR.setMix(value);
+        mFxMixLevels[14] = 1.0f;
+        // FORCE SEND for Octaver (Insert-style)
+        for (auto &t : mTracks) {
+          t.fxSends[14] = 1.0f;
+          t.fxMix[14] = 1.0f;
+          t.smoothedFxSends[14] = 1.0f;
+        }
+      } else if (subId == 1) {
+        mOctaverFxL.setMode(value);
+        mOctaverFxR.setMode(value);
+      } else if (subId == 2) {
+        mOctaverFxL.setUnison(value);
+        mOctaverFxR.setUnison(value);
+      } else if (subId == 3) {
+        mOctaverFxL.setDetune(value);
+        mOctaverFxR.setDetune(value);
+      }
+      break;
+    }
+  }
+
+  // CRITICAL: Persist All Global Parameters to Track 0
+  // This ensures the UI can read them back via getTrackParameters(0)
+  if (!mTracks.empty()) {
+    if (parameterId >= 490 && parameterId < 1600) {
+      mTracks[0].parameters[parameterId] = value;
     }
   }
 }
@@ -1413,6 +1569,13 @@ oboe::DataCallbackResult
 AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                           int32_t numFrames) {
 
+  if (mFirstRun.exchange(false)) {
+    // Set Thread Priority to max (-20)
+    // Note: SCHED_FIFO is preferred but requires more setup.
+    // Nice value -19 is excellent for real-time audio on Android.
+    setpriority(PRIO_PROCESS, 0, -19);
+  }
+
   // Robust Denormal Prevention (Flush-to-Zero)
 #if defined(__aarch64__)
   uint64_t fpcr;
@@ -1478,6 +1641,11 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
   memset(output, 0, numFrames * numChannels * sizeof(float));
 
+  if (mStartupFrames > 0) {
+    mStartupFrames -= numFrames;
+    return oboe::DataCallbackResult::Continue;
+  }
+
   const int kBlockSize = 256;
 
   float samplesPerStep =
@@ -1496,11 +1664,11 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
     // Unified Processing Block (Control + Audio + NoteOff)
     {
-      std::lock_guard<std::recursive_mutex> lock(mLock);
-      // REMOVED: Locking here causes audio dropouts if UI thread holds lock.
-      // Audio thread should run free. We rely on atomics/race-tolerance for
-      // params. Critical ops (like vector resize) should be guarded, but we
-      // don't resize tracks in realtime.
+      // mLock REMOVED to avoid audio dropouts.
+      // State changes are now handled via processCommands() at the start of
+      // onAudioReady. Audio thread should run free. We rely on
+      // atomics/race-tolerance for params. Critical ops (like vector resize)
+      // should be guarded, but we don't resize tracks in realtime.
 
       mSampleCount += framesToDo;
       while (mSampleCount >= samplesPerStep && samplesPerStep > 0.0f) {
@@ -1556,8 +1724,9 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                         s.gate / static_cast<float>(s.ratchet);
 
                     if (delayedSamples <= 1.0) {
-                      triggerNoteLocked(t, ni.note, ni.velocity * 127, true,
-                                        ratchetedGate);
+                      triggerNoteLocked(t, ni.note,
+                                        static_cast<int>(ni.velocity * 127),
+                                        true, ratchetedGate);
                     } else {
                       track.mPendingNotes.push_back(
                           {ni.note, ni.velocity * 127.0f, delayedSamples,
@@ -1566,7 +1735,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
                     if (s.ratchet > 1) {
                       float ratchetInterval =
-                          trackSamplesPerStep / (float)s.ratchet;
+                          trackSamplesPerStep / static_cast<float>(s.ratchet);
                       for (int r = 1; r < s.ratchet; ++r) {
                         double rDelay = delayedSamples + (r * ratchetInterval);
                         track.mPendingNotes.push_back(
@@ -1606,8 +1775,9 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                             ds.gate / static_cast<float>(ds.ratchet);
 
                         if (delayedSamples <= 1.0) {
-                          triggerNoteLocked(t, ni.note, ni.velocity * 127, true,
-                                            ratchetedGate, ds.punch);
+                          triggerNoteLocked(t, ni.note,
+                                            static_cast<int>(ni.velocity * 127),
+                                            true, ratchetedGate, ds.punch);
                         } else {
                           track.mPendingNotes.push_back(
                               {ni.note, ni.velocity * 127.0f, delayedSamples,
@@ -1615,7 +1785,8 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                         }
                         if (ds.ratchet > 1) {
                           float ratchetInterval =
-                              trackSamplesPerStep / (float)ds.ratchet;
+                              trackSamplesPerStep /
+                              static_cast<float>(ds.ratchet);
                           for (int r = 1; r < ds.ratchet; ++r) {
                             double rDelay =
                                 delayedSamples + (r * ratchetInterval);
@@ -1669,8 +1840,8 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
              it != track.mPendingNotes.end();) {
           it->samplesRemaining -= framesToDo;
           if (it->samplesRemaining <= 0) {
-            triggerNoteLocked(t, it->note, (int)it->velocity, true, it->gate,
-                              it->punch);
+            triggerNoteLocked(t, it->note, static_cast<int>(it->velocity), true,
+                              it->gate, it->punch);
             it = track.mPendingNotes.erase(it);
           } else {
             ++it;
@@ -1753,86 +1924,70 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 }
 
 void AudioEngine::triggerNote(int trackIndex, int note, int velocity) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::NOTE_ON;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = note;
+  cmd.value = static_cast<float>(velocity);
   std::lock_guard<std::mutex> lock(mCommandLock);
-  mCommandQueue.push_back(
-      {AudioCommand::NOTE_ON, trackIndex, note, (float)velocity});
+  mCommandQueue.push_back(cmd);
 }
 
 void AudioEngine::releaseNote(int trackIndex, int note) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::NOTE_OFF;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = note;
   std::lock_guard<std::mutex> lock(mCommandLock);
-  mCommandQueue.push_back({AudioCommand::NOTE_OFF, trackIndex, note, 0.0f});
+  mCommandQueue.push_back(cmd);
 }
 
 // ... COPY OF OTHER METHODS ...
 void AudioEngine::setArpRate(int trackIndex, float rate, int divisionMode) {
-  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-    std::lock_guard<std::recursive_mutex> lock(mLock);
-    mTracks[trackIndex].mArpRate = rate;
-    mTracks[trackIndex].mArpDivisionMode = divisionMode;
-  }
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_ARP_RATE;
+  cmd.trackIndex = trackIndex;
+  cmd.value = rate;
+  cmd.data1 = divisionMode;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
 }
 
 void AudioEngine::setStep(int trackIndex, int stepIndex, bool active,
                           const std::vector<int> &notes, float velocity,
                           int ratchet, bool punch, float probability,
                           float gate, bool isSkipped) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_STEP;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = stepIndex;
+  cmd.bValue = active;
+  cmd.notes = notes;
+  cmd.velocity = velocity;
+  cmd.ratchet = ratchet;
+  cmd.punch = punch;
+  cmd.probability = probability;
+  cmd.gate = gate;
+  cmd.isSkipped = isSkipped;
+
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::getFxSends(int trackIndex, float *dest) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-    Step step;
-    step.isSkipped = isSkipped;
-    for (int n : notes) {
-      step.addNote(n, velocity, 0.0f);
+    for (int i = 0; i < 17; ++i) {
+      dest[i] = mTracks[trackIndex].fxSends[i];
     }
-    step.active = active; // Set this AFTER addNote because addNote overrides
-                          // active to true
-    step.ratchet = ratchet;
-    step.punch = punch;
-    step.probability = probability;
-    step.gate = gate;
+  }
+}
 
-    int firstNote = notes.empty() ? 60 : notes[0];
-
-    // Drum Sequencer Logic
-    // ONLY apply drum mapping if this is explicitly a drum-capable track
-    // (Drum Engine or Sampler Chops)
-    int drumIdx = -1;
-    bool isSamplerChops =
-        (mTracks[trackIndex].engineType == 2 &&
-         mTracks[trackIndex].samplerEngine.getPlayMode() == 2);
-
-    if (mTracks[trackIndex].engineType == 5 ||
-        mTracks[trackIndex].engineType == 6 || isSamplerChops) {
-      if (firstNote >= 60)
-        drumIdx = firstNote - 60;
-      else if (firstNote >= 0 && firstNote < 16)
-        drumIdx = firstNote;
-      else if (firstNote >= 35) {
-        // GM Mapping for drums
-        if (firstNote == 35 || firstNote == 36)
-          drumIdx = 0; // Kick
-        else if (firstNote == 38 || firstNote == 40)
-          drumIdx = 1; // Snare
-        else if (firstNote == 39)
-          drumIdx = 2; // Clap/Tom? (GM: Clap=39)
-        else if (firstNote == 41 || firstNote == 43 || firstNote == 45)
-          drumIdx = 2; // Low Tom
-        else if (firstNote == 42 || firstNote == 44 || firstNote == 46)
-          drumIdx = 3; // HiHat Closed / Open
-        else if (firstNote == 49)
-          drumIdx = 5; // Crash
-        // ... Simple mapping
-        else
-          drumIdx = (firstNote % 8); // Last resort
-      }
-    }
-
-    // Write to Drum Sequencer if valid index found
-    if (drumIdx >= 0 && drumIdx < 16) {
-      mTracks[trackIndex].drumSequencers[drumIdx].setStep(stepIndex, step);
-    } else {
-      // ALWAYS write to Main Sequencer (for highlighting, fallback, and
-      // non-drum engines)
-      mTracks[trackIndex].sequencer.setStep(stepIndex, step);
+void AudioEngine::getFxMix(int trackIndex, float *dest) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    for (int i = 0; i < 17; ++i) {
+      dest[i] = mTracks[trackIndex].fxMix[i];
     }
   }
 }
@@ -1846,19 +2001,6 @@ std::vector<float> AudioEngine::getAllTrackParameters(int trackIndex) {
     }
   }
   return params;
-}
-
-void AudioEngine::setTrackPan(int trackIndex, float pan) {
-  if (trackIndex >= 0 && trackIndex < mTracks.size()) {
-    std::lock_guard<std::recursive_mutex> lock(mLock);
-    mTracks[trackIndex].pan = pan;
-    mTracks[trackIndex].smoothedPan = pan;
-
-    // Fix: Immediately update coefficients for startup/sync
-    float angle = pan * (float)M_PI * 0.5f;
-    mTracks[trackIndex].panL = cosf(angle);
-    mTracks[trackIndex].panR = sinf(angle);
-  }
 }
 
 void AudioEngine::setSequencerConfig(int trackIndex, int numPages,
@@ -1877,11 +2019,11 @@ void AudioEngine::setSequencerConfig(int trackIndex, int numPages,
 }
 
 void AudioEngine::setTempo(float bpm) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  // Safety clamp BPM to reasonable musical range
-  if (!std::isfinite(bpm))
-    return;
-  mBpm = std::max(1.0f, std::min(999.0f, bpm));
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TEMPO;
+  cmd.value = bpm;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
 }
 
 void AudioEngine::setPlaying(bool playing) {
@@ -1937,6 +2079,11 @@ void AudioEngine::setPlaying(bool playing) {
       mFilterPedalL[i].clear();
       mFilterPedalR[i].clear();
     }
+    // Prevent Silence for Filter Pedals (Default Mix to 1.0 if not touched)
+    mFxMixLevels[12] = 1.0f; // Filter 1
+    mFxMixLevels[15] = 1.0f; // Filter 2
+    mFxMixLevels[16] = 1.0f; // Filter 3
+
     mHpLfoL.reset(mSampleRate);
     mHpLfoR.reset(mSampleRate);
     mLpLfoL.reset(mSampleRate);
@@ -1952,25 +2099,19 @@ void AudioEngine::setClockMultiplier(int trackIndex, float multiplier) {
 }
 
 void AudioEngine::setSwing(float swing) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  for (auto &track : mTracks) {
-    track.sequencer.setSwing(swing);
-  }
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_SWING;
+  cmd.value = swing;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
 }
 
 void AudioEngine::setPatternLength(int length) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  mPatternLength = (length <= 0) ? 1 : (length > 64 ? 64 : length);
-
-  // Propagate to all track sequencers
-  int pages = (mPatternLength + 15) / 16;
-  for (int i = 0; i < (int)mTracks.size(); ++i) {
-    setSequencerConfig(i, pages, 16);
-  }
-
-  if (mGlobalStepIndex >= mPatternLength) {
-    mGlobalStepIndex = 0;
-  }
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_PATTERN_LENGTH;
+  cmd.data1 = length;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
 }
 
 void AudioEngine::setPlaybackDirection(int trackIndex, int direction) {
@@ -2276,14 +2417,19 @@ void AudioEngine::saveAppState() {
   if (mAppDataDir.empty())
     return;
   std::string path = mAppDataDir + "/app_state.txt";
-  std::ofstream file(path);
+  // Write to temp file first to prevent partial writes
+  std::string tempPath = path + ".tmp";
+  std::ofstream file(tempPath);
   if (file.is_open()) {
+    file << "LOOM_STATE_V1\n"; // Magic Header
     for (int i = 0; i < (int)mTracks.size(); ++i) {
       if (!mTracks[i].lastSamplePath.empty()) {
         file << i << ":" << mTracks[i].lastSamplePath << "\n";
       }
     }
     file.close();
+    // Atomic rename (mostly atomic on POSIX)
+    rename(tempPath.c_str(), path.c_str());
   }
 }
 
@@ -2294,14 +2440,34 @@ void AudioEngine::loadAppState() {
   std::ifstream file(path);
   if (file.is_open()) {
     std::string line;
+    // Check Header
+    if (std::getline(file, line)) {
+      if (line != "LOOM_STATE_V1") {
+        LOGD("Invalid State Header. resetting state.");
+        file.close();
+        return; // Discard invalid state
+      }
+    }
+
     while (std::getline(file, line)) {
-      size_t pos = line.find(':');
-      if (pos != std::string::npos) {
-        int trackIndex = std::stoi(line.substr(0, pos));
-        std::string samplePath = line.substr(pos + 1);
-        if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-          loadSample(trackIndex, samplePath);
+      try {
+        size_t pos = line.find(':');
+        if (pos != std::string::npos) {
+          int trackIndex = std::stoi(line.substr(0, pos));
+          std::string samplePath = line.substr(pos + 1);
+          if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+            // Verify file exists before loading to prevent crash loops
+            FILE *f = fopen(samplePath.c_str(), "rb");
+            if (f) {
+              fclose(f);
+              loadSample(trackIndex, samplePath);
+            } else {
+              LOGD("Skipping missing file in state: %s", samplePath.c_str());
+            }
+          }
         }
+      } catch (...) {
+        LOGD("Error parsing state line: %s", line.c_str());
       }
     }
     file.close();
@@ -2399,13 +2565,6 @@ void AudioEngine::stopRecordingSample(int trackIndex) {
 void AudioEngine::setRecordingLocked(bool locked) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   mIsRecordingLocked = locked;
-}
-
-void AudioEngine::setEngineType(int trackIndex, int type) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex >= 0 && trackIndex < mTracks.size()) {
-    mTracks[trackIndex].engineType = type;
-  }
 }
 
 std::vector<float> AudioEngine::getSamplerWaveform(int trackIndex,
@@ -2526,7 +2685,10 @@ void AudioEngine::setGenericLfoParam(int lfoIndex, int paramId, float value) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   switch (paramId) {
   case 0:
-    mLfos[lfoIndex].setFrequency(value);
+    // Cubic scaling: 0.01Hz to 50Hz
+    // Range = 50 - 0.01 = 49.99
+    // Val = 0.01 + (v^3 * 49.99)
+    mLfos[lfoIndex].setFrequency(0.01f + (value * value * value) * 49.99f);
     break;
   case 1:
     mLfos[lfoIndex].setDepth(value);
@@ -2563,13 +2725,6 @@ void AudioEngine::setFxChain(int sourceFx, int destFx) {
     return;
   std::lock_guard<std::recursive_mutex> lock(mLock);
   mFxChainDest[sourceFx] = destFx;
-}
-
-void AudioEngine::setTrackVolume(int trackIndex, float volume) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex >= 0 && trackIndex < mTracks.size()) {
-    mTracks[trackIndex].volume = volume;
-  }
 }
 
 void AudioEngine::onErrorAfterClose(oboe::AudioStream *audioStream,
@@ -2610,13 +2765,6 @@ void AudioEngine::enqueueMidiEvent(int type, int channel, int data1,
   msg.data1 = data1;
   msg.data2 = data2;
   mMidiQueue.push_back(msg);
-}
-
-void AudioEngine::setTrackActive(int trackIndex, bool active) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-    mTracks[trackIndex].isActive = active;
-  }
 }
 
 void AudioEngine::restorePresets() {
@@ -2754,6 +2902,18 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       Track &track = mTracks[t];
       track.gainReduction = 1.0f; // Reset per frame
 
+      // ALWAYS Update smoothed parameters even if track is inactive
+      // This prevents "stuck" FX Sends/Volume when waking up from silence.
+      if (std::abs(track.volume - track.smoothedVolume) > 0.0001f) {
+        track.smoothedVolume += 0.01f * (track.volume - track.smoothedVolume);
+      }
+      for (int f = 0; f < 17; ++f) {
+        if (std::abs(track.fxSends[f] - track.smoothedFxSends[f]) > 0.0001f) {
+          track.smoothedFxSends[f] +=
+              0.01f * (track.fxSends[f] - track.smoothedFxSends[f]);
+        }
+      }
+
       if (!track.isActive && track.mSilenceFrames > 2400) { // 50ms at 48k
         track.follower.process(0.0f);
         continue;
@@ -2826,9 +2986,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         track.panR = sinf(angle);
       }
 
-      if (std::abs(track.volume - track.smoothedVolume) > 0.0001f) {
-        track.smoothedVolume += 0.01f * (track.volume - track.smoothedVolume);
-      }
+      // (Moved smoothedVolume update to top of loop)
 
       float finalVol = track.smoothedVolume * track.gainReduction;
 
@@ -2841,34 +2999,12 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         float punchScale = 1.5f;
         preFaderL *= punchScale;
         preFaderR *= punchScale;
-        // Apply to main output too?
-        // The previous code applied punch to trackOutput and preFader.
-        // However, trackOutput is calculated LATER now using dryScale.
-        // So we should scale rawSampleL/R or handle it carefully.
-        // Actually, let's keep it simple and just scale preFader here.
-        // And for finalVol, we need to handle punch if it affects the main mix.
-        // But wait, the punch logic was removed in my previous edit?
-        // Let's check the previous diff.
-        // Yes, I verified the diff, I removed the punch block.
-        // I should probably restore the punch block too if I want to keep that
-        // feature, but for now, the critical error is the undeclared
-        // identifier.
-
-        // To match the previous logic exactly, I should just define them.
-        // But I'll add the punch check back to be safe if I can see where it
-        // belongs. Actually, "track.mPunchCounter" was used in the deleted
-        // block. I should look at where I removed it. It was lines 2795-2803 in
-        // the ORIGINAL file (before my edit).
-
-        // Let's just fix the build error first by defining the variables.
+        track.mPunchCounter--;
       }
 
       float trackDryKill = 0.0f;
       for (int f = 0; f < 17; ++f) {
-        if (track.fxSends[f] > 0.001f || track.smoothedFxSends[f] > 0.001f) {
-          track.smoothedFxSends[f] +=
-              0.01f * (track.fxSends[f] - track.smoothedFxSends[f]);
-
+        if (track.smoothedFxSends[f] > 0.001f) {
           // Per-track mix balance
           float wetAmount = track.smoothedFxSends[f] * track.fxMix[f];
           fxBusesL[f] += preFaderL * wetAmount;
@@ -2939,11 +3075,13 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     // Serial Chain Processing - Skip if bus is idle
     if (std::abs(fxBusesL[0]) > 0.00001f || std::abs(fxBusesR[0]) > 0.00001f)
       routeFx(0, mOverdriveFxL.process(fxBusesL[0]),
-              mOverdriveFxR.process(fxBusesR[0]), true); // Delta
+              mOverdriveFxR.process(fxBusesR[0]),
+              false); // Insert Mode (Not Delta)
 
     if (std::abs(fxBusesL[1]) > 0.00001f || std::abs(fxBusesR[1]) > 0.00001f)
       routeFx(1, mBitcrusherFxL.process(fxBusesL[1]),
-              mBitcrusherFxR.process(fxBusesR[1]), true); // Delta
+              mBitcrusherFxR.process(fxBusesR[1]),
+              false); // Insert Mode (Not Delta)
 
     if (std::abs(fxBusesL[9]) > 0.00001f || std::abs(fxBusesR[9]) > 0.00001f) {
       float hpL = mHpLfoL.process(fxBusesL[9], sampleRate);
@@ -2952,13 +3090,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       routeFx(9, hpL, hpR);
     }
 
-    if (std::abs(fxBusesL[10]) > 0.00001f ||
-        std::abs(fxBusesR[10]) > 0.00001f) {
-      float lpL = mLpLfoL.process(fxBusesL[10], sampleRate);
-      mLpLfoR.syncFrom(mLpLfoL); // KILL PHASE SWIRL
-      float lpR = mLpLfoR.process(fxBusesR[10], sampleRate);
-      routeFx(10, lpL, lpR);
-    }
+    // MOVED LP LFO TO MASTER INSERT (BELOW)
 
     if (std::abs(fxBusesL[2]) > 0.00001f || std::abs(fxBusesR[2]) > 0.00001f) {
       routeFx(2, mChorusFxL.process(fxBusesL[2], sampleRate),
@@ -2974,7 +3106,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       // Use new Stereo Process API
       float wL = 0, wR = 0;
       mTapeWobbleFx.processStereo(fxBusesL[4], fxBusesR[4], wL, wR, sampleRate);
-      routeFx(4, wL, wR, true); // Delta
+      routeFx(4, wL, wR, false); // Insert Mode (Not Delta)
     }
 
     if (std::abs(fxBusesL[5]) > 1.0e-12f || std::abs(fxBusesR[5]) > 1.0e-12f ||
@@ -3009,7 +3141,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       routeFx(
           7, mSlicerFxL.process(fxBusesL[7], mSampleCount + i, mSamplesPerStep),
           mSlicerFxR.process(fxBusesR[7], mSampleCount + i, mSamplesPerStep),
-          true); // Delta
+          false); // Standard Mix
     }
 
     if (std::abs(fxBusesL[8]) > 0.00001f || std::abs(fxBusesR[8]) > 0.00001f) {
@@ -3064,16 +3196,58 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
               mOctaverFxR.process(fxBusesR[14], sampleRate));
     }
 
-    float finalL = (mixedSampleL + wetSampleL + spreadL) * mMasterVolume;
-    float finalR = (mixedSampleR + wetSampleR + spreadR) * mMasterVolume;
+    float finalL = (mixedSampleL + wetSampleL + spreadL);
+    float finalR = (mixedSampleR + wetSampleR + spreadR);
 
     if (!std::isfinite(finalL))
       finalL = 0.0f;
     if (!std::isfinite(finalR))
       finalR = 0.0f;
 
-    outBuffer[i * 2] = softLimit(finalL);
-    outBuffer[i * 2 + 1] = softLimit(finalR);
+    // MASTER INSERTS (LP / HP LFO Pedals)
+    // Apply before Final Master Volume.
+    // Check if pedals are "active" (active usually means mixed in, but for
+    // insert we check if effect is on). Note: We use fxMixLevels as
+    // "Active/Bypass" switch for these global pedals if logic dictates. Or we
+    // just check if Depth > 0 or Rate > 0? No, that's ambiguous. Let's assume
+    // if mFxMixLevels[9/10] > 0, we process. AND we process spreadL/spreadR
+    // (the Accumulator).
+
+    // HP LFO (Pedal 9) - Apply to Master Mix
+    if (mFxMixLevels[9] > 0.01f) {
+      // Note: mHpLfo.process handles the filter logic.
+      // If we want Dry/Wet, we blend. But usually LFO Filter is 100% Wet.
+      // We'll treat MixLevel as ON/OFF switch.
+      float hL = mHpLfoL.process(finalL, sampleRate);
+      mHpLfoR.syncFrom(mHpLfoL);
+      float hR = mHpLfoR.process(finalR, sampleRate);
+      finalL = hL;
+      finalR = hR;
+    }
+
+    // LP LFO (Pedal 10) - Apply to Master Mix
+    if (mFxMixLevels[10] > 0.01f) {
+      float lL = mLpLfoL.process(finalL, sampleRate);
+      mLpLfoR.syncFrom(mLpLfoL);
+      float lR = mLpLfoR.process(finalR, sampleRate);
+      finalL = lL;
+      finalR = lR;
+    }
+
+    // Final Limiter / Soft Clip
+    if (finalL > 1.0f)
+      finalL = fast_tanh(finalL);
+    else if (finalL < -1.0f)
+      finalL = fast_tanh(finalL);
+
+    if (finalR > 1.0f)
+      finalR = fast_tanh(finalR);
+    else if (finalR < -1.0f)
+      finalR = fast_tanh(finalR);
+
+    // Final Master Volume
+    outBuffer[i * 2] = finalL * mMasterVolume;
+    outBuffer[i * 2 + 1] = finalR * mMasterVolume;
   }
 }
 
@@ -3207,8 +3381,56 @@ void AudioEngine::setInputDevice(int deviceId) {
     }
   }
 }
+void AudioEngine::setTrackVolume(int trackIndex, float volume) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TRACK_VOLUME;
+  cmd.trackIndex = trackIndex;
+  cmd.value = volume;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::setTrackActive(int trackIndex, bool active) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TRACK_ACTIVE;
+  cmd.trackIndex = trackIndex;
+  cmd.bValue = active;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::setTrackPan(int trackIndex, float pan) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TRACK_PAN;
+  cmd.trackIndex = trackIndex;
+  cmd.value = pan;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::setEngineType(int trackIndex, int type) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_ENGINE_TYPE;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = type;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
 void AudioEngine::loadSoundFont(int trackIndex, const std::string &path) {
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    FILE *f = fopen(path.c_str(), "rb");
+    if (!f)
+      return;
+
+    // Check file size > 1KB (SoundFonts are usually larger)
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fclose(f); // <--- Close AFTER using
+
+    if (size < 1024) {
+      return;
+    }
+
     std::lock_guard<std::recursive_mutex> lock(mLock);
     mTracks[trackIndex].soundFontEngine.load(path);
   }
@@ -3234,4 +3456,15 @@ std::string AudioEngine::getSoundFontPresetName(int trackIndex,
     return mTracks[trackIndex].soundFontEngine.getPresetName(presetIndex);
   }
   return "";
+}
+
+void AudioEngine::setSlices(int trackIndex, const std::vector<int> &starts,
+                            const std::vector<int> &ends) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_SLICES;
+  cmd.trackIndex = trackIndex;
+  cmd.sliceStarts = starts;
+  cmd.sliceEnds = ends;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
 }

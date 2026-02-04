@@ -90,3 +90,24 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
+
+task incrementVersion(type: Exec) {
+    workingDir '..'
+    commandLine 'python3', 'check_version.py', '--increment'
+}
+
+task checkVersion(type: Exec) {
+    workingDir '..'
+    commandLine 'python3', 'check_version.py'
+    mustRunAfter incrementVersion
+}
+
+// Hook it into the build process
+preBuild.dependsOn checkVersion
+
+// Auto-increment for Release builds
+android.applicationVariants.all { variant ->
+    if (variant.buildType.name == 'release') {
+        variant.preBuildProvider.get().dependsOn incrementVersion
+    }
+}

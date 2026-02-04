@@ -88,4 +88,7 @@ class NativeLib {
     external fun setRecordingLocked(locked: Boolean)
     external fun setTrackActive(trackIndex: Int, active: Boolean)
     external fun setTrackPan(trackIndex: Int, pan: Float)
+    external fun setTrackMute(trackIndex: Int, muted: Boolean)
+    external fun getFxSends(trackIndex: Int): FloatArray
+    external fun getFxMix(trackIndex: Int): FloatArray
 }

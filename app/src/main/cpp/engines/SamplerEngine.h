@@ -61,10 +61,10 @@ public:
     mPitch = 0.0f;
     mStretch = 1.0f;
     mSpeed = 1.0f;
-    mAttack = 0.01f;
-    mDecay = 0.1f;
-    mSustain = 1.0f;
-    mRelease = 0.2f;
+    mAttack = 0.002f; // Fast attack but no click
+    mDecay = 0.5f;    // Longer decay
+    mSustain = 1.0f;  // Full sustain
+    mRelease = 0.5f;  // Smooth release
     mFilterCutoff = 1.0f;
     mFilterResonance = 0.0f;
     mFilterEnvAmount = 0.0f;
@@ -280,12 +280,30 @@ public:
       break;
     case 300: // PITCH: changes the pitch but keeps playback time constant
       mPitch = (value - 0.5f) * 48.0f;
+      for (auto &v : mVoices) {
+        if (v.active) {
+          float keyShift = (mPlayMode == Chops || mPlayMode == OneShotChops ||
+                            mPlayMode == LoopChops)
+                               ? 0.0f
+                               : (float)(v.note - 60);
+          v.targetPitchRatio = powf(2.0f, (mPitch + keyShift) / 12.0f) * mSpeed;
+        }
+      }
       break;
     case 301: // STRETCH: changes playback time but keeps pitch constant
       mStretch = value * 4.0f;
       break;
     case 302: // SPEED: changes both pitch and playback time together
       mSpeed = value * 2.0f;
+      for (auto &v : mVoices) {
+        if (v.active) {
+          float keyShift = (mPlayMode == Chops || mPlayMode == OneShotChops ||
+                            mPlayMode == LoopChops)
+                               ? 0.0f
+                               : (float)(v.note - 60);
+          v.targetPitchRatio = powf(2.0f, (mPitch + keyShift) / 12.0f) * mSpeed;
+        }
+      }
       break;
     case 303: // Filter Cutoff
       setFilterCutoff(value);

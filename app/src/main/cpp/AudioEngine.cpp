@@ -1703,15 +1703,14 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
             int seqStep = track.sequencer.getCurrentStepIndex();
             track.mInternalStepIndex = seqStep;
 
-            // Restoration: Revert ANY P-locks from the PREVIOUS step to their
-            // base values before applying logic for THIS step.
-            for (int p = 0; p < 2500; ++p) {
-              if (std::abs(track.appliedParameters[p] - track.parameters[p]) >
-                  0.0001f) {
-                track.appliedParameters[p] = track.parameters[p];
-                updateEngineParameter(t, p, track.parameters[p]);
-              }
+            // Restoration: Revert P-locks from the PREVIOUS step to base values
+            // Optimized: Only restore parameters that were actually modified
+            for (int i = 0; i < track.mActivePLockCount; ++i) {
+              int p = track.mActivePLocks[i];
+              track.appliedParameters[p] = track.parameters[p];
+              updateEngineParameter(t, p, track.parameters[p]);
             }
+            track.mActivePLockCount = 0;
 
             const std::vector<Step> &steps = track.sequencer.getSteps();
             if (seqStep < steps.size()) {
@@ -1749,6 +1748,10 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                   for (auto const &[pid, val] : s.parameterLocks) {
                     track.appliedParameters[pid] = val;
                     updateEngineParameter(t, pid, val);
+                    // Track modified parameters for efficient restoration
+                    if (track.mActivePLockCount < 32) {
+                      track.mActivePLocks[track.mActivePLockCount++] = pid;
+                    }
                   }
                 }
               }
@@ -2559,6 +2562,13 @@ void AudioEngine::startRecordingSample(int trackIndex) {
 void AudioEngine::stopRecordingSample(int trackIndex) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (!mIsRecordingLocked) {
+    // Commit recorded samples to active buffer (lock-free swap)
+    if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+      if (mTracks[trackIndex].engineType == 2)
+        mTracks[trackIndex].samplerEngine.commitRecording();
+      else if (mTracks[trackIndex].engineType == 3)
+        mTracks[trackIndex].granularEngine.commitRecording();
+    }
     mIsRecordingSample = false;
     mRecordingTrackIndex = -1;
   }

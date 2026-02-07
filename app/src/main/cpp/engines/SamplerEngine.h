@@ -5,6 +5,7 @@
 #include "Adsr.h"
 #include <algorithm>
 #include <android/log.h>
+#include <atomic>
 #include <cmath>
 #include <memory>
 #include <mutex>
@@ -57,6 +58,57 @@ public:
       v.reset();
   }
 
+  // Disable copy (atomic is not copyable)
+  SamplerEngine(const SamplerEngine &) = delete;
+  SamplerEngine &operator=(const SamplerEngine &) = delete;
+
+  // Move constructor (atomics need explicit handling)
+  SamplerEngine(SamplerEngine &&other) noexcept
+      : mActiveBuffer(other.mActiveBuffer.load(std::memory_order_relaxed)),
+        mBuffers{std::move(other.mBuffers[0]), std::move(other.mBuffers[1])},
+        mRecordingBuffer(std::move(other.mRecordingBuffer)),
+        mReverse(other.mReverse), mVoices(std::move(other.mVoices)),
+        mTrimStart(other.mTrimStart), mTrimEnd(other.mTrimEnd),
+        mPitch(other.mPitch), mStretch(other.mStretch), mSpeed(other.mSpeed),
+        mAttack(other.mAttack), mDecay(other.mDecay), mSustain(other.mSustain),
+        mRelease(other.mRelease), mFilterCutoff(other.mFilterCutoff),
+        mFilterResonance(other.mFilterResonance),
+        mFilterEnvAmount(other.mFilterEnvAmount), mGlide(other.mGlide),
+        mLastPitchRatio(other.mLastPitchRatio), mPlayMode(other.mPlayMode),
+        mUseEnvelope(other.mUseEnvelope), mSampleRate(other.mSampleRate),
+        mSlices(std::move(other.mSlices)) {}
+
+  SamplerEngine &operator=(SamplerEngine &&other) noexcept {
+    if (this != &other) {
+      mActiveBuffer.store(other.mActiveBuffer.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+      mBuffers[0] = std::move(other.mBuffers[0]);
+      mBuffers[1] = std::move(other.mBuffers[1]);
+      mRecordingBuffer = std::move(other.mRecordingBuffer);
+      mReverse = other.mReverse;
+      mVoices = std::move(other.mVoices);
+      mTrimStart = other.mTrimStart;
+      mTrimEnd = other.mTrimEnd;
+      mPitch = other.mPitch;
+      mStretch = other.mStretch;
+      mSpeed = other.mSpeed;
+      mAttack = other.mAttack;
+      mDecay = other.mDecay;
+      mSustain = other.mSustain;
+      mRelease = other.mRelease;
+      mFilterCutoff = other.mFilterCutoff;
+      mFilterResonance = other.mFilterResonance;
+      mFilterEnvAmount = other.mFilterEnvAmount;
+      mGlide = other.mGlide;
+      mLastPitchRatio = other.mLastPitchRatio;
+      mPlayMode = other.mPlayMode;
+      mUseEnvelope = other.mUseEnvelope;
+      mSampleRate = other.mSampleRate;
+      mSlices = std::move(other.mSlices);
+    }
+    return *this;
+  }
+
   void resetToDefaults() {
     mPitch = 0.0f;
     mStretch = 1.0f;
@@ -78,52 +130,51 @@ public:
   }
 
   void setSample(const std::vector<float> &data) {
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
-    mBuffer = data;
+    // Write to inactive buffer, then swap
+    int inactive = 1 - mActiveBuffer.load(std::memory_order_acquire);
+    mBuffers[inactive] = data;
+    mActiveBuffer.store(inactive, std::memory_order_release);
   }
   void loadSample(const std::vector<float> &data) { setSample(data); }
-  const std::vector<float> &getSampleData() const { return mBuffer; }
+  const std::vector<float> &getSampleData() const {
+    return mBuffers[mActiveBuffer.load(std::memory_order_acquire)];
+  }
+
+  // Helper for internal access to active buffer
+  const std::vector<float> &getBuffer() const {
+    return mBuffers[mActiveBuffer.load(std::memory_order_acquire)];
+  }
 
   void setSlicePoints(const std::vector<float> &points) {
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
+    std::lock_guard<std::mutex> lock(mSliceLock);
     mSlices.clear();
-    if (mBuffer.empty())
+    int active = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &buf = mBuffers[active];
+    if (buf.empty())
       return;
 
     for (size_t i = 0; i < points.size(); ++i) {
-      size_t start = static_cast<size_t>(points[i] * mBuffer.size());
+      size_t start = static_cast<size_t>(points[i] * buf.size());
       size_t end = (i + 1 < points.size())
-                       ? static_cast<size_t>(points[i + 1] * mBuffer.size())
-                       : mBuffer.size();
+                       ? static_cast<size_t>(points[i + 1] * buf.size())
+                       : buf.size();
       if (start < end)
         mSlices.push_back({start, end});
     }
-    // Ensure specific count or just use points?
-    // Existing logic used regions. WavUtils saves points.
-    // If points are just start markers:
-    // We can reconstruct regions [p[i], p[i+1]].
   }
 
   void setPlaybackSpeed(float speed);
 
   void setSlicePosition(int index, float position) {
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
-    if (index >= 0 && index < mSlices.size() && !mBuffer.empty()) {
-      size_t newStart = static_cast<size_t>(position * mBuffer.size());
-      // Constrain to buffer
-      if (newStart >= mBuffer.size())
-        newStart = mBuffer.size() - 1;
+    std::lock_guard<std::mutex> lock(mSliceLock);
+    int active = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &buf = mBuffers[active];
+    if (index >= 0 && index < (int)mSlices.size() && !buf.empty()) {
+      size_t newStart = static_cast<size_t>(position * buf.size());
+      if (newStart >= buf.size())
+        newStart = buf.size() - 1;
 
       mSlices[index].start = newStart;
-      // Optimistic update of previous/next bounds?
-      // For now, we trust the UI to send valid ordered points or we just update
-      // the specific slice start. Note: mSlices is [start, end]. If we change
-      // start, we might overlap. The current engine uses mSlices[i].start to
-      // mSlices[i].end. If we drag a slice point, we usually mean the boundary
-      // between slice i and i-1? Or the start of slice i? The UI sends "Slice
-      // Points" which are usually just the starts. In `setSlicePoints`, we
-      // construct [start, nextStart]. So if we update slice i start, we should
-      // arguably update slice i-1 end?
       if (index > 0) {
         mSlices[index - 1].end = newStart;
       }
@@ -131,51 +182,69 @@ public:
   }
 
   void clearBuffer() {
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
-    mBuffer.clear();
+    int inactive = 1 - mActiveBuffer.load(std::memory_order_acquire);
+    mBuffers[inactive].clear();
+    mActiveBuffer.store(inactive, std::memory_order_release);
+    std::lock_guard<std::mutex> lock(mSliceLock);
     mSlices.clear();
     for (auto &v : mVoices)
       v.active = false;
   }
 
   void pushSample(float sample) {
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
-    mBuffer.push_back(sample);
+    // During recording, accumulate in recording buffer
+    std::lock_guard<std::mutex> lock(mRecordingLock);
+    mRecordingBuffer.push_back(sample);
+  }
+
+  void commitRecording() {
+    // Called when recording stops - swap to active
+    std::lock_guard<std::mutex> lock(mRecordingLock);
+    int inactive = 1 - mActiveBuffer.load(std::memory_order_acquire);
+    mBuffers[inactive] = std::move(mRecordingBuffer);
+    mRecordingBuffer.clear();
+    mActiveBuffer.store(inactive, std::memory_order_release);
   }
 
   void normalize() {
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
-    if (mBuffer.empty())
+    int active = mActiveBuffer.load(std::memory_order_acquire);
+    if (mBuffers[active].empty())
       return;
+    int inactive = 1 - active;
+    mBuffers[inactive] = mBuffers[active];
     float maxVal = 0.0f;
-    for (float s : mBuffer)
+    for (float s : mBuffers[inactive])
       maxVal = std::max(maxVal, std::abs(s));
     if (maxVal > 0.0001f) {
       float gain = 0.95f / maxVal;
-      for (auto &s : mBuffer)
+      for (auto &s : mBuffers[inactive])
         s *= gain;
     }
+    mActiveBuffer.store(inactive, std::memory_order_release);
   }
 
   void trim() {
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
-    if (mBuffer.empty())
+    int active = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &buf = mBuffers[active];
+    if (buf.empty())
       return;
-    size_t start = static_cast<size_t>(mTrimStart * mBuffer.size());
-    size_t end = static_cast<size_t>(mTrimEnd * mBuffer.size());
-    if (end > mBuffer.size())
-      end = mBuffer.size();
+    size_t start = static_cast<size_t>(mTrimStart * buf.size());
+    size_t end = static_cast<size_t>(mTrimEnd * buf.size());
+    if (end > buf.size())
+      end = buf.size();
     if (start >= end) {
       if (end > 0)
         start = end - 1;
       else
         return;
     }
-    std::vector<float> newBuffer(mBuffer.begin() + start,
-                                 mBuffer.begin() + end);
-    mBuffer = std::move(newBuffer);
+    int inactive = 1 - active;
+    mBuffers[inactive] =
+        std::vector<float>(buf.begin() + start, buf.begin() + end);
+    mActiveBuffer.store(inactive, std::memory_order_release);
     mTrimStart = 0.0f;
     mTrimEnd = 1.0f;
+    std::lock_guard<std::mutex> lock(mSliceLock);
     mSlices.clear();
     for (auto &v : mVoices)
       v.active = false;
@@ -200,11 +269,10 @@ public:
   void setGlide(float g) { mGlide = g; }
 
   void triggerNote(int note, int velocity) {
-    if (!mBufferLock->try_lock())
-      return;
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock, std::adopt_lock);
+    int active = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &buf = mBuffers[active];
 
-    if (mBuffer.empty())
+    if (buf.empty())
       return;
 
     int voiceIdx = -1;
@@ -253,10 +321,10 @@ public:
       v.start = mSlices[sliceIdx].start;
       v.end = mSlices[sliceIdx].end;
     } else {
-      v.start = static_cast<size_t>(mTrimStart * mBuffer.size());
-      v.end = static_cast<size_t>(mTrimEnd * mBuffer.size());
-      if (v.end > mBuffer.size())
-        v.end = mBuffer.size();
+      v.start = static_cast<size_t>(mTrimStart * buf.size());
+      v.end = static_cast<size_t>(mTrimEnd * buf.size());
+      if (v.end > buf.size())
+        v.end = buf.size();
       if (v.start >= v.end && v.end > 0)
         v.start = v.end - 1;
     }
@@ -294,7 +362,6 @@ public:
   }
 
   void setParameter(int id, float value) {
-    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     switch (id) {
     case 1: // Cutoff
       setFilterCutoff(value);
@@ -403,7 +470,8 @@ public:
   void setFilterEnvAmount(float v) { mFilterEnvAmount = v; }
 
   float render() {
-    if (mBuffer.empty())
+    const auto &buffer = getBuffer();
+    if (buffer.empty())
       return 0.0f;
 
     float mixedOutput = 0.0f;
@@ -454,8 +522,8 @@ public:
       // mode
       if (mPlayMode != Chops && mPlayMode != OneShotChops &&
           mPlayMode != LoopChops) {
-        v.start = static_cast<size_t>(mTrimStart * mBuffer.size());
-        v.end = static_cast<size_t>(mTrimEnd * mBuffer.size());
+        v.start = static_cast<size_t>(mTrimStart * buffer.size());
+        v.end = static_cast<size_t>(mTrimEnd * buffer.size());
       }
 
       float voiceOutput = 0.0f;
@@ -472,15 +540,15 @@ public:
         }
         int idx = static_cast<int>(v.position);
         // Fix: Prevent playing past slice end in Chops modes (One Chop)
-        if (idx >= 0 && idx < (int)mBuffer.size()) {
+        if (idx >= 0 && idx < (int)buffer.size()) {
           // If we are in a non-looping mode, strictly enforce v.end
           if (mPlayMode == OneShot || mPlayMode == Chops ||
               mPlayMode == OneShotChops) {
             if (idx < (int)v.end) {
-              voiceOutput = mBuffer[idx];
+              voiceOutput = buffer[idx];
             }
           } else {
-            voiceOutput = mBuffer[idx];
+            voiceOutput = buffer[idx];
           }
         }
       } else {
@@ -502,24 +570,24 @@ public:
         float w1 = 1.0f - std::abs(phase * 2.0f - 1.0f);
 
         float s1 = 0.0f;
-        if (idx1 >= 0 && idx1 < (int)mBuffer.size()) {
+        if (idx1 >= 0 && idx1 < (int)buffer.size()) {
           if (mPlayMode == OneShot || mPlayMode == Chops ||
               mPlayMode == OneShotChops) {
             if (idx1 < (int)v.end)
-              s1 = mBuffer[idx1];
+              s1 = buffer[idx1];
           } else {
-            s1 = mBuffer[idx1];
+            s1 = buffer[idx1];
           }
         }
 
         float s2 = 0.0f;
-        if (idx2 >= 0 && idx2 < (int)mBuffer.size()) {
+        if (idx2 >= 0 && idx2 < (int)buffer.size()) {
           if (mPlayMode == OneShot || mPlayMode == Chops ||
               mPlayMode == OneShotChops) {
             if (idx2 < (int)v.end)
-              s2 = mBuffer[idx2];
+              s2 = buffer[idx2];
           } else {
-            s2 = mBuffer[idx2];
+            s2 = buffer[idx2];
           }
         }
 
@@ -560,11 +628,13 @@ public:
   }
 
   void findConstrainedSlices(int count) {
+    const auto &buf = getBuffer();
+    std::lock_guard<std::mutex> lock(mSliceLock);
     mSlices.clear();
-    if (mBuffer.empty() || count <= 0)
+    if (buf.empty() || count <= 0)
       return;
 
-    size_t totalSamples = mBuffer.size();
+    size_t totalSamples = buf.size();
     size_t avgLength = totalSamples / count;
     size_t windowSize = avgLength; // +/- 50% search window centered at beat
 
@@ -588,7 +658,7 @@ public:
       for (size_t j = searchStart; j < searchEnd - energyWindow; j += 128) {
         float energy = 0.0f;
         for (int k = 0; k < energyWindow; ++k) {
-          float s = mBuffer[j + k];
+          float s = buf[j + k];
           energy += s * s;
         }
 
@@ -611,37 +681,41 @@ public:
   }
 
   void prepareSlices(int count) {
+    const auto &buf = getBuffer();
+    std::lock_guard<std::mutex> lock(mSliceLock);
     mSlices.clear();
-    if (mBuffer.empty() || count <= 0)
+    if (buf.empty() || count <= 0)
       return;
-    size_t step = mBuffer.size() / count;
+    size_t step = buf.size() / count;
     for (int i = 0; i < count; ++i) {
       mSlices.push_back({i * step, (i + 1) * step});
     }
   }
 
   std::vector<float> getSlicePoints() const {
+    const auto &buf = getBuffer();
     std::vector<float> points;
-    if (mBuffer.empty())
+    if (buf.empty())
       return points;
     for (const auto &s : mSlices) {
-      points.push_back((float)s.start / (float)mBuffer.size());
+      points.push_back((float)s.start / (float)buf.size());
     }
     return points;
   }
 
   std::vector<float> getAmplitudeWaveform(int numPoints) const {
+    const auto &buf = getBuffer();
     std::vector<float> result;
-    if (mBuffer.empty())
+    if (buf.empty())
       return result;
-    int step = mBuffer.size() / numPoints;
+    int step = buf.size() / numPoints;
     if (step < 1)
       step = 1;
     for (int i = 0; i < numPoints; ++i) {
       float maxVal = 0.0f;
-      int end = std::min((int)mBuffer.size(), (i + 1) * step);
+      int end = std::min((int)buf.size(), (i + 1) * step);
       for (int j = i * step; j < end; ++j) {
-        maxVal = std::max(maxVal, std::abs(mBuffer[j]));
+        maxVal = std::max(maxVal, std::abs(buf[j]));
       }
       result.push_back(maxVal);
     }
@@ -655,8 +729,13 @@ public:
     return false;
   }
 
-  std::shared_ptr<std::recursive_mutex> mBufferLock =
-      std::make_shared<std::recursive_mutex>();
+  // Double-buffering for lock-free audio
+  mutable std::atomic<int> mActiveBuffer{0};
+  std::vector<float> mBuffers[2];
+  std::mutex mRecordingLock;
+  std::vector<float> mRecordingBuffer;
+  std::mutex mSliceLock;
+
   bool mReverse = false;
 
 private:
@@ -674,7 +753,6 @@ private:
   int mSampleRate = 48000;
 
   std::vector<Slice> mSlices;
-  std::vector<float> mBuffer;
 };
 
 #endif // SAMPLER_ENGINE_H

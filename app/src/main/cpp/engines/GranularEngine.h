@@ -3,8 +3,9 @@
 
 #include "Adsr.h"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
-#include <memory> // Added for std::shared_ptr
+#include <memory>
 #include <mutex>
 #include <random>
 #include <vector>
@@ -48,8 +49,8 @@ public:
       return (a0 * mu * mu2) + (a1 * mu2) + (a2 * mu) + a3;
     }
 
-    float nextSample(const std::vector<float> &source) {
-      if (!isActive || source.empty())
+    float nextSample(const float *source, size_t sourceSize) {
+      if (!isActive || sourceSize == 0)
         return 0.0f;
 
       // -- GRAIN ENVELOPE (Windowing) --
@@ -62,7 +63,7 @@ public:
 
       // Parameter Setters
 
-      int size = static_cast<int>(source.size());
+      int size = static_cast<int>(sourceSize);
       int idx = static_cast<int>(position);
       float frac = position - static_cast<float>(idx);
 
@@ -143,8 +144,63 @@ public:
     resetToDefaults();
   }
 
+  // Disable copy (atomic is not copyable)
+  GranularEngine(const GranularEngine &) = delete;
+  GranularEngine &operator=(const GranularEngine &) = delete;
+
+  // Move constructor (atomics need explicit handling)
+  GranularEngine(GranularEngine &&other) noexcept
+      : mActiveBuffer(other.mActiveBuffer.load(std::memory_order_relaxed)),
+        mSourceBuffers{std::move(other.mSourceBuffers[0]),
+                       std::move(other.mSourceBuffers[1])},
+        mRecordingBuffer(std::move(other.mRecordingBuffer)),
+        mBasePitch(other.mBasePitch), mGrains(std::move(other.mGrains)),
+        mLFOS(std::move(other.mLFOS)), mVoices(std::move(other.mVoices)),
+        mPosition(other.mPosition), mSpeed(other.mSpeed),
+        mGrainSize(other.mGrainSize), mDensity(other.mDensity),
+        mPitch(other.mPitch), mSpray(other.mSpray), mDetune(other.mDetune),
+        mRandomTiming(other.mRandomTiming), mMaxGrains(other.mMaxGrains),
+        mWidth(other.mWidth), mReverseProb(other.mReverseProb),
+        mGlide(other.mGlide), mLastBasePitch(other.mLastBasePitch),
+        mSampleRate(other.mSampleRate), mMainAttack(other.mMainAttack),
+        mMainDecay(other.mMainDecay), mMainSustain(other.mMainSustain),
+        mMainRelease(other.mMainRelease), mGain(other.mGain) {}
+
+  GranularEngine &operator=(GranularEngine &&other) noexcept {
+    if (this != &other) {
+      mActiveBuffer.store(other.mActiveBuffer.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+      mSourceBuffers[0] = std::move(other.mSourceBuffers[0]);
+      mSourceBuffers[1] = std::move(other.mSourceBuffers[1]);
+      mRecordingBuffer = std::move(other.mRecordingBuffer);
+      mBasePitch = other.mBasePitch;
+      mGrains = std::move(other.mGrains);
+      mLFOS = std::move(other.mLFOS);
+      mVoices = std::move(other.mVoices);
+      mPosition = other.mPosition;
+      mSpeed = other.mSpeed;
+      mGrainSize = other.mGrainSize;
+      mDensity = other.mDensity;
+      mPitch = other.mPitch;
+      mSpray = other.mSpray;
+      mDetune = other.mDetune;
+      mRandomTiming = other.mRandomTiming;
+      mMaxGrains = other.mMaxGrains;
+      mWidth = other.mWidth;
+      mReverseProb = other.mReverseProb;
+      mGlide = other.mGlide;
+      mLastBasePitch = other.mLastBasePitch;
+      mSampleRate = other.mSampleRate;
+      mMainAttack = other.mMainAttack;
+      mMainDecay = other.mMainDecay;
+      mMainSustain = other.mMainSustain;
+      mMainRelease = other.mMainRelease;
+      mGain = other.mGain;
+    }
+    return *this;
+  }
+
   void resetToDefaults() {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
     mPosition = 0.5f;
     mSpeed = 1.0f;
     mGrainSize = 0.2f;
@@ -176,43 +232,62 @@ public:
   }
 
   void setSource(const std::vector<float> &source) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
-    mSource = source;
+    // Write to inactive buffer, then swap
+    int inactive = 1 - mActiveBuffer.load(std::memory_order_acquire);
+    mSourceBuffers[inactive] = source;
+    mActiveBuffer.store(inactive, std::memory_order_release);
   }
-  const std::vector<float> &getSampleData() const { return mSource; }
+  const std::vector<float> &getSampleData() const {
+    return mSourceBuffers[mActiveBuffer.load(std::memory_order_acquire)];
+  }
   void clearSource() {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
-    mSource.clear();
+    int inactive = 1 - mActiveBuffer.load(std::memory_order_acquire);
+    mSourceBuffers[inactive].clear();
+    mActiveBuffer.store(inactive, std::memory_order_release);
   }
   void pushSample(float sample) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
-    mSource.push_back(sample);
+    // During recording, accumulate in recording buffer (not live yet)
+    std::lock_guard<std::mutex> lock(mRecordingLock);
+    mRecordingBuffer.push_back(sample);
+  }
+  void commitRecording() {
+    // Called when recording stops - swap to active
+    std::lock_guard<std::mutex> lock(mRecordingLock);
+    int inactive = 1 - mActiveBuffer.load(std::memory_order_acquire);
+    mSourceBuffers[inactive] = std::move(mRecordingBuffer);
+    mRecordingBuffer.clear();
+    mActiveBuffer.store(inactive, std::memory_order_release);
   }
 
   void normalize() {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
-    if (mSource.empty())
+    int active = mActiveBuffer.load(std::memory_order_acquire);
+    if (mSourceBuffers[active].empty())
       return;
+    // Work on inactive buffer
+    int inactive = 1 - active;
+    mSourceBuffers[inactive] = mSourceBuffers[active];
     float maxVal = 0.0f;
-    for (float s : mSource)
+    for (float s : mSourceBuffers[inactive])
       maxVal = std::max(maxVal, std::abs(s));
     if (maxVal > 0.0001f) {
-      for (float &s : mSource)
+      for (float &s : mSourceBuffers[inactive])
         s /= maxVal;
     }
+    mActiveBuffer.store(inactive, std::memory_order_release);
   }
 
   void trim(float start, float end) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
-    if (mSource.empty())
+    int active = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &src = mSourceBuffers[active];
+    if (src.empty())
       return;
-    int s = std::max(
-        0, std::min((int)(start * mSource.size()), (int)mSource.size()));
-    int e =
-        std::max(0, std::min((int)(end * mSource.size()), (int)mSource.size()));
+    int s = std::max(0, std::min((int)(start * src.size()), (int)src.size()));
+    int e = std::max(0, std::min((int)(end * src.size()), (int)src.size()));
     if (e > s) {
-      std::vector<float> trimmed(mSource.begin() + s, mSource.begin() + e);
-      mSource = trimmed;
+      int inactive = 1 - active;
+      mSourceBuffers[inactive] =
+          std::vector<float>(src.begin() + s, src.begin() + e);
+      mActiveBuffer.store(inactive, std::memory_order_release);
     }
   }
 
@@ -266,7 +341,6 @@ public:
   }
 
   void setParameter(int id, float value) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
     if (id == 400)
       mPosition = value;
     else if (id == 401)
@@ -354,8 +428,10 @@ public:
   }
 
   void render(float *left, float *right) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
-    if (mSource.empty()) {
+    // Lock-free: read from active buffer
+    int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &source = mSourceBuffers[activeIdx];
+    if (source.empty()) {
       *left = *right = 0.0f;
       return;
     }
@@ -405,9 +481,11 @@ public:
     // 2. Render and Mix Grains
     float lMixed = 0.0f, rMixed = 0.0f;
     int activeCount = 0;
+    const float *srcData = source.data();
+    size_t srcSize = source.size();
     for (auto &g : mGrains) {
       if (g.isActive) {
-        float sample = g.nextSample(mSource);
+        float sample = g.nextSample(srcData, srcSize);
 
         // Multiplier from parent voice (ADSR + Velocity)
         float masterGain = 0.0f;
@@ -436,11 +514,12 @@ public:
     float vol;
   };
   void getPlayheads(PlayheadInfo *out, int maxCount) {
-    std::lock_guard<std::mutex> lock(*mBufferLock);
+    int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &source = mSourceBuffers[activeIdx];
     int count = 0;
     for (const auto &g : mGrains) {
       if (g.isActive && count < maxCount) {
-        out[count].pos = g.position / mSource.size();
+        out[count].pos = source.empty() ? 0.0f : g.position / source.size();
 
         // VISIBILITY FIX: Multiply grain envelope by voice envelope so it fades
         // correctly
@@ -460,17 +539,19 @@ public:
   }
 
   std::vector<float> getAmplitudeWaveform(int numPoints) const {
+    int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &source = mSourceBuffers[activeIdx];
     std::vector<float> result;
-    if (mSource.empty())
+    if (source.empty())
       return result;
-    int step = mSource.size() / numPoints;
+    int step = source.size() / numPoints;
     if (step < 1)
       step = 1;
     for (int i = 0; i < numPoints; ++i) {
       float maxVal = 0.0f;
-      int end = std::min((int)mSource.size(), (i + 1) * step);
+      int end = std::min((int)source.size(), (i + 1) * step);
       for (int j = i * step; j < end; ++j) {
-        maxVal = std::max(maxVal, std::abs(mSource[j]));
+        maxVal = std::max(maxVal, std::abs(source[j]));
       }
       result.push_back(maxVal);
     }
@@ -478,9 +559,13 @@ public:
   }
 
 private:
-  std::shared_ptr<std::mutex> mBufferLock = std::make_shared<std::mutex>();
+  // Double-buffering for lock-free audio
+  mutable std::atomic<int> mActiveBuffer{0};
+  std::vector<float> mSourceBuffers[2];
+  std::mutex mRecordingLock;
+  std::vector<float> mRecordingBuffer;
+
   float mBasePitch = 1.0f;
-  std::vector<float> mSource;
   std::vector<Grain> mGrains;
   std::vector<LFO> mLFOS;
   std::vector<Voice> mVoices;
@@ -509,7 +594,9 @@ private:
   float mGain = 1.0f;
 
   void spawnGrain(float *lfoOffsets, int voiceIdx) {
-    if (mSource.empty())
+    int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
+    const auto &source = mSourceBuffers[activeIdx];
+    if (source.empty())
       return;
     Voice &v = mVoices[voiceIdx];
     // Find inactive grain
@@ -534,7 +621,7 @@ private:
             (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) - 0.5f) *
             mDetune;
 
-        g.position = p * mSource.size();
+        g.position = p * source.size();
         g.speed = sp * v.basePitch * grainPitch;
         g.isReverse = (static_cast<float>(rand()) /
                        static_cast<float>(RAND_MAX)) < mReverseProb;

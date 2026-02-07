@@ -51,8 +51,8 @@ public:
     // Feedback
     float feedback = delayed * mFeedback;
 
-    // Write
-    float toWrite = input + feedback;
+    // Write w/ Saturation to prevent explosion
+    float toWrite = input + std::tanh(feedback);
     if (std::abs(toWrite) < 1.0e-15f)
       toWrite = 0.0f;
     mBuffer[mWritePos] = toWrite;

@@ -148,6 +148,9 @@ public:
 
   void processStereoWet(float inL, float inR, float &outL, float &outR) {
     if (!std::isfinite(inL) || !std::isfinite(inR)) {
+      // If input is bad, we MUST clear the tank, otherwise it stays broken
+      // forever.
+      clear();
       outL = outR = 0.0f;
       return;
     }

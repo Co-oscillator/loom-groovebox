@@ -25,11 +25,15 @@ public:
   Arpeggiator()
       : mMode(ArpMode::OFF), mStep(0), mOctaves(0), mInversion(0),
         mIsLatched(false), mIsWaitingForNewGesture(false), mUpperLane1Index(0),
-        mUpperLane2Index(0) {
+        mUpperLane2Index(0), mRng(std::random_device{}()) {
     // Default: Lane 0 (Root) active, Lanes 1 & 2 inactive
     mRhythms.resize(3, std::vector<bool>(16, false));
     std::fill(mRhythms[0].begin(), mRhythms[0].end(), true);
     mScaleIntervals = {0, 2, 4, 5, 7, 9, 11}; // Default Major
+
+    mHeldNotes.reserve(32);
+    mSequence.reserve(128);
+    mNotesToPlay.reserve(8);
   }
 
   void setChordProgConfig(bool enabled, int mood, int complexity) {
@@ -127,9 +131,10 @@ public:
     mIsWaitingForNewGesture = false;
   }
 
-  std::vector<int> nextNotes() {
+  const std::vector<int> &nextNotes() {
+    mNotesToPlay.clear();
     if (mSequence.empty() || mMode == ArpMode::OFF || mRhythms.empty())
-      return {};
+      return mNotesToPlay;
 
     // Check for harmonic step change
     if (mIsChordProgEnabled && !mGeneratedChordProgression.empty()) {
@@ -140,29 +145,26 @@ public:
       }
     }
 
-    std::vector<int> notesToPlay;
     int stepIndex = mStep % 16; // 16 step pattern
 
-    int seqSize = mSequence.size();
+    int seqSize = (int)mSequence.size();
 
     // Lane 0: Root/Main Note
     if (mRhythms.size() > 0 && mRhythms[0][stepIndex]) {
       int idx = mStep % seqSize;
 
-      // Removed old mutation logic as requested by user ("no longer needed")
-
       int noteIdx = mSequence[idx];
       if (mInversion != 0 && (mStep % seqSize) == 0) {
         noteIdx += mInversion * 12; // Apply inversion to root of cycle
       }
-      notesToPlay.push_back(noteIdx);
+      mNotesToPlay.push_back(noteIdx);
     }
 
     // Lane 1: +1 Walk
     if (mRhythms.size() > 1 && mRhythms[1][stepIndex]) {
       if (seqSize > 1) {
         int idx = (mStep + 1) % seqSize;
-        notesToPlay.push_back(mSequence[idx]);
+        mNotesToPlay.push_back(mSequence[idx]);
       }
     }
 
@@ -170,12 +172,12 @@ public:
     if (mRhythms.size() > 2 && mRhythms[2][stepIndex]) {
       if (seqSize > 2) {
         int idx = (mStep + 2) % seqSize;
-        notesToPlay.push_back(mSequence[idx]);
+        mNotesToPlay.push_back(mSequence[idx]);
       }
     }
 
     mStep++;
-    return notesToPlay;
+    return mNotesToPlay;
   }
 
   void reset() { mStep = 0; }
@@ -190,8 +192,10 @@ private:
   bool mIsWaitingForNewGesture;
   std::vector<int> mHeldNotes;
   std::vector<int> mSequence;
+  std::vector<int> mNotesToPlay;
   std::vector<std::vector<bool>> mRhythms; // 3 lanes x 8 steps
   std::vector<int> mRandomSequence;
+  std::mt19937 mRng;
 
   bool mIsChordProgEnabled = false;
   int mChordProgMood = 0;
@@ -241,6 +245,7 @@ private:
 
     // Expand octaves
     std::vector<int> expanded;
+    expanded.reserve(32);
     int startOct = std::min(0, mOctaves);
     int endOct = std::max(0, mOctaves);
     for (int o = startOct; o <= endOct; ++o) {
@@ -262,7 +267,7 @@ private:
       break;
     case ArpMode::UP_DOWN:
       mSequence = expanded;
-      for (int i = expanded.size() - 2; i > 0; --i) {
+      for (int i = (int)expanded.size() - 2; i > 0; --i) {
         mSequence.push_back(expanded[i]);
       }
       break;
@@ -287,17 +292,14 @@ private:
         }
       } else {
         mSequence = expanded;
-        std::shuffle(mSequence.begin(), mSequence.end(),
-                     std::mt19937(std::random_device()()));
+        std::shuffle(mSequence.begin(), mSequence.end(), mRng);
       }
       break;
     case ArpMode::BACH: {
       // 3 steps forward, 1 step back
       if (expanded.empty())
         break;
-      int size = expanded.size();
-      // Generate a loop that covers the progression
-      // Approx length: size * 1.5
+      int size = (int)expanded.size();
       for (int i = 0; i < size + 4; ++i) { // Safety margin
         int groupSize = 3;
         int baseShift = i / groupSize;
@@ -311,7 +313,7 @@ private:
       // 0, Max, 1, Max-1...
       if (expanded.empty())
         break;
-      int size = expanded.size();
+      int size = (int)expanded.size();
       for (int i = 0; i < size; ++i) {
         int offset = i / 2;
         int idx = (i % 2 == 0) ? offset : (size - 1 - offset);
@@ -325,7 +327,7 @@ private:
       // Inner -> Outer
       if (expanded.empty())
         break;
-      int size = expanded.size();
+      int size = (int)expanded.size();
       int center = size / 2;
       for (int i = 0; i < size; ++i) {
         int offset = (i + 1) / 2;
@@ -340,16 +342,17 @@ private:
       // Random walk simulation (pre-calc for loop stability)
       if (expanded.empty())
         break;
-      int size = expanded.size();
+      int size = (int)expanded.size();
       int current = 0;
-      std::mt19937 rng(std::random_device{}());
       std::uniform_int_distribution<int> dist(-1, 1);
 
       // Generate a nice long walk
       for (int i = 0; i < 32; ++i) {
         mSequence.push_back(expanded[current]);
-        int move = dist(rng);
-        current = std::clamp(current + move, 0, size - 1);
+        int move = dist(mRng);
+        current = (current + move < 0)
+                      ? 0
+                      : (current + move >= size ? size - 1 : current + move);
       }
       break;
     }

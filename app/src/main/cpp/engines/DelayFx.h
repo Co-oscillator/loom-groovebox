@@ -44,14 +44,23 @@ public:
     }
   }
 
+  void setSampleRate(float sr) { mSampleRate = sr; }
+
   void setDelay(float frames) {
     if (frames < mBufferL.size())
       mTargetDelayFrames = frames;
   }
   void setDelayTime(float value) {
     // User requested max 1500ms
-    float maxFrames = 1.5f * 48000.0f; // 72000
-    mTargetDelayFrames = value * maxFrames;
+    float maxFrames =
+        1.5f * 48000.0f; // Keep max buffer reference const or dynamic?
+    // Ideally we track sample rate in class. For now, assume 48k for buffer
+    // calc BUT we must use current rate for delay time calc. Actually,
+    // mTargetDelayFrames is absolute frames. If setDelayTime(1.0) means 1
+    // second, it should require Sample Rate. We will update setDelayTime to
+    // rely on a member mSampleRate.
+    float maxFramesRef = 1.5f * mSampleRate;
+    mTargetDelayFrames = value * maxFramesRef;
     if (mTargetDelayFrames < 1.0f)
       mTargetDelayFrames = 1.0f;
   }
@@ -155,8 +164,8 @@ public:
     delayedR = mBufferR[i0] * (1.0f - frac) + mBufferR[i1] * frac;
 
     if (mType == 1) { // Tape
-      delayedL = fast_tanh(delayedL * 1.5f);
-      delayedR = fast_tanh(delayedR * 1.5f);
+      delayedL = fast_tanh(delayedL * 1.2f);
+      delayedR = fast_tanh(delayedR * 1.2f);
     }
 
     // Filter Logic (Per Channel SVF)
@@ -201,7 +210,8 @@ public:
     float nextL = 0, nextR = 0;
     float currentFb = mFeedback;
     if (mType == 1)
-      currentFb *= 0.95f; // Slight reduction for Tape to compensate drive
+      currentFb *=
+          0.8f; // Reduced to 0.8f to compensate for 1.2f Drive (Net ~0.96)
 
     if (mType == 2) { // Ping-Pong
       float monoIn = (inL + inR) * 0.707f;
@@ -270,6 +280,7 @@ private:
   int mFilterMode = 0; // 0=LP, 1=HP, 2=BP
   DelayDetails::TinyAllPass mDiffL[3], mDiffR[3];
   uint32_t mSilentCounter = 48000;
+  float mSampleRate = 48000.0f;
 };
 
 #endif // DELAY_FX_H

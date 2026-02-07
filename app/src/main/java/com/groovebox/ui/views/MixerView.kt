@@ -49,7 +49,7 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                     .padding(vertical = 1.dp)
                     .background(
                         if (isSelected) engineColor.copy(alpha = 0.2f) 
-                        else Color.White.copy(alpha = 0.05f),
+                        else Color.White.copy(alpha = 0.1f),
                         RoundedCornerShape(6.dp)
                     )
                     .border(
@@ -183,14 +183,14 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                     Text(
                         text = "CH ${i + 1}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) engineColor else Color.Gray,
+                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.5f),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = track.engineType.name.replace("_", " "),
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) engineColor else Color.Gray.copy(alpha = 0.8f),
+                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.4f),
                         fontSize = 8.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis

@@ -47,17 +47,28 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
 
         // Note On/Off: Only target the currently selected track
         if (msgType == 0x90 || msgType == 0x80) {
-            val trackIdx = state.selectedTrackIndex
-            val track = state.tracks.getOrNull(trackIdx)
-            if (track != null) {
+        // Note On/Off: Check all tracks for channel matches
+        if (msgType == 0x90 || msgType == 0x80) {
+            state.tracks.forEachIndexed { i, track ->
                 val listensOnAll = track.midiInChannel == 17
                 val listensOnChan = track.midiInChannel == midiChan
                 
-                if (listensOnAll || listensOnChan) {
+                // "All" channels only triggers if this is the selected track
+                // specific channel triggers regardless of selection
+                val shouldTrigger = (listensOnAll && i == state.selectedTrackIndex) || listensOnChan
+                
+                if (shouldTrigger) {
                     var triggeredNote = data1
 
                     // EMP16 Bank A Pad Remapping (ONLY in Bank 0)
-                    if (state.currentSequencerBank == 0) {
+                    // Apply remapping only if this is the selected track and we are in Bank 0
+                    // For background tracks (fixed channel), we likely want standard chromatic mapping
+                    // But if the user plays the pads on channel 1, they expect the remapping.
+                    // We'll apply it if it's the selected track OR if it's a drum engine.
+                    
+                    val isDrum = track.engineType == com.groovebox.EngineType.FM_DRUM || track.engineType == com.groovebox.EngineType.ANALOG_DRUM
+                    
+                    if (state.currentSequencerBank == 0 && i == state.selectedTrackIndex) {
                         val padIdx = when (data1) {
                             in 60..63 -> data1 - 60
                             in 56..59 -> (data1 - 56) + 4
@@ -66,29 +77,33 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
                             else -> -1
                         }
                         if (padIdx != -1) {
-                            triggeredNote = if (track.engineType == com.groovebox.EngineType.FM_DRUM || track.engineType == com.groovebox.EngineType.ANALOG_DRUM) {
+                            triggeredNote = if (isDrum) {
                                 60 + (padIdx % 8)
                             } else {
                                 val scaleNotes = com.groovebox.ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, 24)
                                 scaleNotes.getOrElse(padIdx) { data1 }
                             }
                         }
-                    } else {
-                        // In Bank B or C, we ignore notes from the pads (they will send CC instead)
-                        // This prevents the "high pitched notes" when sequencing.
-                        if (data1 in 41..95) return 
+                    } else if (state.currentSequencerBank != 0 && i == state.selectedTrackIndex && data1 in 41..95) {
+                         // Ignore potentially conflicting pad ranges for selected track in other banks
+                         return@forEachIndexed
                     }
                     
                     if (msgType == 0x90 && data2 > 0) {
-                        nativeLib.triggerNote(trackIdx, triggeredNote, data2)
-                        onCommand(MidiCommand.NoteTriggered(triggeredNote, data2))
+                        nativeLib.triggerNote(i, triggeredNote, data2)
+                        if (i == state.selectedTrackIndex) {
+                             onCommand(MidiCommand.NoteTriggered(triggeredNote, data2))
+                        }
                     } else if (msgType == 0x80 || (msgType == 0x90 && data2 == 0)) {
-                        nativeLib.releaseNote(trackIdx, triggeredNote)
-                        onCommand(MidiCommand.NoteTriggered(triggeredNote, 0))
+                        nativeLib.releaseNote(i, triggeredNote)
+                        if (i == state.selectedTrackIndex) {
+                             onCommand(MidiCommand.NoteTriggered(triggeredNote, 0))
+                        }
                     }
-                    return
                 }
             }
+            return
+        }
         }
 
         if (msgType == 0xB0) { // Control Change (CC)

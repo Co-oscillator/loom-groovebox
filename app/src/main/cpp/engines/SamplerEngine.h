@@ -106,6 +106,30 @@ public:
 
   void setPlaybackSpeed(float speed);
 
+  void setSlicePosition(int index, float position) {
+    std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
+    if (index >= 0 && index < mSlices.size() && !mBuffer.empty()) {
+      size_t newStart = static_cast<size_t>(position * mBuffer.size());
+      // Constrain to buffer
+      if (newStart >= mBuffer.size())
+        newStart = mBuffer.size() - 1;
+
+      mSlices[index].start = newStart;
+      // Optimistic update of previous/next bounds?
+      // For now, we trust the UI to send valid ordered points or we just update
+      // the specific slice start. Note: mSlices is [start, end]. If we change
+      // start, we might overlap. The current engine uses mSlices[i].start to
+      // mSlices[i].end. If we drag a slice point, we usually mean the boundary
+      // between slice i and i-1? Or the start of slice i? The UI sends "Slice
+      // Points" which are usually just the starts. In `setSlicePoints`, we
+      // construct [start, nextStart]. So if we update slice i start, we should
+      // arguably update slice i-1 end?
+      if (index > 0) {
+        mSlices[index - 1].end = newStart;
+      }
+    }
+  }
+
   void clearBuffer() {
     std::lock_guard<std::recursive_mutex> lock(*mBufferLock);
     mBuffer.clear();

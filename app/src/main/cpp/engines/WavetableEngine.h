@@ -218,7 +218,9 @@ public:
   float render() {
     float mixedOutput = 0.0f;
     int activeCount = 0;
-    if (mTable.empty())
+
+    std::unique_lock<std::mutex> lock(*mMutex, std::try_to_lock);
+    if (!lock.owns_lock() || mTable.empty())
       return 0.0f;
 
     for (auto &v : mVoices) {
@@ -278,6 +280,11 @@ public:
           double tablePos = phase * 2047.0;
           int i1 = (int)tablePos;
           int i2 = (i1 + 1) % 2048;
+
+          // Safety Bounds Check
+          if (offset + i1 >= mTable.size() || offset + i2 >= mTable.size())
+            return 0.0f;
+
           float f = (float)(tablePos - i1);
           return (1.0f - f) * mTable[offset + i1] + f * mTable[offset + i2];
         };

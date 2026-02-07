@@ -713,3 +713,23 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setTrackPan(
   if (engine)
     engine->setTrackPan(track_index, pan);
 }
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_groovebox_NativeLib_getFxChain(JNIEnv *env, jobject thiz) {
+  if (engine) {
+    int chain[17];
+    engine->getFxChain(chain); // Copies mFxChainDest to chain
+    jintArray result = env->NewIntArray(17);
+    env->SetIntArrayRegion(result, 0, 17, chain);
+    return result;
+  }
+  return env->NewIntArray(0);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setSlicePosition(
+    JNIEnv *env, jobject thiz, jint track_index, jint slice_index,
+    jfloat position) {
+  if (engine) {
+    engine->setSlicePosition(track_index, slice_index, position);
+  }
+}

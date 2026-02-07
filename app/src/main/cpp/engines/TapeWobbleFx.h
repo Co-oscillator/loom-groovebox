@@ -7,7 +7,7 @@
 
 class TapeWobbleFx {
 public:
-  TapeWobbleFx(int maxDelay = 2048) {
+  TapeWobbleFx(int maxDelay = 8192) {
     mBufferL.resize(maxDelay, 0.0f);
     mBufferR.resize(maxDelay, 0.0f);
     mBufferR.resize(maxDelay, 0.0f);

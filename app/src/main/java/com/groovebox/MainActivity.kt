@@ -271,7 +271,8 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         nativeLib.setTrackPan(trackIdx, t.pan) // Re-added Pan sync
         
         t.parameters.forEach { (pid, v) -> 
-            val safeVal = if (v.isNaN() || v.isInfinite()) 0.0f else v.coerceIn(0f, 1f)
+            // Safety: Only prevent NaNs, allow full range (e.g. FM Algo > 1.0)
+            val safeVal = if (v.isNaN() || v.isInfinite()) 0.0f else v
             // Debug critical params: Vol(0), Cutoff(1)
             if (pid == 0) Log.d("Groovebox", "SyncTrack ID $trackIdx Param 0 (Vol override?) = $safeVal")
             if (pid == 1) Log.d("Groovebox", "SyncTrack ID $trackIdx Param 1 (Cutoff) = $safeVal")
@@ -1025,12 +1026,29 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
                     events.toList().chunked(4).forEach { event ->
                         // event is a List<Byte> of size 4: [type, channel, data1, data2]
                         val type = event[0].toInt()
-                        val channel = event[1].toInt() // Track Index (0-7) or MIDI Channel
+                        val trackIdx = event[1].toInt() // This comes from C++ as Track Index (0-7)
                         val data1 = event[2]
                         val data2 = event[3]
                         
+                        // Look up the track's configured MIDI Output Channel
+                        // Access via property or state passed in?
+                        // If we are inside MainActivity's scope, it should be visible.
+                        // Try this@MainActivity.grooveboxState
+                        // Look up the track's configured MIDI Output Channel
+                        // Use latestState which is captured and updated
+                        val track = latestState.tracks.getOrNull(trackIdx)
+                        val configCh = track?.midiOutChannel ?: 1 // Default to Ch 1 if null
+                        
+                        // Logic:
+                        // 1-16: Use that channel (0-15)
+                        // 17 (All): Use trackIdx (0-7) mapped to Ch 1-8 (Pass-through)
+                        
+                        val targetChannel = if (configCh == 17) trackIdx else (configCh - 1).coerceIn(0, 15)
+                        
                         // Construct MIDI Message (3 bytes: status, data1, data2)
-                        val status = (type and 0xF0) or (channel and 0x0F)
+                        // Note: Status = Type (0xF0) | Channel (0x0F)
+                        // We must masking type to 0xF0 (e.g. 0x90) and OR with targetChannel
+                        val status = (type and 0xF0) or (targetChannel and 0x0F)
                         midiManager.sendMidi(byteArrayOf(status.toByte(), data1.toByte(), data2.toByte()))
                     }
                 }
@@ -1167,6 +1185,8 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
                 color = Color.White.copy(alpha = 0.5f), 
                 modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
             )
+
+
 
             // Parameter Value Display (Bottom Right)
             val displayValue = localFocusedValue ?: state.focusedValue
@@ -1517,7 +1537,7 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
 
         Divider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 4.dp))
 
-        // Cluster 4: REV, RND, Jump (Vertical Stack)
+        // Cluster 4: REV, PING-PONG, RND (Vertical Stack)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally, 
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -1568,21 +1588,6 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                 colors = ButtonDefaults.buttonColors(containerColor = if (latestState.isRandomOrder) Color.Magenta else unselectedColor),
                 shape = buttonShape
             ) { Text("RND", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White) }
-
-            // JUMP
-            Button(
-                onClick = { 
-                    val current = latestState
-                    val nextJumpWaiting = !current.jumpModeWaitingForTap
-                    latestOnStateChange(current.copy(jumpModeWaitingForTap = nextJumpWaiting))
-                    // Also trigger native jump mode immediately if we want it to repeat CURRENT step
-                    nativeLib.setIsJumpMode(current.selectedTrackIndex, nextJumpWaiting)
-                },
-                modifier = buttonModifier,
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = if (latestState.jumpModeWaitingForTap) Color.Yellow else unselectedColor),
-                shape = buttonShape
-            ) { Text("JUMP", style = MaterialTheme.typography.labelSmall, color = if (latestState.jumpModeWaitingForTap) Color.Black else Color.White, fontWeight = FontWeight.Bold) }
         }
     }
 }

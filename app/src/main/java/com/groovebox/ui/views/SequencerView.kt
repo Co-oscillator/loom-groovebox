@@ -68,7 +68,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                      // Bank Select
                      Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                          (0..3).forEach { bank ->
-                             val isSelected = state.currentSequencerBank == bank
+                             val isSelected = state.currentSequencerBank == bank && !state.is64StepView
                              val hasSteps = if (track.engineType == EngineType.FM_DRUM) {
                                   // Check drum steps for this bank
                                   val drumInst = track.selectedFmDrumInstrument
@@ -77,11 +77,13 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                   track.steps.subList(bank * 16, (bank + 1) * 16).any { it.active }
                              }
                              
+                             val engineColor = getEngineColor(track.engineType)
+                             
                              Button(
-                                 onClick = { latestOnStateChange(latestState.copy(currentSequencerBank = bank)) },
+                                 onClick = { latestOnStateChange(latestState.copy(currentSequencerBank = bank, is64StepView = false)) },
                                  modifier = Modifier.height(32.dp).width(32.dp),
                                  contentPadding = PaddingValues(0.dp),
-                                 colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Cyan else if (hasSteps) Color.Gray else Color.DarkGray)
+                                 colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) engineColor else if (hasSteps) Color.Gray else Color.DarkGray)
                              ) { Text("${bank + 1}", color = if (isSelected) Color.Black else Color.White, fontSize = 10.sp) }
                          }
                      }
@@ -325,6 +327,15 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                 var showStepPopup by remember { mutableStateOf(false) }
                                 
                                 val engineColor = getEngineColor(track.engineType)
+                                
+                                // Check for Ghost Notes (active steps on other drum voices)
+                                val isGhostActive = if (isMultiTrack && !step.active && !step.isSkipped) {
+                                    track.drumSteps.indices.any { idx ->
+                                        idx != track.selectedFmDrumInstrument && 
+                                        track.drumSteps.getOrNull(idx)?.getOrNull(stepIndex)?.active == true
+                                    }
+                                } else false
+
                                 Box(
                                     modifier = Modifier
                                         .aspectRatio(1f)
@@ -332,6 +343,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                             when {
                                                 step.isSkipped -> Color.Black
                                                 step.active -> engineColor
+                                                isGhostActive -> engineColor.copy(alpha = 0.3f) // Ghost Note Highlight
                                                 else -> lerp(Color.DarkGray, engineColor, 0.2f)
                                             }, 
                                             RoundedCornerShape(if (is64) 4.dp else 8.dp)

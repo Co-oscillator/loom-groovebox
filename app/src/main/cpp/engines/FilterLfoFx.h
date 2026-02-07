@@ -41,7 +41,7 @@ public:
     // Control rate update (every 16 samples)
     if (mControlCounter++ % 16 == 0) {
       // 1. LFO Calculation (Control Rate)
-      float rateHz = 0.01f + (mRate * mRate) * 19.99f;
+      float rateHz = 0.02f + (mRate * mRate) * 49.98f; // 0.02Hz to 50Hz range
       mPhase += (rateHz * 16.0f) / sampleRate;
       if (mPhase >= 1.0f) {
         mPhase -= floorf(mPhase);
@@ -85,9 +85,9 @@ public:
     mSmoothedRes += 0.01f * (mResonance - mSmoothedRes);
 
     float targetFreq = 10.0f * powf(2000.0f, mSmoothedCutoff);
-    targetFreq = std::min(targetFreq, sampleRate * 0.45f);
+    targetFreq = std::min(targetFreq, sampleRate * 0.40f);
 
-    mSvf.setParams(targetFreq, std::max(0.1f, mSmoothedRes * 4.0f), sampleRate);
+    mSvf.setParams(targetFreq, std::max(0.1f, mSmoothedRes * 3.5f), sampleRate);
 
     TSvf::Type type =
         (mMode == FilterLfoMode::LowPass) ? TSvf::LowPass : TSvf::HighPass;

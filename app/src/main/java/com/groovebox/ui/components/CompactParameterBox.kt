@@ -36,8 +36,8 @@ fun CompactParameterBox(
             // Header: Just the text, bold and colored
             Text(
                 text = title.uppercase(),
-                color = startColor,
-                fontSize = 12.sp,
+                color = Color.White, // White text as requested
+                fontSize = 13.sp, // One size larger (was 12)
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 6.dp, start = 2.dp)
             )

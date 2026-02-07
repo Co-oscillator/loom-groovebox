@@ -187,7 +187,8 @@ fun Knob(
                                         when(modeIdx) {
                                             0 -> "1 SHOT"
                                             1 -> "SUSTAIN"
-                                            else -> "CHOP"
+                                            2 -> "CHOP"
+                                            else -> "REV"
                                         }
                                     } else {
                                         val upperLabel = label.uppercase()
@@ -464,7 +465,8 @@ fun Knob(
                          when(modeIdx) {
                              0 -> "1 SHOT"
                              1 -> "SUSTAIN"
-                             else -> "CHOP"
+                             2 -> "CHOP"
+                             else -> "REV"
                          }
                     } else { // Octaver Mode
                         val modeIdx = (value * 11.9f).toInt()
@@ -531,8 +533,8 @@ fun Knob(
         Text(
             label.uppercase(), 
             style = MaterialTheme.typography.labelSmall, 
-            color = if (isHeld) engineColor else if (isTablet) Color.White.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.7f),
-            fontSize = (if (isTablet) 7.sp else 9.sp).let { base -> if (label.length > 5) (base.value - 1).sp else base },
+            color = if (isHeld) Color.White else if (isTablet) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.8f),
+            fontSize = (if (isTablet) 8.sp else 10.sp).let { base -> if (label.length > 5) (base.value - 1).sp else base },
             maxLines = 1, 
             overflow = TextOverflow.Ellipsis
         )

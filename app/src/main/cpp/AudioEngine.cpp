@@ -678,17 +678,9 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
         // Button sends 0.0, 1.0, 2.0 directly
         mFilterPedalL[filterIdx].setMode(value);
         mFilterPedalR[filterIdx].setMode(value);
-      } else if (subParam == 3) { // Mix
-        mFilterPedalL[filterIdx].setMix(value);
-        mFilterPedalR[filterIdx].setMix(value);
-        int bus = 12 + (filterIdx == 0 ? 0 : (filterIdx == 1 ? 3 : 4));
-        mFxMixLevels[bus] = value;
-        for (auto &t : mTracks) {
-          t.fxSends[bus] = 1.0f;
-          t.fxMix[bus] = 1.0f;
-          t.smoothedFxSends[bus] = 1.0f;
-        }
       }
+      // NOTE: subParam==3 (Mix) removed - filters use Pedal SEND control now
+      // mFxMixLevels for filters are initialized to 1.0 and should stay there
       // NO RETURN: Let it fall through to update mParameters array for UI
       // Persistence
     }
@@ -708,7 +700,8 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
   Track &track = mTracks[trackIndex];
 
   // Specific Logic for Global / Sends
-  if (parameterId >= 2000 && parameterId < 2100) {
+  if (parameterId >= 2000 &&
+      parameterId < 2170) { // Extended to cover all 17 FX (0-16)
     // If it's 2103 but targeted at a track, we treat it as global for now
     // or ignore if it should only be truly global.
     // Given the UI sends -1 for 2103, the top block handles it.
@@ -1453,6 +1446,15 @@ void AudioEngine::updateGlobalParameter(int parameterId, float value) {
         mTapeEchoFxL.setMix(value);
         mTapeEchoFxR.setMix(value);
         mFxMixLevels[13] = 1.0f;
+      } else if (subId == 3) { // DRIVE
+        mTapeEchoFxL.setDrive(value);
+        mTapeEchoFxR.setDrive(value);
+      } else if (subId == 4) { // WOW
+        mTapeEchoFxL.setWow(value);
+        mTapeEchoFxR.setWow(value);
+      } else if (subId == 5) { // FLUTTER
+        mTapeEchoFxL.setFlutter(value);
+        mTapeEchoFxR.setFlutter(value);
       }
       break;
     case 2: // Octaver (Slot 14)
@@ -2854,6 +2856,11 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
   if (!std::isfinite(mMasterVolume))
     mMasterVolume = 0.5f;
 
+  // Force Filter FX Mix Levels to 1.0 (Passthrough Fix)
+  mFxMixLevels[12] = 1.0f;
+  mFxMixLevels[15] = 1.0f;
+  mFxMixLevels[16] = 1.0f;
+
   float sampleRate = static_cast<float>(mSampleRate);
 
   // --- Block Rate Control Updates ---
@@ -2902,8 +2909,13 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       Track &track = mTracks[t];
       track.gainReduction = 1.0f; // Reset per frame
 
-      // ALWAYS Update smoothed parameters even if track is inactive
-      // This prevents "stuck" FX Sends/Volume when waking up from silence.
+      if (!track.isActive && track.mSilenceFrames > 2400) { // 50ms at 48k
+        track.follower.process(0.0f);
+        continue;
+      }
+
+      // Update smoothed parameters only when active (saves CPU on inactive
+      // tracks)
       if (std::abs(track.volume - track.smoothedVolume) > 0.0001f) {
         track.smoothedVolume += 0.01f * (track.volume - track.smoothedVolume);
       }
@@ -2912,11 +2924,6 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
           track.smoothedFxSends[f] +=
               0.01f * (track.fxSends[f] - track.smoothedFxSends[f]);
         }
-      }
-
-      if (!track.isActive && track.mSilenceFrames > 2400) { // 50ms at 48k
-        track.follower.process(0.0f);
-        continue;
       }
 
       float rawSampleL = 0.0f, rawSampleR = 0.0f;
@@ -3089,8 +3096,14 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       float hpR = mHpLfoR.process(fxBusesR[9], sampleRate);
       routeFx(9, hpL, hpR);
     }
-
-    // MOVED LP LFO TO MASTER INSERT (BELOW)
+    // LP LFO (Slot 10) - Send-based processing
+    if (std::abs(fxBusesL[10]) > 0.00001f ||
+        std::abs(fxBusesR[10]) > 0.00001f) {
+      float lpL = mLpLfoL.process(fxBusesL[10], sampleRate);
+      mLpLfoR.syncFrom(mLpLfoL);
+      float lpR = mLpLfoR.process(fxBusesR[10], sampleRate);
+      routeFx(10, lpL, lpR);
+    }
 
     if (std::abs(fxBusesL[2]) > 0.00001f || std::abs(fxBusesR[2]) > 0.00001f) {
       routeFx(2, mChorusFxL.process(fxBusesL[2], sampleRate),
@@ -3204,35 +3217,9 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     if (!std::isfinite(finalR))
       finalR = 0.0f;
 
-    // MASTER INSERTS (LP / HP LFO Pedals)
-    // Apply before Final Master Volume.
-    // Check if pedals are "active" (active usually means mixed in, but for
-    // insert we check if effect is on). Note: We use fxMixLevels as
-    // "Active/Bypass" switch for these global pedals if logic dictates. Or we
-    // just check if Depth > 0 or Rate > 0? No, that's ambiguous. Let's assume
-    // if mFxMixLevels[9/10] > 0, we process. AND we process spreadL/spreadR
-    // (the Accumulator).
-
-    // HP LFO (Pedal 9) - Apply to Master Mix
-    if (mFxMixLevels[9] > 0.01f) {
-      // Note: mHpLfo.process handles the filter logic.
-      // If we want Dry/Wet, we blend. But usually LFO Filter is 100% Wet.
-      // We'll treat MixLevel as ON/OFF switch.
-      float hL = mHpLfoL.process(finalL, sampleRate);
-      mHpLfoR.syncFrom(mHpLfoL);
-      float hR = mHpLfoR.process(finalR, sampleRate);
-      finalL = hL;
-      finalR = hR;
-    }
-
-    // LP LFO (Pedal 10) - Apply to Master Mix
-    if (mFxMixLevels[10] > 0.01f) {
-      float lL = mLpLfoL.process(finalL, sampleRate);
-      mLpLfoR.syncFrom(mLpLfoL);
-      float lR = mLpLfoR.process(finalR, sampleRate);
-      finalL = lL;
-      finalR = lR;
-    }
+    // NOTE: HP LFO (9) and LP LFO (10) are now ONLY processed via sends
+    // (see routeFx calls above). Master insert was removed to prevent
+    // double-processing and "track grabbing" issues.
 
     // Final Limiter / Soft Clip
     if (finalL > 1.0f)
@@ -3467,4 +3454,17 @@ void AudioEngine::setSlices(int trackIndex, const std::vector<int> &starts,
   cmd.sliceEnds = ends;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::getFxChain(int *destination) {
+  for (int i = 0; i < 17; ++i) {
+    destination[i] = mFxChainDest[i];
+  }
+}
+
+void AudioEngine::setSlicePosition(int trackIndex, int sliceIndex,
+                                   float position) {
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    mTracks[trackIndex].samplerEngine.setSlicePosition(sliceIndex, position);
+  }
 }

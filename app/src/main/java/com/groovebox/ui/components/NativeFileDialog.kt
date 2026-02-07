@@ -1,6 +1,7 @@
 package com.groovebox.ui.components
 
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
@@ -34,8 +35,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.ExperimentalComposeUiApi
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun NativeFileDialog(
     directory: File,
@@ -57,26 +65,15 @@ fun NativeFileDialog(
     
     val files: List<String> = remember(currentDir, refreshKey, currentExtensions) { 
         if (!currentDir.exists()) {
-             android.widget.Toast.makeText(context, "Debug: Dir not found: ${currentDir.name}", android.widget.Toast.LENGTH_SHORT).show()
              emptyList()
         } else if (!currentDir.isDirectory) {
-             android.widget.Toast.makeText(context, "Debug: Not a directory: ${currentDir.name}", android.widget.Toast.LENGTH_SHORT).show()
              emptyList()
         } else {
             val list = currentDir.listFiles { file -> 
                 currentExtensions?.any { ext -> file.extension.equals(ext, ignoreCase = true) } ?: true
             }?.sortedBy { it.name }?.map { it.name } ?: emptyList()
-            
-            if (list.isEmpty()) {
-                 android.widget.Toast.makeText(context, "Debug: No files found in ${currentDir.name}", android.widget.Toast.LENGTH_SHORT).show()
-            }
             list
         }
-    }
-    
-    // DEBUG TOAST: Verify path on open
-    LaunchedEffect(currentDir) {
-        android.widget.Toast.makeText(context, "Path: ${currentDir.absolutePath}", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     // System Picker
@@ -138,11 +135,19 @@ fun NativeFileDialog(
     Dialog(onDismissRequest = onDismiss) {
         val loomFolders = listOf("samples", "granular", "wavetables", "recordings", "sessions", "soundfonts")
         Card(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .clickable(enabled = false) {}, // Prevent clicks passing through
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            // Apply IME padding to the content column so it shrinks when keyboard opens
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .windowInsetsPadding(WindowInsets.ime)
+            ) {
                 val headerText = (title ?: (if (isSave) "SAVE" else "LOAD")) + " (${files.size} files)"
                 
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -214,17 +219,33 @@ fun NativeFileDialog(
                 }
                 
                 if (isSave) {
+                    val focusRequester = remember { FocusRequester() }
+                    val keyboardController = LocalSoftwareKeyboardController.current
+                    
+                    LaunchedEffect(Unit) {
+                        delay(300)
+                        focusRequester.requestFocus()
+                        keyboardController?.show()
+                    }
+
                     OutlinedTextField(
                          value = fileName,
                          onValueChange = { fileName = it },
                          label = { Text("Filename") },
-                         modifier = Modifier.fillMaxWidth(),
+                         modifier = Modifier
+                             .fillMaxWidth()
+                             .focusRequester(focusRequester),
                          colors = OutlinedTextFieldDefaults.colors(
                              focusedTextColor = Color.White,
                              unfocusedTextColor = Color.White,
                              focusedBorderColor = Color.Cyan,
                              unfocusedBorderColor = Color.Gray
-                         )
+                         ),
+                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                         keyboardActions = KeyboardActions(
+                             onDone = { keyboardController?.hide() }
+                         ),
+                         singleLine = true
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                 } else {
@@ -262,7 +283,7 @@ fun NativeFileDialog(
                 }
 
                 val listState = rememberLazyListState()
-                Box(modifier = Modifier.heightIn(max = 300.dp)) {
+                Box(modifier = Modifier.weight(1f)) { // Use weight to fill available space
                     LazyColumn(state = listState, modifier = Modifier.fillMaxWidth()) {
                         // Extra Options (Direct Actions)
                         if (extraOptions.isNotEmpty()) {

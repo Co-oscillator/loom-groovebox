@@ -91,4 +91,6 @@ class NativeLib {
     external fun setTrackMute(trackIndex: Int, muted: Boolean)
     external fun getFxSends(trackIndex: Int): FloatArray
     external fun getFxMix(trackIndex: Int): FloatArray
+    external fun getFxChain(): IntArray
+    external fun setSlicePosition(trackIndex: Int, sliceIndex: Int, position: Float)
 }

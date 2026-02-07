@@ -436,6 +436,7 @@ public:
     float vol;
   };
   void getPlayheads(PlayheadInfo *out, int maxCount) {
+    std::lock_guard<std::mutex> lock(*mBufferLock);
     int count = 0;
     for (const auto &g : mGrains) {
       if (g.isActive && count < maxCount) {
@@ -541,7 +542,7 @@ private:
         float length = mGrainSize;
         if (mLFOS[1].target == 1)
           length *= (1.0f + lfoOffsets[1]);
-        g.initialLife = static_cast<int>(length * 48000.0f * 2.0f + 100);
+        g.initialLife = static_cast<int>(length * mSampleRate * 2.0f + 100);
         g.life = g.initialLife;
         g.envValue = 0.0f;
         g.voiceIdx = voiceIdx; // Link to voice

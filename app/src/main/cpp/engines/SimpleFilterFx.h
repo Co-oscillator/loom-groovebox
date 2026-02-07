@@ -36,7 +36,10 @@ public:
   float process(float input, float sampleRate) {
     if (!std::isfinite(input))
       input = 0.0f;
-    if (mMix <= 0.001f || sampleRate <= 0.0f)
+    // Force Mix to 1.0 to ensure filtering (Passthrough Fix)
+    mMix = 1.0f;
+
+    if (sampleRate <= 0.0f)
       return input;
 
     // Smooth parameters
@@ -82,11 +85,12 @@ public:
   }
 
 private:
-  float mCutoff = 1000.0f;
-  float mTargetCutoff = 1000.0f;
+  float mCutoff = 200.0f; // Lower default for audible filtering
+  float mTargetCutoff = 200.0f;
   float mResonance = 0.707f;
   float mTargetResonance = 0.707f;
-  float mMix = 0.0f;
+  float mMix =
+      1.0f; // Full wet - routing via SEND controls whether audio reaches filter
   Mode mMode = LP;
 
   // Filter State (TPT form)

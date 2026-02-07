@@ -238,6 +238,10 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                          GlobalKnob("CUT", 0.5f, 593, state, onStateChange, nativeLib, fullLabel = "HP LFO Cutoff")
                          GlobalKnob("RES", 0.0f, 594, state, onStateChange, nativeLib, fullLabel = "HP LFO Resonance")
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+                         GlobalKnob("MIX", 0.0f, 595, state, onStateChange, nativeLib, fullLabel = "HP LFO Mix") // Added Mix
+                    }
                 }
             }
             item {
@@ -252,6 +256,10 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                          GlobalKnob("CUT", 0.5f, 493, state, onStateChange, nativeLib)
                          GlobalKnob("RES", 0.0f, 494, state, onStateChange, nativeLib)
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+                         GlobalKnob("MIX", 0.0f, 495, state, onStateChange, nativeLib, fullLabel = "LP LFO Mix") // Added Mix
+                    }
                 }
             }
             item {
@@ -261,30 +269,23 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                             GlobalKnob("CUT", 0.5f, 2200, state, onStateChange, nativeLib, fullLabel = "Filter 1 Cutoff")
                             GlobalKnob("RES", 0.0f, 2201, state, onStateChange, nativeLib, fullLabel = "Filter 1 Res")
                         }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                            GlobalKnob("MIX", 0.0f, 2203, state, onStateChange, nativeLib, fullLabel = "Filter 1 Mix")
-                            
-                            // Mode Cycle Button
-                            val paramId = 2202
-                            val currentMode = (state.tracks[0].parameters[paramId] ?: 0f).toInt().coerceIn(0, 2)
-                            val modeLabels = listOf("LP", "HP", "BP")
-                            Button(
-                                onClick = {
-                                    val nextMode = (currentMode + 1) % 3
-                                    nativeLib.setParameter(0, paramId, nextMode.toFloat())
-                                    val newTracks = state.tracks.toMutableList()
-                                    val newParams = newTracks[0].parameters.toMutableMap()
-                                    newParams[paramId] = nextMode.toFloat()
-                                    newTracks[0] = newTracks[0].copy(parameters = newParams)
-                                    onStateChange(state.copy(tracks = newTracks))
-                                },
-                                modifier = Modifier.height(32.dp).width(50.dp),
-                                contentPadding = PaddingValues(0.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(modeLabels[currentMode], style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
-                            }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        // Mode Cycle Button
+                        val paramId = 2202
+                        val currentMode = (state.globalParameters[paramId] ?: 0f).toInt().coerceIn(0, 2)
+                        val modeLabels = listOf("LP", "HP", "BP")
+                        Button(
+                            onClick = {
+                                val nextMode = (currentMode + 1) % 3
+                                nativeLib.setParameter(-1, paramId, nextMode.toFloat())
+                                onStateChange(state.copy(globalParameters = state.globalParameters + (paramId to nextMode.toFloat())))
+                            },
+                            modifier = Modifier.height(32.dp).width(60.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(modeLabels[currentMode], style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
                         }
                     }
                 }
@@ -296,30 +297,23 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                             GlobalKnob("CUT", 0.5f, 2205, state, onStateChange, nativeLib, fullLabel = "Filter 2 Cutoff")
                             GlobalKnob("RES", 0.0f, 2206, state, onStateChange, nativeLib, fullLabel = "Filter 2 Res")
                         }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                            GlobalKnob("MIX", 0.0f, 2208, state, onStateChange, nativeLib, fullLabel = "Filter 2 Mix")
-                            
-                            // Mode Cycle Button
-                            val paramId = 2207
-                            val currentMode = (state.tracks[0].parameters[paramId] ?: 0f).toInt().coerceIn(0, 2)
-                            val modeLabels = listOf("LP", "HP", "BP")
-                            Button(
-                                onClick = {
-                                    val nextMode = (currentMode + 1) % 3
-                                    nativeLib.setParameter(0, paramId, nextMode.toFloat())
-                                    val newTracks = state.tracks.toMutableList()
-                                    val newParams = newTracks[0].parameters.toMutableMap()
-                                    newParams[paramId] = nextMode.toFloat()
-                                    newTracks[0] = newTracks[0].copy(parameters = newParams)
-                                    onStateChange(state.copy(tracks = newTracks))
-                                },
-                                modifier = Modifier.height(32.dp).width(50.dp),
-                                contentPadding = PaddingValues(0.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(modeLabels[currentMode], style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
-                            }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        // Mode Cycle Button
+                        val paramId = 2207
+                        val currentMode = (state.globalParameters[paramId] ?: 0f).toInt().coerceIn(0, 2)
+                        val modeLabels = listOf("LP", "HP", "BP")
+                        Button(
+                            onClick = {
+                                val nextMode = (currentMode + 1) % 3
+                                nativeLib.setParameter(-1, paramId, nextMode.toFloat())
+                                onStateChange(state.copy(globalParameters = state.globalParameters + (paramId to nextMode.toFloat())))
+                            },
+                            modifier = Modifier.height(32.dp).width(60.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(modeLabels[currentMode], style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
                         }
                     }
                 }
@@ -341,10 +335,10 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                 Pedal("OCTAVER", Color(0xFF3F51B5), state, 14, onStateChange, nativeLib) {
                     Column {
                          Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
-                             GlobalKnob("MIX", 0.5f, 1530, state, onStateChange, nativeLib, fullLabel = "Octaver Mix")
+                             GlobalKnob("MIX", 0.5f, 1520, state, onStateChange, nativeLib, fullLabel = "Octaver Mix")
                          }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            GlobalKnob("MODE", 0.5f, 1531, state, onStateChange, nativeLib, fullLabel = "Octave Mode", valueFormatter = { v ->
+                            GlobalKnob("MODE", 0.5f, 1521, state, onStateChange, nativeLib, fullLabel = "Octave Mode", valueFormatter = { v ->
                                 val mode = (v * 11.99f).toInt()
                                 when(mode) {
                                     0 -> "OCT UP"
@@ -362,7 +356,7 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                                     else -> "PWR"
                                 }
                             })
-                            GlobalKnob("UNISON", 0.0f, 1532, state, onStateChange, nativeLib) 
+                            GlobalKnob("UNISON", 0.0f, 1522, state, onStateChange, nativeLib) 
                         }
                     }
                 }
@@ -374,30 +368,23 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                             GlobalKnob("CUT", 0.5f, 2210, state, onStateChange, nativeLib, fullLabel = "Filter 3 Cutoff")
                             GlobalKnob("RES", 0.0f, 2211, state, onStateChange, nativeLib, fullLabel = "Filter 3 Res")
                         }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                            GlobalKnob("MIX", 0.0f, 2213, state, onStateChange, nativeLib, fullLabel = "Filter 3 Mix")
-                            
-                            // Mode Cycle Button
-                            val paramId = 2212
-                            val currentMode = (state.tracks[0].parameters[paramId] ?: 0f).toInt().coerceIn(0, 2)
-                            val modeLabels = listOf("LP", "HP", "BP")
-                            Button(
-                                onClick = {
-                                    val nextMode = (currentMode + 1) % 3
-                                    nativeLib.setParameter(0, paramId, nextMode.toFloat())
-                                    val newTracks = state.tracks.toMutableList()
-                                    val newParams = newTracks[0].parameters.toMutableMap()
-                                    newParams[paramId] = nextMode.toFloat()
-                                    newTracks[0] = newTracks[0].copy(parameters = newParams)
-                                    onStateChange(state.copy(tracks = newTracks))
-                                },
-                                modifier = Modifier.height(32.dp).width(50.dp),
-                                contentPadding = PaddingValues(0.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(modeLabels[currentMode], style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
-                            }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        // Mode Cycle Button
+                        val paramId = 2212
+                        val currentMode = (state.globalParameters[paramId] ?: 0f).toInt().coerceIn(0, 2)
+                        val modeLabels = listOf("LP", "HP", "BP")
+                        Button(
+                            onClick = {
+                                val nextMode = (currentMode + 1) % 3
+                                nativeLib.setParameter(-1, paramId, nextMode.toFloat())
+                                onStateChange(state.copy(globalParameters = state.globalParameters + (paramId to nextMode.toFloat())))
+                            },
+                            modifier = Modifier.height(32.dp).width(60.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(modeLabels[currentMode], style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
                         }
                     }
                 }

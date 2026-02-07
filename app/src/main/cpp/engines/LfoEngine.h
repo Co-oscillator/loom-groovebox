@@ -23,6 +23,8 @@ public:
   void setShape(int s) { mShape = static_cast<LfoShape>(s); }
   void setSync(bool s) { mSync = s; }
 
+  void reset(float sampleRate) { mPhase = 0.0f; }
+
   void setBpm(float bpm) { mBpm = bpm; }
 
   void advance(float sampleRate) {

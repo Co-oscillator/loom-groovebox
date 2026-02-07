@@ -50,6 +50,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -83,15 +84,18 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-        // Premium Title Bar
+        // Premium Title Bar with Centered Action Buttons
         val engineColor = getEngineColor(track.engineType)
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Engine Name Label (Restored Style)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Left: Engine Name Label
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 EngineIcon(track.engineType, modifier = Modifier.size(24.dp), color = engineColor)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -103,8 +107,41 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                 )
             }
             
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                // RESTORE PATCH Button
+            // Center: Test Note, Default Patch, Randomize (as trio)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val buttonWidth = 100.dp
+                val buttonHeight = 42.dp
+                val buttonShape = RoundedCornerShape(4.dp)
+                
+                // Test Note Button (with proper press detection)
+                var isPressed by remember { mutableStateOf(false) }
+                Box(
+                    modifier = Modifier
+                        .size(width = buttonWidth, height = buttonHeight)
+                        .background(if (isPressed) Color.Cyan.copy(alpha = 0.3f) else Color.DarkGray, buttonShape)
+                        .pointerInput(trackIndex) {
+                            detectTapGestures(
+                                onPress = {
+                                    try {
+                                        isPressed = true
+                                        nativeLib.triggerNote(trackIndex, 60, 100)
+                                        awaitRelease()
+                                    } finally {
+                                        isPressed = false
+                                        nativeLib.releaseNote(trackIndex, 60)
+                                    }
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("♪ ♫", fontSize = 18.sp, color = Color.Cyan, fontWeight = FontWeight.Bold)
+                }
+                
+                // Default Patch Button
                 Button(
                     onClick = { 
                          nativeLib.restoreTrackPreset(trackIndex)
@@ -112,31 +149,34 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                             if (i == trackIndex) t.copy(parameters = emptyMap()) else t 
                          }))
                     },
-                    modifier = Modifier.height(36.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp),
+                    modifier = Modifier.size(width = buttonWidth, height = buttonHeight),
+                    contentPadding = PaddingValues(0.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
-                    shape = RoundedCornerShape(4.dp)
+                    shape = buttonShape
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("RESTORE", fontSize = 8.sp, fontWeight = FontWeight.Bold, lineHeight = 8.sp)
-                        Text("PATCH", fontSize = 8.sp, fontWeight = FontWeight.Bold, lineHeight = 8.sp)
+                        Text("DEFAULT", fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
+                        Text("PATCH", fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
                     }
                 }
-
-                TestTriggerButton(trackIndex, nativeLib)
                 
-                // Randomize Button (Dice Only)
+                // Randomize Button (Double Dice - square dice)
                 Button(
                     onClick = { randomizeTrackParameters(trackIndex, state, onStateChange, nativeLib) },
-                    modifier = Modifier.size(36.dp),
-                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.size(width = buttonWidth, height = buttonHeight),
+                    contentPadding = PaddingValues(4.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                    shape = RoundedCornerShape(4.dp)
+                    shape = buttonShape
                 ) {
-                    DiceIcon(modifier = Modifier.size(20.dp), color = Color.White)
+                    DoubleDiceIcon(modifier = Modifier.size(width = 70.dp, height = 34.dp), color = Color.White)
                 }
-
-                // MIDI Learn Toggle (Standardized)
+            }
+            
+            // Right: MIDI Learn Toggle
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.End
+            ) {
                 Button(
                     onClick = { 
                         val newActive = !state.midiLearnActive
@@ -172,6 +212,7 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
             EngineType.GRANULAR -> GranularParameters(state, trackIndex, onStateChange, nativeLib)
             EngineType.AUDIO_IN -> AudioInParameters(state, trackIndex, onStateChange, nativeLib)
             EngineType.SOUNDFONT -> SoundFontParameters(state, trackIndex, onStateChange, nativeLib, onRefresh = {})
+            EngineType.MIDI -> MidiEngineParameters(state, trackIndex, onStateChange, nativeLib)
             else -> Text("No parameters for this engine type yet.", color = Color.Gray)
         }
         
@@ -185,7 +226,8 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
         Spacer(modifier = Modifier.height(24.dp))
 
         // Global FX Sends (Dynamic based on Chain)
-        GlobalFxSends(state, trackIndex, onStateChange, nativeLib)
+        // Global FX Sends (Active Sends / Any)
+        GlobalActiveSends(state, trackIndex, onStateChange, nativeLib)
          
         Spacer(modifier = Modifier.height(24.dp))
         Divider(color = Color.Gray.copy(alpha = 0.3f))
@@ -284,6 +326,60 @@ fun DiceIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
     }
 }
 
+@Composable
+fun DoubleDiceIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
+    Canvas(modifier = modifier) {
+        // Make dice square using height as basis
+        val diceSize = size.height * 0.9f  // Square dice
+        val totalDiceWidth = diceSize * 2
+        val gap = (size.width - totalDiceWidth) / 3  // Distribute remaining space
+        val dotRadius = diceSize * 0.08f
+        val cornerRadius = diceSize * 0.15f
+        
+        // Left dice (showing 3 - diagonal line)
+        val leftOffset = Offset(gap, (size.height - diceSize) / 2)
+        drawRoundRect(
+            color = Color.Black,
+            topLeft = leftOffset,
+            size = Size(diceSize, diceSize),
+            cornerRadius = CornerRadius(cornerRadius, cornerRadius)
+        )
+        drawRoundRect(
+            color = color,
+            topLeft = leftOffset,
+            size = Size(diceSize, diceSize),
+            cornerRadius = CornerRadius(cornerRadius, cornerRadius),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
+        )
+        // Dots for 3: center + 2 corners
+        drawCircle(color = color, radius = dotRadius, center = Offset(leftOffset.x + diceSize / 2, leftOffset.y + diceSize / 2))
+        drawCircle(color = color, radius = dotRadius, center = Offset(leftOffset.x + diceSize * 0.25f, leftOffset.y + diceSize * 0.25f))
+        drawCircle(color = color, radius = dotRadius, center = Offset(leftOffset.x + diceSize * 0.75f, leftOffset.y + diceSize * 0.75f))
+        
+        // Right dice (showing 5 - 4 corners + center)
+        val rightOffset = Offset(gap * 2 + diceSize, (size.height - diceSize) / 2)
+        drawRoundRect(
+            color = Color.Black,
+            topLeft = rightOffset,
+            size = Size(diceSize, diceSize),
+            cornerRadius = CornerRadius(cornerRadius, cornerRadius)
+        )
+        drawRoundRect(
+            color = color,
+            topLeft = rightOffset,
+            size = Size(diceSize, diceSize),
+            cornerRadius = CornerRadius(cornerRadius, cornerRadius),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
+        )
+        // Dots for 5: center + 4 corners
+        drawCircle(color = color, radius = dotRadius, center = Offset(rightOffset.x + diceSize / 2, rightOffset.y + diceSize / 2))
+        drawCircle(color = color, radius = dotRadius, center = Offset(rightOffset.x + diceSize * 0.25f, rightOffset.y + diceSize * 0.25f))
+        drawCircle(color = color, radius = dotRadius, center = Offset(rightOffset.x + diceSize * 0.75f, rightOffset.y + diceSize * 0.25f))
+        drawCircle(color = color, radius = dotRadius, center = Offset(rightOffset.x + diceSize * 0.25f, rightOffset.y + diceSize * 0.75f))
+        drawCircle(color = color, radius = dotRadius, center = Offset(rightOffset.x + diceSize * 0.75f, rightOffset.y + diceSize * 0.75f))
+    }
+}
+
 fun randomizeTrackParameters(trackIndex: Int, state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
     val track = state.tracks[trackIndex]
     val newParams = track.parameters.toMutableMap()
@@ -294,7 +390,7 @@ fun randomizeTrackParameters(trackIndex: Int, state: GrooveboxState, onStateChan
         EngineType.GRANULAR -> (400..429).toList()
         EngineType.WAVETABLE -> (450..476).toList()
         EngineType.SAMPLER -> (300..304).toList() + (310..314).toList() + listOf(320, 330, 331, 355)
-        EngineType.FM_DRUM -> (0..27).map { 200 + (it/7)*10 + (it%7) }
+        EngineType.FM_DRUM -> (0..55).map { 200 + (it/7)*10 + (it%7) } // 8 Drums * 7 Params
         EngineType.ANALOG_DRUM -> (0..47).map { 600 + (it/6)*10 + (it%6) }
         EngineType.SOUNDFONT -> listOf(1, 2, 100, 103, 112, 113, 150, 151, 152, 355)
         EngineType.AUDIO_IN -> (100..123).toList()
@@ -431,13 +527,21 @@ fun RecordingStrip(
     val engineColor = getEngineColor(track.engineType)
     val scope = rememberCoroutineScope()
     
-    // For Sampler, fetch real slice points
-    val slicePoints = if (track.engineType == EngineType.SAMPLER && nativeLib != null) {
-        remember(trackIndex, track.parameters[340], isRecording) {
-            nativeLib.getSlicePoints(trackIndex)
-        }
-    } else null
+    // For Sampler, fetch real slice points with local state for smooth dragging
+    var slicePoints by remember { mutableStateOf<FloatArray?>(null) }
     
+    // Fetch initial or refreshed points
+    LaunchedEffect(trackIndex, track.parameters[340], isRecording) {
+        if (track.engineType == EngineType.SAMPLER && nativeLib != null) {
+            slicePoints = nativeLib.getSlicePoints(trackIndex)
+        } else {
+            slicePoints = null
+        }
+    }
+    
+    // Drag State
+    var draggingSliceIndex by remember { mutableIntStateOf(-1) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -506,6 +610,10 @@ fun RecordingStrip(
                                  if (idx == trackIndex) t.copy(lastSamplePath = path) else t
                              }))
                              onWaveformRefresh()
+                             // Refresh slices after load
+                             if (nativeLib != null) {
+                                 slicePoints = nativeLib.getSlicePoints(trackIndex)
+                             }
                         }, 
                         isSave = false,
                         trackIndex = trackIndex,
@@ -621,6 +729,47 @@ fun RecordingStrip(
                 .background(Color.Black, RoundedCornerShape(8.dp))
                 .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
                 .padding(4.dp)
+                .pointerInput(trackIndex, slicePoints) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+    val width = size.width
+                            val clickPos = offset.x / width.toFloat()
+                            // Find closer slice within tolerance
+                            slicePoints?.let { points ->
+                                var closestIdx = -1
+                                var minDist = 0.05f // 5% tolerance
+                                points.forEachIndexed { i, p ->
+                                    val dist = kotlin.math.abs(p - clickPos)
+                                    if (dist < minDist) {
+                                        minDist = dist
+                                        closestIdx = i
+                                    }
+                                }
+                                draggingSliceIndex = closestIdx
+                            }
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            if (draggingSliceIndex != -1 && slicePoints != null) {
+                                val width = size.width.toFloat()
+                                val delta = dragAmount.x / width
+                                val currentPoints = slicePoints!!
+                                val newPos = (currentPoints[draggingSliceIndex] + delta).coerceIn(0f, 1f)
+                                
+                                // Update Local Array for Snap UI
+                                currentPoints[draggingSliceIndex] = newPos
+                                // Force Recomposition? FloatArray content change doesn't trigger unless we reassign?
+                                // slicePoints = currentPoints // Might work
+                                
+                                // Call Native
+                                nativeLib?.setSlicePosition(trackIndex, draggingSliceIndex, newPos)
+                            }
+                        },
+                        onDragEnd = {
+                            draggingSliceIndex = -1
+                        }
+                    )
+                }
         ) {
             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                 val wave = waveform
@@ -635,13 +784,14 @@ fun RecordingStrip(
                     drawLine(Color.Red.copy(alpha = 0.3f), Offset(0f, size.height/2), Offset(size.width, size.height/2), strokeWidth = 1.dp.toPx())
                 }
                 
-                if (track.engineType == EngineType.SAMPLER && slicePoints != null) {
+                val currentPoints = slicePoints
+                if (track.engineType == EngineType.SAMPLER && currentPoints != null) {
                     val paint = Paint().apply {
                         color = android.graphics.Color.MAGENTA
                         textSize = 24f
                         typeface = Typeface.DEFAULT_BOLD
                     }
-                    slicePoints.forEachIndexed { index, point ->
+                    currentPoints.forEachIndexed { index, point ->
                         val x = point * size.width
                         drawLine(Color.Magenta, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
                         
@@ -970,10 +1120,10 @@ fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
              }
          }
 
-        // ROW 1: CHARACTER, FILTER
+        // ROW 1: CHARACTER (0.6), UNISON/LOFI (0.7), AMP ENV (0.7)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // CHARACTER (2x2)
-            CompactParameterBox(title = "CHARACTER", startColor = wtColor, modifier = Modifier.weight(1f)) {
+            CompactParameterBox(title = "CHARACTER", startColor = wtColor, modifier = Modifier.weight(0.6f)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Knob("Morph", 0.0f, 450, state, onStateChange, nativeLib, knobSize = 34.dp)
                     Knob("Warp", 0.0f, 465, state, onStateChange, nativeLib, knobSize = 34.dp)
@@ -984,6 +1134,33 @@ fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
                 }
             }
 
+            // UNISON & LO-FI (2x2)
+             CompactParameterBox(title = "UNISON & LO-FI", startColor = wtColor, modifier = Modifier.weight(0.7f)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("Detune", 0.0f, 451, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("Glide", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 34.dp)
+                }
+                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("Bits", 0.0f, 468, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("Srate", 0.0f, 469, state, onStateChange, nativeLib, knobSize = 34.dp)
+                }
+            }
+
+            // AMP ENVELOPE (2x2)
+            CompactParameterBox(title = "AMP ENV", startColor = wtColor, modifier = Modifier.weight(0.7f)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("Atk", 0.01f, 454, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("Dcy", 0.1f, 455, state, onStateChange, nativeLib, knobSize = 34.dp)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Knob("Sus", 0.8f, 456, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("Rel", 0.5f, 457, state, onStateChange, nativeLib, knobSize = 34.dp)
+                }
+            }
+        }
+
+        // ROW 2: FILTER (1.0), FILTER ENV (1.0)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // FILTER (2x2 with Mode Button)
             CompactParameterBox(title = "FILTER", startColor = wtColor, modifier = Modifier.weight(1f)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -1012,10 +1189,7 @@ fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
                     }
                 }
             }
-        }
 
-        // ROW 2: FILT ENV, AMP ENV
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // FILTER ENVELOPE (2x2)
             CompactParameterBox(title = "FILTER ENV", startColor = wtColor, modifier = Modifier.weight(1f)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -1025,32 +1199,6 @@ fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Knob("Sus", 0.0f, 473, state, onStateChange, nativeLib, knobSize = 34.dp)
                     Knob("Rel", 0.5f, 474, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
-            }
-            
-            // AMP ENVELOPE (2x2)
-            CompactParameterBox(title = "AMP ENV", startColor = wtColor, modifier = Modifier.weight(1f)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("Atk", 0.01f, 454, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("Dcy", 0.1f, 455, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("Sus", 0.8f, 456, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("Rel", 0.5f, 457, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
-            }
-        }
-
-        // ROW 3: UNISON & LO-FI (2x2)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            CompactParameterBox(title = "UNISON & LO-FI", startColor = wtColor, modifier = Modifier.width(200.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("Detune", 0.0f, 451, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("Glide", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("Bits", 1.0f, 475, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("Srate", 0.0f, 476, state, onStateChange, nativeLib, knobSize = 34.dp)
                 }
             }
         }
@@ -1396,7 +1544,7 @@ fun FmDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
     val configuration = LocalConfiguration.current
     val isTablet = minOf(configuration.screenWidthDp, configuration.screenHeightDp) >= 600
 
-    val containerModifier = if (isTablet) Modifier.fillMaxWidth().padding(vertical = 8.dp)
+    val containerModifier = if (isTablet) Modifier.fillMaxWidth().fillMaxHeight().padding(vertical = 8.dp)
                             else Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)
     
     Row(
@@ -1412,7 +1560,7 @@ fun FmDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text(name, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp, maxLines = 1)
+                Text(name, style = MaterialTheme.typography.labelMedium, color = Color.Gray, maxLines = 1)
                 
                 EngineIcon(
                     type = EngineType.FM_DRUM,
@@ -1517,7 +1665,7 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
         // 6-Operator Grid
         // 6-Operator Grid
         val config = LocalConfiguration.current
-        val isWide = config.screenWidthDp >= 600
+
         val themeColor = Color(0xFF00FF00) // Green for FM
 
         // Helper contents
@@ -1571,21 +1719,28 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
              }
         }
 
-        if (isWide) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactParameterBox("ROUTING", themeColor, modifier = Modifier.weight(1f), content = routingContent)
-                CompactParameterBox("FILTER & UNISON", themeColor, modifier = Modifier.weight(1f), content = filterContent)
-                CompactParameterBox("AMP ENVELOPE", themeColor, modifier = Modifier.weight(1f), content = ampContent)
+        // 3 Control Boxes (Narrow) + Browse Button
+        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+             CompactParameterBox("ROUTING", themeColor, modifier = Modifier.weight(0.75f), content = routingContent)
+             CompactParameterBox("FILTER & UNISON", themeColor, modifier = Modifier.weight(0.75f), content = filterContent)
+             CompactParameterBox("AMP ENVELOPE", themeColor, modifier = Modifier.weight(0.75f), content = ampContent)
+             
+             // Browse Button (Large Square-ish)
+             Button(
+                onClick = { showPresetDrawer = true },
+                colors = ButtonDefaults.buttonColors(containerColor = themeColor.copy(alpha=0.2f)),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, themeColor),
+                modifier = Modifier.weight(1.0f).fillMaxHeight()
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Menu, contentDescription = null, tint = themeColor, modifier = Modifier.size(24.dp))
+                    Text("BROWSE\nPRESETS", color = themeColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 10.sp)
+                }
             }
-        } else {
-             CompactParameterBox("ROUTING", themeColor, content = routingContent)
-             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactParameterBox("FILTER & UNISON", themeColor, modifier = Modifier.weight(1f), content = filterContent)
-                CompactParameterBox("AMP ENVELOPE", themeColor, modifier = Modifier.weight(1f), content = ampContent)
-             }
         }
 
-        // 6-Operator Grid
+        // 6-Operator Grid (Restored)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1601,7 +1756,6 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Operator Toggle Button (3 States: OFF, MOD, CARRIER)
                     val isActive = (track.fmActiveMask and (1 shl opIdx)) != 0
                     val isCarrier = (track.fmCarrierMask and (1 shl opIdx)) != 0
                     
@@ -1631,8 +1785,6 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                 if (idx == trackIndex) t.copy(fmActiveMask = if (nextActive) t.fmActiveMask or (1 shl opIdx) else t.fmActiveMask and (1 shl opIdx).inv(),
                                                             fmCarrierMask = if (nextCarrier) t.fmCarrierMask or (1 shl opIdx) else t.fmCarrierMask and (1 shl opIdx).inv()) else t
                             }))
-                            // NativeLib: we need to pass both masks or handle them in setParameter
-                            // For now, let's use param 153 for CarrierMask and assume another param for ActiveMask or combine them
                             nativeLib.setParameter(trackIndex, 153, (if (nextCarrier) track.fmCarrierMask or (1 shl opIdx) else track.fmCarrierMask and (1 shl opIdx).inv()).toFloat())
                             nativeLib.setParameter(trackIndex, 155, (if (nextActive) track.fmActiveMask or (1 shl opIdx) else track.fmActiveMask and (1 shl opIdx).inv()).toFloat())
                         },
@@ -1651,8 +1803,6 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
 
                     Divider(color = Color.White.copy(alpha = 0.1f))
 
-                    // Operator Parameter Knobs (made slightly larger)
-                    // Operator Parameter Knobs (made slightly larger)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Knob("LVL", 0.0f, baseId, state, onStateChange, nativeLib, knobSize = 24.dp)
                         Knob("RAT", 1.0f, baseId + 1, state, onStateChange, nativeLib, knobSize = 24.dp, valueFormatter = { String.format("%.1f", it) })
@@ -1666,21 +1816,7 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                          Knob("S", 1.0f, baseId + 4, state, onStateChange, nativeLib, knobSize = 24.dp)
                          Knob("R", 0.0f, baseId + 5, state, onStateChange, nativeLib, knobSize = 24.dp)
                     }
-            }
-        }
-    }
-
-    // Preset Button (Bottom)
-        Box(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
-             Button(
-                onClick = { showPresetDrawer = true },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00ADB5)), // Cyan/Teal
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(50.dp).fillMaxWidth(0.8f)
-            ) {
-                Icon(Icons.Default.Menu, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("BROWSE FM PRESETS", color = Color.Black, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
     }
@@ -1693,7 +1829,7 @@ fun GranularParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (G
     var waveform by remember { mutableStateOf<FloatArray?>(null) }
     var playheads by remember { mutableStateOf(floatArrayOf()) }
     var isRecordingSample by remember { mutableStateOf(false) }
-    val themeColor = Color(0xFFFF69B4) // Pink for Granular
+    val themeColor = Color(0xFFFF00FF) // Fuschia for Granular
 
 
     // Animation loop for playheads and waveform
@@ -1740,59 +1876,58 @@ fun GranularParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (G
             }
         )
         
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // CLOUD (2x2)
-            CompactParameterBox(title = "CLOUD", startColor = themeColor, modifier = Modifier.weight(1f)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("POS", 0.0f, 400, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("SIZE", 0.2f, 406, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("DENS", 0.5f, 407, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("SPRAY", 0.0f, 415, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
+    // Single Row Layout: Cloud, Motion, Envelope, Advanced
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // CLOUD (2x2)
+        CompactParameterBox(title = "CLOUD", startColor = themeColor, modifier = Modifier.weight(1f)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("POS", 0.0f, 400, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("SIZE", 0.2f, 406, state, onStateChange, nativeLib, knobSize = 34.dp)
             }
-
-            // MOTION (2x3 with Glide)
-            CompactParameterBox(title = "MOTION", startColor = themeColor, modifier = Modifier.weight(1.5f)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("SPEED", 0.5f, 401, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("JITTER", 0.0f, 411, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("REV", 0.0f, 420, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("PITCH", 0.5f, 410, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Spacer(modifier = Modifier.width(34.dp)) // Empty slot for balance
-                }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("DENS", 0.5f, 407, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("SPRAY", 0.0f, 415, state, onStateChange, nativeLib, knobSize = 34.dp)
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // ENVELOPE (2x2)
-            CompactParameterBox(title = "ENVELOPE", startColor = themeColor, modifier = Modifier.weight(1f)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("ATK", 0.01f, 425, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("DEC", 0.1f, 426, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("SUS", 1.0f, 427, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("REL", 0.5f, 428, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
+        // MOTION (2x3 -> 2x3 with REV restored)
+        CompactParameterBox(title = "MOTION", startColor = themeColor, modifier = Modifier.weight(1f)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("SPEED", 0.5f, 401, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("JITTER", 0.0f, 411, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("REV", 0.0f, 420, state, onStateChange, nativeLib, knobSize = 34.dp) // Restored REV
             }
-            
-            // ADVANCED (2x2)
-             CompactParameterBox(title = "ADVANCED", startColor = themeColor, modifier = Modifier.weight(1f)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("DETUN", 0.0f, 416, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("RAND", 0.0f, 417, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("COUNT", 0.2f, 418, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("WIDTH", 0.5f, 419, state, onStateChange, nativeLib, knobSize = 34.dp)
-                }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("PITCH", 0.5f, 410, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Spacer(modifier = Modifier.width(34.dp)) // Balance
             }
         }
+
+        // ENVELOPE (2x2)
+        CompactParameterBox(title = "ENVELOPE", startColor = themeColor, modifier = Modifier.weight(1f)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("ATK", 0.01f, 425, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("DEC", 0.1f, 426, state, onStateChange, nativeLib, knobSize = 34.dp)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("SUS", 1.0f, 427, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("REL", 0.5f, 428, state, onStateChange, nativeLib, knobSize = 34.dp)
+            }
+        }
+        
+        // ADVANCED (2x2)
+         CompactParameterBox(title = "ADVANCED", startColor = themeColor, modifier = Modifier.weight(1f)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("DETUN", 0.0f, 416, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("RAND", 0.0f, 417, state, onStateChange, nativeLib, knobSize = 34.dp)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Knob("COUNT", 0.2f, 418, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("WIDTH", 0.5f, 419, state, onStateChange, nativeLib, knobSize = 34.dp)
+            }
+        }
+    }
     }
 }
 
@@ -2019,63 +2154,56 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
 
         val themeColor = Color(0xFFFFD700) // Gold for Sampler
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // TOP ROW: SAMPLE EDITS, SYNTHESIS
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // SAMPLE EDITS (2x2)
-                CompactParameterBox(title = "SAMPLE EDITS", startColor = themeColor, modifier = Modifier.weight(1f)) {
+            // ONE ROW: SAMPLE EDITS, SYNTHESIS, ENVELOPE
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                // SAMPLE EDITS (Compact 2x2)
+                CompactParameterBox(title = "SAMPLE EDITS", startColor = themeColor, modifier = Modifier.weight(0.8f)) {
                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Knob("START", 0.0f, 330, state, onStateChange, nativeLib, knobSize = 34.dp)
-                        Knob("END", 1.0f, 331, state, onStateChange, nativeLib, knobSize = 34.dp)
+                        Knob("START", 0.0f, 330, state, onStateChange, nativeLib, knobSize = 32.dp)
+                        Knob("END", 1.0f, 331, state, onStateChange, nativeLib, knobSize = 32.dp)
                      }
                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Knob("SLICES", 0.0f, 340, state, onStateChange, nativeLib, knobSize = 34.dp, valueFormatter = { v -> "${(v * 14f).toInt() + 2}" })
-                         // Mode Knob (or button? sticking to knob as per request "Play mode controls... 2x2")
-                        Knob("MODE", 0.0f, 320, state, onStateChange, nativeLib, knobSize = 34.dp, valueFormatter = { v ->
+                        Knob("SLICES", 0.0f, 340, state, onStateChange, nativeLib, knobSize = 32.dp, valueFormatter = { v -> "${(v * 14f).toInt() + 2}" })
+                        Knob("MODE", 0.0f, 320, state, onStateChange, nativeLib, knobSize = 32.dp, valueFormatter = { v ->
                             when(v) {
-                                in 0.0f..0.24f -> "ONE"
-                                in 0.25f..0.49f -> "LOOP"
-                                in 0.5f..0.74f -> "CHOP"
-                                else -> "REV"
+                                in 0.0f..0.16f -> "ONE"
+                                in 0.161f..0.32f -> "SUS"
+                                in 0.321f..0.49f -> "LOOP"
+                                in 0.491f..0.65f -> "CHOP" // Gate Chop
+                                in 0.651f..0.82f -> "1-CP" // One-Shot Chop
+                                else -> "L-CP" // Loop Chop
                             }
                         })
                      }
                 }
 
-                // SYNTHESIS (2x3)
-            CompactParameterBox(title = "SYNTHESIS", startColor = themeColor, modifier = Modifier.weight(1f)) {
-                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("PITCH", 0.5f, 300, state, onStateChange, nativeLib, knobSize = 34.dp, detentValue = 0.5f)
-                    Knob("SPEED", 0.5f, 302, state, onStateChange, nativeLib, knobSize = 34.dp, detentValue = 0.5f)
-                    Knob("STRCH", 0.25f, 301, state, onStateChange, nativeLib, knobSize = 34.dp, detentValue = 0.25f)
+                // SYNTHESIS (Wide)
+                CompactParameterBox(title = "SYNTHESIS", startColor = themeColor, modifier = Modifier.weight(1.2f)) {
+                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Knob("PITCH", 0.5f, 300, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.5f)
+                        Knob("SPEED", 0.5f, 302, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.5f)
+                        Knob("STRCH", 0.25f, 301, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.25f)
+                        Knob("EGINT", 0.5f, 314, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.5f) // Restored EG INT
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Knob("FILT", 1.0f, 1, state, onStateChange, nativeLib, knobSize = 32.dp)
+                        Knob("RESO", 0.0f, 2, state, onStateChange, nativeLib, knobSize = 32.dp)
+                        Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 32.dp)
+                    }
                 }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("FILT", 1.0f, 1, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("RESO", 0.0f, 2, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 34.dp) // Moved Glide here
+                
+                // ENVELOPE (Compact 2x2)
+                CompactParameterBox(title = "ENVELOPE", startColor = themeColor, modifier = Modifier.weight(0.8f)) {
+                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                         Knob("A", 0.01f, 310, state, onStateChange, nativeLib, knobSize = 32.dp)
+                         Knob("D", 0.2f, 311, state, onStateChange, nativeLib, knobSize = 32.dp)
+                     }
+                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                         Knob("S", 1.0f, 312, state, onStateChange, nativeLib, knobSize = 32.dp)
+                         Knob("R", 0.2f, 313, state, onStateChange, nativeLib, knobSize = 32.dp)
+                     }
                 }
             }
-            }
-
-            // BOTTOM ROW: ENVELOPE (Glide centered + ADSR 2x2)
-            // Hmm, mixing Glide + ADSR in one box.
-            // User said: "Envelope controls should be in a 2x2 grid for the ADSR, and the glide goes above those two rows and centered, with a square box shape."
-            // A single box for Glide + ADSR.
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            // ENVELOPE (2x2)
-            CompactParameterBox(title = "ENVELOPE", startColor = themeColor, modifier = Modifier.width(200.dp)) {
-                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                     Knob("A", 0.01f, 310, state, onStateChange, nativeLib, knobSize = 34.dp)
-                     Knob("D", 0.2f, 311, state, onStateChange, nativeLib, knobSize = 34.dp)
-                 }
-                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                     Knob("S", 1.0f, 312, state, onStateChange, nativeLib, knobSize = 34.dp)
-                     Knob("R", 0.2f, 313, state, onStateChange, nativeLib, knobSize = 34.dp)
-                 }
-            }
-            }
-        }
     }
 }
 
@@ -2252,6 +2380,52 @@ fun GlobalFxSends(state: GrooveboxState, trackIndex: Int, onStateChange: (Groove
         }
     } else {
         Text("No Active FX in Chain", color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(8.dp))
+    }
+}
+
+@Composable
+fun GlobalActiveSends(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+    val fxSends = nativeLib.getFxSends(trackIndex) // Should be 17 floats
+    val fxNames = mapOf(
+        0 to "ODRV", 1 to "BIT", 2 to "CHOR", 3 to "PHAS", 4 to "WOB",
+        5 to "DLY", 6 to "REV", 7 to "SLIC", 8 to "CMP",
+        9 to "HP", 10 to "LP", 11 to "FLG", 12 to "FLT1", 13 to "TAPE", 14 to "OCT",
+        15 to "FLT2", 16 to "FLT3"
+    )
+
+    // Filter for Active Sends (> 0.01f)
+    // Filter for Active Sends (> 0.01f)
+    val activeIndices = fxSends.indices.filter { i -> fxSends[i] > 0.01f }
+
+    if (activeIndices.isNotEmpty()) {
+        ParameterGroup("ACTIVE FX SENDS (ANY)") {
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                activeIndices.forEach { fxId ->
+                    val name = fxNames[fxId] ?: "FX\$fxId"
+                    val slotIdx = state.fxChainSlots.indexOf(fxId)
+                    
+                    if (slotIdx != -1) {
+                         val paramId = 2000 + (slotIdx * 10)
+                         Knob(name, 0.0f, paramId, state, onStateChange, nativeLib, knobSize = 40.dp, overrideValue = fxSends[fxId])
+                    } else {
+                         // Read-only display of send level if not in slot
+                         Knob(
+                            label = name, 
+                            initialValue = 0f, 
+                            parameterId = -1, 
+                            state = state, 
+                            onStateChange = onStateChange, 
+                            nativeLib = nativeLib, 
+                            knobSize = 40.dp,
+                            overrideValue = fxSends[fxId],
+                            overrideColor = Color.Gray
+                        )
+                    }
+                }
+            }
+        }
+    } else {
+        // Optional: Hide or show "No Active Sends"
     }
 }
 

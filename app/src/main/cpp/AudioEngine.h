@@ -79,6 +79,7 @@ public:
   // setRouting takes specific destParamId now
   void setRouting(int destTrack, int sourceTrack, int source, int dest,
                   float amount, int destParamId = -1);
+  void getFxChain(int *destination);
   void setParameter(int trackIndex, int parameterId, float value);
   void setParameterPreview(int trackIndex, int parameterId, float value);
   void setSwing(float swing);
@@ -141,6 +142,7 @@ public:
   void setArpRate(int trackIndex, float rate, int divisionMode);
   float getCpuLoad();
   void setInputDevice(int deviceId);
+  void setSlicePosition(int trackIndex, int sliceIndex, float position);
   void setTrackActive(int trackIndex, bool active);
   void setTrackPan(int trackIndex, float pan);
   void setSlices(int trackIndex, const std::vector<int> &starts,
@@ -149,6 +151,7 @@ public:
   // Audio Export
   void renderToWav(int numCycles, const std::string &path);
   void renderStereo(float *outBuffer, int numFrames);
+  void updateSampleRate(float sampleRate);
 
   // Track Management
   void initTrack(int i);
@@ -282,6 +285,8 @@ private:
     float mClockMultiplier = 1.0f;
     float mArpRate = 1.0f;    // 1.0 = 1/16th, 0.5 = 1/8th, etc.
     int mArpDivisionMode = 0; // 0=Reg, 1=Dotted, 2=Triplet
+    int mActivePLocks[32];    // Track up to 32 P-locks per step for fast reset
+    int mActivePLockCount = 0;
     bool mArpTriplet = false;
     bool mParametersDirty = true; // Flag for optimization
 
@@ -312,11 +317,13 @@ private:
 
   std::vector<Track> mTracks;
   RoutingMatrix mRoutingMatrix;
-  bool mIsPlaying = false;
-  bool mIsRecording = false;       // Transport record (sequencer)
-  bool mIsRecordingSample = false; // Sample capture
-  bool mIsResampling = false;      // New: Record Master Mix
-  bool mIsRecordingLocked = false;
+  std::atomic<bool> mIsPlaying{false};
+  std::atomic<bool> mIsRecording{false};       // Transport record (sequencer)
+  std::atomic<bool> mIsRecordingSample{false}; // Sample capture
+  std::atomic<bool> mIsResampling{false};      // New: Record Master Mix
+  std::atomic<bool> mIsRecordingLocked{false};
+  std::atomic<bool> mSampleRateChanged{false};
+  std::atomic<float> mPendingSampleRate{48000.0f};
   int mRecordingTrackIndex = -1;
   float mBpm = 120.0f;
   double mSampleCount = 0;
@@ -385,6 +392,7 @@ public:
   int mSidechainSourceTrack = -1;
   int mSidechainSourceDrumIdx = -1;
   float mMasterVolume = 0.8f;
+  bool mIsFloatFormat = true; // Assume Float, but verify at stream open
   float mFxMixLevels[17] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
                             1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
                             1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0

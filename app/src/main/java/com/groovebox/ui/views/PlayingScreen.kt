@@ -1553,40 +1553,68 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
 
     // Transpose Menu
     if (showTransposeMenu) {
+        val config = LocalConfiguration.current
+        val isWide = config.screenWidthDp > 600
+
         androidx.compose.ui.window.Popup(
             onDismissRequest = { showTransposeMenu = false },
             alignment = Alignment.BottomStart
         ) {
+            val popupHeight = if (isWide) 84.dp else 120.dp
+            
             Surface(
-                modifier = Modifier.fillMaxWidth().height(84.dp).padding(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(popupHeight)
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 color = Color(0xFF1E1E1E),
                 shape = RoundedCornerShape(12.dp),
                 tonalElevation = 8.dp,
                 border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
             ) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val noteNames = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
-                    noteNames.forEachIndexed { i, name ->
-                        val currentOctave = state.rootNote / 12
-                        Surface(
-                            onClick = {
-                                val newRoot = currentOctave * 12 + i
-                                onStateChange(state.copy(rootNote = newRoot))
-                                nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
-                                showTransposeMenu = false
-                            },
-                            color = if (state.rootNote % 12 == i) Color.Cyan else Color.Transparent,
-                            border = if (state.rootNote % 12 == i) null else BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(name, style = MaterialTheme.typography.labelSmall, color = if (state.rootNote % 12 == i) Color.Black else Color.White)
-                            }
+                val noteNames = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+                
+                // Helper for button rendering
+                val renderButton: @Composable (Int, String) -> Unit = { i, name ->
+                    val currentOctave = state.rootNote / 12
+                    Surface(
+                        onClick = {
+                            val newRoot = currentOctave * 12 + i
+                            onStateChange(state.copy(rootNote = newRoot))
+                            nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
+                            showTransposeMenu = false
+                        },
+                        color = if (state.rootNote % 12 == i) Color.Cyan else Color.Transparent,
+                        border = if (state.rootNote % 12 == i) null else BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            // Only show text, octave is implied
+                            Text(name, style = MaterialTheme.typography.labelSmall, color = if (state.rootNote % 12 == i) Color.Black else Color.White)
+                        }
+                    }
+                }
+
+                if (isWide) {
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        noteNames.forEachIndexed { i, name -> renderButton(i, name) }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(vertical = 6.dp),
+                        verticalArrangement = Arrangement.SpaceEvenly,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            noteNames.take(6).forEachIndexed { i, name -> renderButton(i, name) }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            noteNames.drop(6).forEachIndexed { i, name -> renderButton(i + 6, name) }
                         }
                     }
                 }

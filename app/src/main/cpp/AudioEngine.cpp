@@ -82,8 +82,9 @@ AudioEngine::AudioEngine() {
   for (int i = 0; i < 3; ++i) {
     mFilterPedalL[i].clear();
     mFilterPedalR[i].clear();
-    mFilterPedalL[i].setMix(1.0f);
-    mFilterPedalR[i].clear();
+    // Default to mid-range cutoff (~632Hz) so filtering is audible
+    mFilterPedalL[i].setCutoff(0.5f);
+    mFilterPedalR[i].setCutoff(0.5f);
     mFilterPedalL[i].setMix(1.0f);
     mFilterPedalR[i].setMix(1.0f);
   }
@@ -366,9 +367,9 @@ bool AudioEngine::start() {
   for (int i = 0; i < 3; ++i) {
     mFilterPedalL[i].clear();
     mFilterPedalR[i].clear();
-    // Force Open State so they aren't silent
-    mFilterPedalL[i].setCutoff(1.0f);
-    mFilterPedalR[i].setCutoff(1.0f);
+    // Default to mid-range cutoff (~632Hz) so filtering is audible
+    mFilterPedalL[i].setCutoff(0.5f);
+    mFilterPedalR[i].setCutoff(0.5f);
     mFilterPedalL[i].setMix(1.0f);
     mFilterPedalR[i].setMix(1.0f);
   }
@@ -629,7 +630,9 @@ void AudioEngine::setParameter(int trackIndex, int parameterId, float value) {
 
 void AudioEngine::setParameterPreview(int trackIndex, int parameterId,
                                       float value) {
-  setParameter(trackIndex, parameterId, value);
+  // Preview only: Update engine directly without modifying base parameters
+  // This is used during P-lock editing so knob changes don't affect the track
+  updateEngineParameter(trackIndex, parameterId, value);
 }
 
 void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,

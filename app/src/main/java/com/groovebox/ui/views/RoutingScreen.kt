@@ -463,10 +463,7 @@ fun FxChainEditor(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 contentAlignment = Alignment.Center
             ) {
                 if (isFilled) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(fxName, color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text("\${slotIdx+1}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
-                    }
+                    Text(fxName, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 } else {
                     Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.Gray)
                 }

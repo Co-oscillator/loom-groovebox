@@ -1488,10 +1488,43 @@ void AudioEngine::updateGlobalParameter(int parameterId, float value) {
     }
   }
 
+  // Filter Pedals (2200-2214)
+  if (parameterId >= 2200 && parameterId < 2215) {
+    int filterIdx = -1;
+    int subParam = -1;
+
+    if (parameterId >= 2200 && parameterId < 2205) { // 2200-2204: Filter 1
+      filterIdx = 0;
+      subParam = parameterId - 2200;
+    } else if (parameterId >= 2205 &&
+               parameterId < 2210) { // 2205-2209: Filter 2
+      filterIdx = 1;
+      subParam = parameterId - 2205;
+    } else if (parameterId >= 2210 &&
+               parameterId < 2215) { // 2210-2214: Filter 3
+      filterIdx = 2;
+      subParam = parameterId - 2210;
+    }
+
+    if (filterIdx != -1) {
+      if (subParam == 0) { // Cutoff
+        mFilterPedalL[filterIdx].setCutoff(value);
+        mFilterPedalR[filterIdx].setCutoff(value);
+      } else if (subParam == 1) { // Resonance
+        mFilterPedalL[filterIdx].setResonance(value);
+        mFilterPedalR[filterIdx].setResonance(value);
+      } else if (subParam == 2) { // Mode
+        mFilterPedalL[filterIdx].setMode(value);
+        mFilterPedalR[filterIdx].setMode(value);
+      }
+    }
+  }
+
   // CRITICAL: Persist All Global Parameters to Track 0
   // This ensures the UI can read them back via getTrackParameters(0)
   if (!mTracks.empty()) {
-    if (parameterId >= 490 && parameterId < 1600) {
+    if ((parameterId >= 490 && parameterId < 1600) ||
+        (parameterId >= 2200 && parameterId < 2215)) {
       mTracks[0].parameters[parameterId] = value;
     }
   }

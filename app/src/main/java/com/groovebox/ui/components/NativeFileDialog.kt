@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import java.io.File
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
@@ -132,16 +133,21 @@ fun NativeFileDialog(
         }
         }
 
-    Dialog(onDismissRequest = onDismiss) {
-        val loomFolders = listOf("samples", "granular", "wavetables", "recordings", "sessions", "soundfonts")
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .clickable(enabled = false) {}, // Prevent clicks passing through
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
-        ) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            val loomFolders = listOf("samples", "granular", "wavetables", "recordings", "sessions", "soundfonts")
+            Card(
+                modifier = Modifier
+                    .widthIn(max = 600.dp)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clickable(enabled = false) {}, // Prevent clicks passing through
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+            ) {
             // Apply IME padding to the content column so it shrinks when keyboard opens
             Column(
                 modifier = Modifier
@@ -446,6 +452,7 @@ fun NativeFileDialog(
                         }
                     }
                 }
+            }
             }
         }
     }

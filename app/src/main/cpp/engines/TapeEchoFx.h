@@ -25,29 +25,58 @@ public:
     if (!std::isfinite(input))
       input = 0.0f;
 
-    // Wow & Flutter LFOs
+    // Wow & Flutter LFOs (Use std::sin for smooth derivative/pitch)
     mWowPhase += 0.5f / sampleRate;
-    if (mWowPhase >= 1.0f)
-      mWowPhase -= 1.0f;
-    mFlutterPhase += 12.0f / sampleRate;
-    if (mFlutterPhase >= 1.0f)
-      mFlutterPhase -= 1.0f;
+    if (mWowPhase > 6.283185f)
+      mWowPhase -= 6.283185f;
 
-    float modulation = (FastSine::get(mWowPhase) * mWowAmount) +
-                       (FastSine::get(mFlutterPhase) * mFlutterAmount);
+    mFlutterPhase += 12.0f / sampleRate;
+    if (mFlutterPhase > 6.283185f)
+      mFlutterPhase -= 6.283185f;
+
+    float modulation = (std::sin(mWowPhase) * mWowAmount) +
+                       (std::sin(mFlutterPhase) * mFlutterAmount);
 
     float targetDelaySamples = (mTime + modulation * mTime) * sampleRate;
 
-    // Faster smoothing for "rubbery" transitions
-    mSmoothedDelay += 0.001f * (targetDelaySamples - mSmoothedDelay);
+    if (!std::isfinite(targetDelaySamples))
+      targetDelaySamples = mTime * sampleRate;
+
+    float diff = targetDelaySamples - mSmoothedDelay;
+
+    // Smooth approach first
+    float step = 0.0002f * diff;
+
+    // Slew Rate Limiter: Max 0.95 (0.05x speed). High limit allows manual play
+    // but stops aliasing.
+    float maxSlew = 0.95f;
+    if (step > maxSlew)
+      step = maxSlew;
+    if (step < -maxSlew)
+      step = -maxSlew;
+
+    mSmoothedDelay += step;
+
+    // Safety Clamps
+    if (!std::isfinite(mSmoothedDelay))
+      mSmoothedDelay = targetDelaySamples;
+    if (mSmoothedDelay < 0.0f)
+      mSmoothedDelay = 0.0f;
 
     // Read positions
     // Read position relative to most recent sample (mWritePos - 1)
     float readPos = (float)mWritePos - 1.0f - mSmoothedDelay;
-    while (readPos < 0.0f)
-      readPos += (float)mBuffer.size();
-    while (readPos >= (float)mBuffer.size())
-      readPos -= (float)mBuffer.size();
+
+    // Safety check for invalid Delay/LFO state
+    if (!std::isfinite(readPos)) {
+      readPos = (float)mWritePos - 1.0f;
+    }
+
+    // Safe Wrapping (avoid infinite while loops if readPos is extreme)
+    float bufSizeVal = (float)mBuffer.size();
+    readPos = fmodf(readPos, bufSizeVal);
+    if (readPos < 0.0f)
+      readPos += bufSizeVal;
 
     // Hermite Interpolation (4-point)
     int i1 = (int)readPos;
@@ -68,6 +97,8 @@ public:
     float d = y1;
 
     float echo = ((a * frac + b) * frac + c) * frac + d;
+    if (!std::isfinite(echo))
+      echo = 0.0f;
 
     // Smooth Parameters
     mSmoothedFeedback += 0.001f * (mFeedback - mSmoothedFeedback);
@@ -83,9 +114,15 @@ public:
     // Low-pass to simulate tape head wear & prevent high-freq "zipper"
     // Denormal protection
     feedbackSig += 1.0e-15f;
+    if (!std::isfinite(feedbackSig))
+      feedbackSig = 0.0f;
+
     mFilterState += 0.05f * (feedbackSig - mFilterState);
-    if (std::abs(mFilterState) < 1.0e-15f)
+    if (!std::isfinite(mFilterState))
       mFilterState = 0.0f;
+    else if (std::abs(mFilterState) < 1.0e-15f)
+      mFilterState = 0.0f;
+
     feedbackSig = mFilterState;
 
     float toWrite = input + feedbackSig;

@@ -14,13 +14,13 @@ public:
     // Map 0..1 to 20Hz..20kHz exponential
     // f = 20 * (1000^val)
     float targetFreq = 20.0f * std::pow(1000.0f, cutoff);
-    mTargetCutoff = std::clamp(targetFreq, 20.0f, 20000.0f);
+    mTargetCutoff = std::max(20.0f, std::min(targetFreq, 20000.0f));
   }
 
   void setResonance(float res) {
     // Map 0..1 to Q 0.707..10.0
     float targetQ = 0.707f + res * 9.3f;
-    mTargetResonance = std::clamp(targetQ, 0.707f, 10.0f);
+    mTargetResonance = std::max(0.707f, std::min(targetQ, 10.0f));
   }
 
   void setMode(float mode) {
@@ -28,6 +28,11 @@ public:
     if (m >= 0 && m <= 2) {
       mMode = static_cast<Mode>(m);
     }
+  }
+
+  void snap() {
+    mCutoff = mTargetCutoff;
+    mResonance = mTargetResonance;
   }
 
   void setMix(float mix) { mMix = mix; }
@@ -46,7 +51,7 @@ public:
     mCutoff += 0.002f * (mTargetCutoff - mCutoff);
     mResonance += 0.002f * (mTargetResonance - mResonance);
 
-    float f_clipped = std::clamp(mCutoff, 20.0f, sampleRate / 6.0f);
+    float f_clipped = std::max(20.0f, std::min(mCutoff, sampleRate / 6.0f));
     float g = std::tan((float)M_PI * f_clipped / sampleRate);
     float q = 1.0f / mResonance;
     float d = 1.0f / (1.0f + g * (g + q));
@@ -74,6 +79,12 @@ public:
     }
 
     float out = input * (1.0f - mMix) + wet * mMix;
+
+    // Optional: Gain compensation for high resonance
+    // Scaling by 1.0 / sqrt(Q) or similar to keep power roughly constant
+    float compensation = 1.0f / (1.0f + (mResonance - 0.707f) * 0.35f);
+    out *= compensation;
+
     if (!std::isfinite(out))
       out = 0.0f;
     return out;

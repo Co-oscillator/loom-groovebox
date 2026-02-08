@@ -406,6 +406,9 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         // Native `setFxChain` links two FX units directly.
         // If we have [Reverb, Delay], we call setFxChain(Reverb, Delay).
     }
+
+    // 7. Sidechain
+    nativeLib.setSidechainConfig(state.sidechainSourceTrack, state.sidechainSourceDrumIdx)
 }
 
 fun toggleStep(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, trackIdx: Int, stepIdx: Int) {

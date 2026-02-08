@@ -147,6 +147,13 @@ fun Knob(
                                 if (state.lfoLearnActive) {
                                     val lfoIdx = state.lfoLearnLfoIndex
                                     if (lfoIdx != -1) {
+                                        // Unassign previous target if different
+                                        val oldTargetId = state.lfos[lfoIdx].targetId
+                                        if (oldTargetId != -1 && oldTargetId != parameterId) {
+                                            // Send 0.0 amount to remove routing
+                                            nativeLib.setRouting(latestState.selectedTrackIndex, -1, 2 + lfoIdx, 5, 0.0f, oldTargetId)
+                                        }
+
                                         // LFO1=2, LFO2=3... LFO5=6
                                         nativeLib.setRouting(latestState.selectedTrackIndex, -1, 2 + lfoIdx, 5, 1.0f, parameterId)
                                         val newLfos = state.lfos.toMutableList()
@@ -157,12 +164,20 @@ fun Knob(
                                     val macroIdx = state.macroLearnMacroIndex
                                     val tIdx = state.macroLearnTargetIndex
                                     if (macroIdx != -1 && tIdx != -1) {
-                                         // Macro1=9, Macro2=10...
-                                         nativeLib.setRouting(latestState.selectedTrackIndex, -1, 10 + macroIdx, 5, 1.0f, parameterId)
-                                         val newMacros = state.macros.toMutableList()
-                                         val currentTargets = newMacros[macroIdx].targets.toMutableList()
+                                         val currentMacro = state.macros[macroIdx]
+                                         val currentTargets = currentMacro.targets.toMutableList()
+                                         
                                          if (tIdx < currentTargets.size) {
+                                             val oldTargetId = currentTargets[tIdx].targetId
+                                             if (oldTargetId != -1 && oldTargetId != parameterId) {
+                                                 nativeLib.setRouting(latestState.selectedTrackIndex, -1, 10 + macroIdx, 5, 0.0f, oldTargetId)
+                                             }
+
+                                             // Macro1=10, Macro2=11...
+                                             nativeLib.setRouting(latestState.selectedTrackIndex, -1, 10 + macroIdx, 5, 1.0f, parameterId)
+                                             
                                              currentTargets[tIdx] = currentTargets[tIdx].copy(targetId = parameterId, targetLabel = label)
+                                             val newMacros = state.macros.toMutableList()
                                              newMacros[macroIdx] = newMacros[macroIdx].copy(targets = currentTargets)
                                              latestOnStateChange(latestState.copy(macros = newMacros, macroLearnActive = false))
                                          }

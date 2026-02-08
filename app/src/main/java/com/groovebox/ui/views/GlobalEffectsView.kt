@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,6 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
 import com.groovebox.EngineType
 import com.groovebox.GrooveboxState
 import com.groovebox.NativeLib
@@ -27,6 +33,20 @@ import com.groovebox.ui.components.Knob
 
 @Composable
 fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+    if (state.isSelectingSidechain) {
+        SidechainSelectorDialog(
+            state = state,
+            onDismiss = { onStateChange(state.copy(isSelectingSidechain = false)) },
+            onSelect = { trackIdx, drumIdx ->
+                nativeLib.setSidechainConfig(trackIdx, drumIdx)
+                onStateChange(state.copy(
+                    isSelectingSidechain = false,
+                    sidechainSourceTrack = trackIdx,
+                    sidechainSourceDrumIdx = drumIdx
+                ))
+            }
+        )
+    }
     Row(modifier = Modifier.fillMaxSize()) {
         // Pedalboard Grid
         LazyVerticalStaggeredGrid(
@@ -67,9 +87,13 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             val scText = if (state.sidechainSourceTrack != -1) {
-                                val instruments = listOf("KICK", "SNARE", "TOM", "HIHAT", "OHH", "CYMB", "PERC", "NOISE")
-                                val name = instruments.getOrNull(state.sidechainSourceDrumIdx) ?: ""
-                                "SC: $name"
+                                if (state.sidechainSourceDrumIdx != -1) {
+                                    val instruments = listOf("KICK", "SNARE", "TOM", "HIHAT", "OHH", "CYMB", "PERC", "NOISE")
+                                    val name = instruments.getOrNull(state.sidechainSourceDrumIdx) ?: "??"
+                                    "SC: T${state.sidechainSourceTrack + 1} $name"
+                                } else {
+                                    "SC: TRACK ${state.sidechainSourceTrack + 1}"
+                                }
                             } else "SC TRG"
                             Text(scText, color = hotPink, style = MaterialTheme.typography.labelSmall)
                         }
@@ -599,4 +623,131 @@ fun GlobalKnob(
         },
         valueFormatter = valueFormatter
     )
+}
+
+@Composable
+fun SidechainSelectorDialog(
+    state: GrooveboxState,
+    onDismiss: () -> Unit,
+    onSelect: (Int, Int) -> Unit
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.8f),
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF222222),
+            border = BorderStroke(1.dp, Color.Gray)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Sidechain Source",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                val scrollState = rememberScrollState()
+
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                    ) {
+                        state.tracks.forEachIndexed { index, track ->
+                            val isSelected = state.sidechainSourceTrack == index && state.sidechainSourceDrumIdx == -1
+                            val isDrum = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM
+                            
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .border(1.dp, if (isSelected || (state.sidechainSourceTrack == index && isDrum)) Color.Cyan else Color.Gray, RoundedCornerShape(4.dp))
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    text = "Track ${index + 1}: ${track.engineType}",
+                                    color = if (isSelected) Color.Cyan else Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onSelect(index, -1) }
+                                        .padding(4.dp)
+                                )
+                                
+                                if (isDrum) { // Expanded options for Drums
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    val drumNames = if (track.engineType == EngineType.FM_DRUM) {
+                                        listOf("KICK", "SNARE", "TOM", "HIHAT", "OHH", "CYMB", "PERC", "NOISE")
+                                    } else {
+                                        // ANALOG_DRUM UI only exposes 5 voices
+                                        listOf("KICK", "SNARE", "CYMBAL", "HAT C", "HAT O")
+                                    }
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        val rows = drumNames.chunked(4)
+                                        rows.forEach { rowNames ->
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                rowNames.forEach { name ->
+                                                    val dIdx = drumNames.indexOf(name)
+                                                    val isDrumSelected = state.sidechainSourceTrack == index && state.sidechainSourceDrumIdx == dIdx
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(if (isDrumSelected) Color.Cyan else Color.DarkGray, RoundedCornerShape(4.dp))
+                                                            .clickable { onSelect(index, dIdx) }
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    ) {
+                                                        Text(name, color = if (isDrumSelected) Color.Black else Color.White, fontSize = 10.sp)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } 
+                    
+                    // Scrollbar
+                    if (scrollState.maxValue > 0) {
+                        Canvas(modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(6.dp)
+                            .fillMaxHeight()
+                        ) {
+                            val viewportH = size.height
+                            val contentH = viewportH + scrollState.maxValue
+                            
+                            val thumbHeight = maxOf(20.dp.toPx(), (viewportH / contentH) * viewportH)
+                            
+                            val scrollRatio = if (scrollState.maxValue > 0) scrollState.value.toFloat() / scrollState.maxValue.toFloat() else 0f
+                            val thumbY = scrollRatio * (viewportH - thumbHeight)
+                            
+                            drawRoundRect(
+                                color = Color.Gray.copy(alpha = 0.3f),
+                                size = size,
+                                cornerRadius = CornerRadius(3f, 3f)
+                            )
+                            
+                            drawRoundRect(
+                                color = Color.Cyan.copy(alpha = 0.5f),
+                                topLeft = Offset(0f, thumbY),
+                                size = Size(size.width, thumbHeight),
+                                cornerRadius = CornerRadius(3f, 3f)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Close")
+                }
+            }
+        }
+    }
 }

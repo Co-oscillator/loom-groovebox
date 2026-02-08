@@ -46,7 +46,7 @@ public:
     mLastOutput += lpAlpha * (mixed - mLastOutput);
 
     // Output Level + Strong Boost for volume parity
-    float out = mLastOutput * mLevel * 2.8f * mMix;
+    float out = mLastOutput * mLevel * 2.1f * mMix;
     // RETURNS (WET - INPUT) for Insert Behavior in Parallel Chain
     return std::tanh(out) - input;
   }

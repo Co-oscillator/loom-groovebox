@@ -2106,9 +2106,6 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
     val isRecordingSample = state.isRecordingSample && state.recordingTrackIndex == trackIndex
 
     LaunchedEffect(trackIndex, track.engineType, isRecordingSample) {
-        if (track.engineType == EngineType.SAMPLER) {
-             nativeLib.setEngineType(trackIndex, 2) // Force Sampler Engine (Type 2) to prevent Subtractive fallback
-        }
         waveform = nativeLib.getWaveform(trackIndex)
         while(true) {
             if (isRecordingSample) {
@@ -2183,11 +2180,28 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
                         Knob("PITCH", 0.5f, 300, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.5f)
                         Knob("SPEED", 0.5f, 302, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.5f)
                         Knob("STRCH", 0.25f, 301, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.25f)
-                        Knob("EGINT", 0.5f, 314, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.5f) // Restored EG INT
                     }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                         Knob("FILT", 1.0f, 1, state, onStateChange, nativeLib, knobSize = 32.dp)
                         Knob("RESO", 0.0f, 2, state, onStateChange, nativeLib, knobSize = 32.dp)
+                        
+                        // REVERSE Button
+                        val isReverse = (track.parameters[351] ?: 0.0f) > 0.5f
+                        Button(
+                            onClick = {
+                                val newVal = if (isReverse) 0.0f else 1.0f
+                                nativeLib.setParameter(trackIndex, 351, newVal)
+                                onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> if (idx == trackIndex) t.copy(parameters = t.parameters + (351 to newVal)) else t }))
+                            },
+                            modifier = Modifier.size(width = 32.dp, height = 32.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (isReverse) themeColor else Color.DarkGray),
+                            shape = CircleShape,
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+                        ) {
+                            Text("REV", fontSize = 8.sp, color = if (isReverse) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        
                         Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 32.dp)
                     }
                 }
@@ -2201,6 +2215,9 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                          Knob("S", 1.0f, 312, state, onStateChange, nativeLib, knobSize = 32.dp)
                          Knob("R", 0.2f, 313, state, onStateChange, nativeLib, knobSize = 32.dp)
+                     }
+                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                         Knob("E INT", 0.5f, 314, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.5f)
                      }
                 }
             }

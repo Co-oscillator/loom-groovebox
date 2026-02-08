@@ -245,11 +245,15 @@ public:
     mSourceBuffers[inactive].clear();
     mActiveBuffer.store(inactive, std::memory_order_release);
   }
-  void pushSample(float sample) {
-    // During recording, accumulate in recording buffer (not live yet)
+  void pushSamples(const float *buffer, int count) {
+    if (count <= 0)
+      return;
     std::lock_guard<std::mutex> lock(mRecordingLock);
-    mRecordingBuffer.push_back(sample);
+    mRecordingBuffer.insert(mRecordingBuffer.end(), buffer, buffer + count);
   }
+
+  // Deprecated/Removed single sample push to prevent usage
+  // void pushSample(float sample) { ... }
   void commitRecording() {
     // Called when recording stops - swap to active
     std::lock_guard<std::mutex> lock(mRecordingLock);
@@ -539,19 +543,43 @@ public:
   }
 
   std::vector<float> getAmplitudeWaveform(int numPoints) const {
-    int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
-    const auto &source = mSourceBuffers[activeIdx];
+    // Check recording buffer first
+    const std::vector<float> *sourcePtr = nullptr;
+    std::unique_lock<std::mutex> recLock(
+        const_cast<GranularEngine *>(this)->mRecordingLock);
+
+    if (!mRecordingBuffer.empty()) {
+      sourcePtr = &mRecordingBuffer;
+    } else {
+      recLock.unlock(); // Unlock if not using recording buffer
+      int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
+      sourcePtr = &mSourceBuffers[activeIdx];
+    }
+
+    const auto &source = *sourcePtr;
     std::vector<float> result;
     if (source.empty())
       return result;
+
     int step = source.size() / numPoints;
     if (step < 1)
       step = 1;
+
+    // OPTIMIZATION: Strided sampling to prevent audio thread lock-up
+    // Scan at most 64 points per bin, or skip if bin is huge
+    int skip = 1;
+    if (step > 64)
+      skip = step / 64;
+
     for (int i = 0; i < numPoints; ++i) {
       float maxVal = 0.0f;
+      int start = i * step;
       int end = std::min((int)source.size(), (i + 1) * step);
-      for (int j = i * step; j < end; ++j) {
-        maxVal = std::max(maxVal, std::abs(source[j]));
+
+      for (int j = start; j < end; j += skip) {
+        float v = std::abs(source[j]);
+        if (v > maxVal)
+          maxVal = v;
       }
       result.push_back(maxVal);
     }

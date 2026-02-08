@@ -70,7 +70,8 @@ public:
                float gate = 1.0f, bool isSkipped = false);
   void setSequencerConfig(int trackIndex, int numPages, int stepsPerPage);
   // New helper for modulation without affecting UI state
-  void updateEngineParameter(int trackIndex, int parameterId, float value);
+  void updateEngineParameter(int trackIndex, int parameterId, float value,
+                             bool immediate = false);
 
   void setFilterType(int trackIndex, int filterType);
   void setFilterCutoff(int trackIndex, float cutoff);
@@ -80,7 +81,8 @@ public:
   void setRouting(int destTrack, int sourceTrack, int source, int dest,
                   float amount, int destParamId = -1);
   void getFxChain(int *destination);
-  void setParameter(int trackIndex, int parameterId, float value);
+  void setParameter(int trackIndex, int parameterId, float value,
+                    bool immediate = false);
   void setParameterPreview(int trackIndex, int parameterId, float value);
   void setSwing(float swing);
   void setPatternLength(int length);
@@ -142,6 +144,7 @@ public:
   void setArpRate(int trackIndex, float rate, int divisionMode);
   float getCpuLoad();
   void setInputDevice(int deviceId);
+  void setSidechainConfig(int trackIndex, int drumIndex);
   void setSlicePosition(int trackIndex, int sliceIndex, float position);
   void setTrackActive(int trackIndex, bool active);
   void setTrackPan(int trackIndex, float pan);
@@ -215,6 +218,7 @@ private:
     std::vector<int> sliceStarts; // For SET_SLICES
     std::vector<int> sliceEnds;   // For SET_SLICES
     int extraData;                // extra
+    bool immediate;               // For P-Locks (Snap)
   };
   std::vector<AudioCommand> mCommandQueue;
   std::mutex mCommandLock;

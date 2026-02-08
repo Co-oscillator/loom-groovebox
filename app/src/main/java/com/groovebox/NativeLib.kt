@@ -93,4 +93,5 @@ class NativeLib {
     external fun getFxMix(trackIndex: Int): FloatArray
     external fun getFxChain(): IntArray
     external fun setSlicePosition(trackIndex: Int, sliceIndex: Int, position: Float)
+    external fun setSidechainConfig(trackIndex: Int, drumIndex: Int)
 }

@@ -733,3 +733,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setSlicePosition(
     engine->setSlicePosition(track_index, slice_index, position);
   }
 }
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_setSidechainConfig(JNIEnv *env, jobject thiz,
+                                                jint track_index,
+                                                jint drum_index) {
+  if (engine) {
+    engine->setSidechainConfig(track_index, drum_index);
+  }
+}

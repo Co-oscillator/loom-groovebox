@@ -6,6 +6,8 @@ enum class EngineType {
 
 enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM, BACH, BROWNIAN, CONVERGE, DIVERGE }
 
+enum class GridMode { GRID_4X4, GRID_6X6, TONNETZ }
+
 data class ArpConfig(
     val mode: ArpMode = ArpMode.OFF,
     val octaves: Int = 0, // -3 to +3
@@ -275,7 +277,7 @@ data class GrooveboxState(
     val copiedDrumSteps: List<List<StepState>>? = null,
     
     // UI State
-    val is6x6Grid: Boolean = false
+    val gridMode: GridMode = GridMode.GRID_4X4
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L

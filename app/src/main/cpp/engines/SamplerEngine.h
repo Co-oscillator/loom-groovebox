@@ -1,3 +1,4 @@
+
 #ifndef SAMPLER_ENGINE_H
 #define SAMPLER_ENGINE_H
 
@@ -703,23 +704,87 @@ public:
     return points;
   }
 
+  void pushSamples(const float *buffer, int count) {
+    if (count <= 0)
+      return;
+    std::lock_guard<std::mutex> lock(mRecordingLock);
+    mRecordingBuffer.insert(mRecordingBuffer.end(), buffer, buffer + count);
+  }
+
   std::vector<float> getAmplitudeWaveform(int numPoints) const {
     const auto &buf = getBuffer();
+
+    // Use recording buffer if active and non-empty
+    // We hold the lock ONLY to determine source and size, or we must hold it
+    // during read? If mRecordingBuffer is being written to, we MUST hold
+    // mRecordingLock during read. Optimization: Don't copy. Iterate with lock
+    // held but sparsely.
+
+    std::unique_lock<std::mutex> lock(
+        (const_cast<SamplerEngine *>(this))->mRecordingLock);
+
+    const std::vector<float> *sourcePtr;
+    if (!mRecordingBuffer.empty()) {
+      sourcePtr = &mRecordingBuffer;
+    } else {
+      sourcePtr = &buf;
+      // If not using recording buffer, we can release the recording lock?
+      // But buf (mBuffers) is stable unless commit happen (on audio thread).
+      // We are on UI thread. Audio thread might swap buffers.
+      // So strictly we need safety. But swap is atomic index change.
+      // Reading mBuffers[active] is safe if we loaded active index freshly.
+      // But let's keep lock for simplicity and safety against race conditions.
+    }
+
+    const auto &source = *sourcePtr;
     std::vector<float> result;
-    if (buf.empty())
+    if (source.empty())
       return result;
-    int step = buf.size() / numPoints;
+
+    int step = source.size() / numPoints;
     if (step < 1)
       step = 1;
+
+    // OPTIMIZATION: Strided sampling
+    int skip = 1;
+    if (step > 64)
+      skip = step / 64;
+
     for (int i = 0; i < numPoints; ++i) {
       float maxVal = 0.0f;
-      int end = std::min((int)buf.size(), (i + 1) * step);
-      for (int j = i * step; j < end; ++j) {
-        maxVal = std::max(maxVal, std::abs(buf[j]));
+      int start = i * step;
+      int end = std::min((int)source.size(), (i + 1) * step);
+
+      for (int j = start; j < end; j += skip) {
+        float v = std::abs(source[j]);
+        if (v > maxVal)
+          maxVal = v;
       }
       result.push_back(maxVal);
     }
     return result;
+  }
+
+  // Add dummy PlayheadInfo for matching Granular signature
+  struct PlayheadInfo {
+    float pos;
+    float vol;
+  };
+
+  void getPlayheads(PlayheadInfo *out, int maxCount) const {
+    const auto &buf = getBuffer();
+    size_t bufSize = buf.empty() ? 1 : buf.size();
+    for (int i = 0; i < maxCount; ++i) {
+      if (i < (int)mVoices.size()) {
+        out[i].pos = mVoices[i].active
+                         ? (float)(mVoices[i].position / (double)bufSize)
+                         : -1.0f;
+        out[i].vol = mVoices[i].active ? 1.0f : 0.0f;
+      } else {
+        out[i].pos = -1.0f;
+        out[i].vol = 0.0f;
+      }
+    }
   }
 
   bool isActive() const {

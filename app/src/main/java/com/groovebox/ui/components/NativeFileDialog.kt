@@ -63,6 +63,7 @@ fun NativeFileDialog(
     var refreshKey by remember { mutableStateOf(0) }
     var currentExtensions by remember { mutableStateOf(extensions) }
     var fileName by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
     
     val files: List<String> = remember(currentDir, refreshKey, currentExtensions) { 
         if (!currentDir.exists()) {
@@ -225,35 +226,53 @@ fun NativeFileDialog(
                 }
                 
                 if (isSave) {
-                    val focusRequester = remember { FocusRequester() }
-                    val keyboardController = LocalSoftwareKeyboardController.current
+                    var showSaveInput by remember { mutableStateOf(false) }
                     
-                    LaunchedEffect(Unit) {
-                        delay(300)
-                        focusRequester.requestFocus()
-                        keyboardController?.show()
+                    Button(
+                        onClick = { showSaveInput = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00AAFF))
+                    ) {
+                        Text("SAVE FILE")
                     }
 
-                    OutlinedTextField(
-                         value = fileName,
-                         onValueChange = { fileName = it },
-                         label = { Text("Filename") },
-                         modifier = Modifier
-                             .fillMaxWidth()
-                             .focusRequester(focusRequester),
-                         colors = OutlinedTextFieldDefaults.colors(
-                             focusedTextColor = Color.White,
-                             unfocusedTextColor = Color.White,
-                             focusedBorderColor = Color.Cyan,
-                             unfocusedBorderColor = Color.Gray
-                         ),
-                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                         keyboardActions = KeyboardActions(
-                             onDone = { keyboardController?.hide() }
-                         ),
-                         singleLine = true
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    if (showSaveInput) {
+                        AlertDialog(
+                            onDismissRequest = { showSaveInput = false },
+                            title = { Text("Save File") },
+                            text = {
+                                OutlinedTextField(
+                                    value = fileName,
+                                    onValueChange = { fileName = it },
+                                    label = { Text("Filename") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = { keyboardController?.hide() }
+                                    )
+                                )
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    if (fileName.isNotBlank()) {
+                                        val finalName = if (fileName.endsWith(".wav", true) || fileName.endsWith(".gbx", true)) fileName else "$fileName.wav"
+                                        val file = File(currentDir, finalName)
+                                        // Simple overwrite check could be added here
+                                        onFileSelected(file.absolutePath)
+                                        showSaveInput = false
+                                        onDismiss()
+                                    }
+                                }) {
+                                    Text("SAVE")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showSaveInput = false }) {
+                                    Text("CANCEL")
+                                }
+                            }
+                        )
+                    }
                 } else {
                      // Export is now in the context menu
                 }

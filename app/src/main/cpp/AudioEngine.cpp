@@ -616,13 +616,15 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
 }
 
 // Internal Param Logic
-void AudioEngine::setParameter(int trackIndex, int parameterId, float value) {
+void AudioEngine::setParameter(int trackIndex, int parameterId, float value,
+                               bool immediate) {
   AudioCommand cmd;
   cmd.type = (trackIndex == -1) ? AudioCommand::GLOBAL_PARAM_SET
                                 : AudioCommand::PARAM_SET;
   cmd.trackIndex = trackIndex;
   cmd.data1 = parameterId;
   cmd.value = value;
+  cmd.immediate = immediate;
 
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
@@ -636,7 +638,7 @@ void AudioEngine::setParameterPreview(int trackIndex, int parameterId,
 }
 
 void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
-                                        float value) {
+                                        float value, bool immediate) {
 
   // Global Parameters (trackIndex = -1)
   if (trackIndex == -1) {
@@ -686,6 +688,10 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       // mFxMixLevels for filters are initialized to 1.0 and should stay there
       // NO RETURN: Let it fall through to update mParameters array for UI
       // Persistence
+      if (immediate) {
+        mFilterPedalL[filterIdx].snap();
+        mFilterPedalR[filterIdx].snap();
+      }
     }
   }
 
@@ -1037,7 +1043,8 @@ void AudioEngine::processCommands() {
         mTracks[cmd.trackIndex].parameters[cmd.data1] = cmd.value;
         mTracks[cmd.trackIndex].appliedParameters[cmd.data1] = cmd.value;
         mTracks[cmd.trackIndex].mParametersDirty = true;
-        updateEngineParameter(cmd.trackIndex, cmd.data1, cmd.value);
+        updateEngineParameter(cmd.trackIndex, cmd.data1, cmd.value,
+                              cmd.immediate);
       }
       break;
     case AudioCommand::GLOBAL_PARAM_SET:
@@ -1045,9 +1052,10 @@ void AudioEngine::processCommands() {
       break;
     case AudioCommand::SET_ENGINE_TYPE:
       if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
-        mTracks[cmd.trackIndex].engineType = cmd.data1;
-        initTrack(cmd.trackIndex); // initTrack should be safe if it doesn't
-                                   // resize vectors
+        if (mTracks[cmd.trackIndex].engineType != cmd.data1) {
+          mTracks[cmd.trackIndex].engineType = cmd.data1;
+          initTrack(cmd.trackIndex);
+        }
       }
       break;
     case AudioCommand::SET_TRACK_VOLUME:
@@ -1651,6 +1659,13 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
       float *input = static_cast<float *>(audioData);
       int channels = audioStream->getChannelCount();
 
+      // Batch buffer to reduce mutex locking frequency
+      // Max buffer size is typically small (e.g. 192), so stack allocation is
+      // safe
+      constexpr int MAX_BATCH = 1024;
+      float batchBuffer[MAX_BATCH];
+      int batchCount = 0;
+
       for (int i = 0; i < numFrames; ++i) {
         float sampleToPush = 0.0f;
         if (channels == 2) {
@@ -1659,10 +1674,16 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
           sampleToPush = input[i];
         }
 
+        if (batchCount < MAX_BATCH) {
+          batchBuffer[batchCount++] = sampleToPush;
+        }
+      }
+
+      if (batchCount > 0) {
         if (track.engineType == 2)
-          track.samplerEngine.pushSample(sampleToPush);
+          track.samplerEngine.pushSamples(batchBuffer, batchCount);
         else if (track.engineType == 3)
-          track.granularEngine.pushSample(sampleToPush);
+          track.granularEngine.pushSamples(batchBuffer, batchCount);
       }
     }
     return oboe::DataCallbackResult::Continue;
@@ -1744,7 +1765,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
             for (int i = 0; i < track.mActivePLockCount; ++i) {
               int p = track.mActivePLocks[i];
               track.appliedParameters[p] = track.parameters[p];
-              updateEngineParameter(t, p, track.parameters[p]);
+              updateEngineParameter(t, p, track.parameters[p], true);
             }
             track.mActivePLockCount = 0;
 
@@ -1783,7 +1804,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                   }
                   for (auto const &[pid, val] : s.parameterLocks) {
                     track.appliedParameters[pid] = val;
-                    updateEngineParameter(t, pid, val);
+                    updateEngineParameter(t, pid, val, true);
                     // Track modified parameters for efficient restoration
                     if (track.mActivePLockCount < 32) {
                       track.mActivePLocks[track.mActivePLockCount++] = pid;
@@ -1840,7 +1861,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                       for (auto const &[pid, val] : ds.parameterLocks) {
                         track.appliedParameters[pid] =
                             val; // SYNC WITH RESTORATION LOOP
-                        updateEngineParameter(t, pid, val);
+                        updateEngineParameter(t, pid, val, true);
                       }
                     }
                   }
@@ -1909,14 +1930,23 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
     bool isStillRecording = mIsRecordingSample;
     if (mIsResampling && isStillRecording && mRecordingTrackIndex != -1) {
       auto &recTrack = mTracks[mRecordingTrackIndex];
+      std::vector<float> resampleBuffer;
+      resampleBuffer.reserve(framesToDo);
+
       for (int k = 0; k < framesToDo; ++k) {
         float mixed = (output[(frameIdx + k) * numChannels] +
                        output[(frameIdx + k) * numChannels + 1]) *
                       0.5f;
+        resampleBuffer.push_back(mixed);
+      }
+
+      if (!resampleBuffer.empty()) {
         if (recTrack.engineType == 2)
-          recTrack.samplerEngine.pushSample(mixed);
+          recTrack.samplerEngine.pushSamples(resampleBuffer.data(),
+                                             resampleBuffer.size());
         else if (recTrack.engineType == 3)
-          recTrack.granularEngine.pushSample(mixed);
+          recTrack.granularEngine.pushSamples(resampleBuffer.data(),
+                                              resampleBuffer.size());
       }
     }
   }
@@ -2397,12 +2427,25 @@ void AudioEngine::setScaleConfig(int rootNote,
   }
 }
 
+void AudioEngine::setSidechainConfig(int trackIndex, int drumIndex) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  mSidechainSourceTrack = trackIndex;
+  mSidechainSourceDrumIdx = drumIndex;
+}
+
 void AudioEngine::getGranularPlayheads(int trackIndex,
                                        GranularEngine::PlayheadInfo *out,
                                        int maxCount) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex >= 0 && trackIndex < mTracks.size()) {
-    mTracks[trackIndex].granularEngine.getPlayheads(out, maxCount);
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    if (mTracks[trackIndex].engineType == 4) { // GRANULAR
+      mTracks[trackIndex].granularEngine.getPlayheads(out, maxCount);
+    } else if (mTracks[trackIndex].engineType == 2) { // SAMPLER
+      // Reuse PlayheadInfo struct but cast or map if they aren't bit-identical
+      // In our case they are both {float, float}
+      mTracks[trackIndex].samplerEngine.getPlayheads(
+          (SamplerEngine::PlayheadInfo *)out, maxCount);
+    }
   }
 }
 

@@ -94,9 +94,27 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                          Button(
                              onClick = {
                                  if (track.engineType == EngineType.FM_DRUM) {
-                                     latestOnStateChange(latestState.copy(copiedDrumSteps = track.drumSteps, copiedSteps = null))
+                                     // Smart Copy for Drums: Trim to used length (rounded up to bar)
+                                     // Check all 8 lanes
+                                     var maxStep = 0
+                                     track.drumSteps.forEach { lane -> 
+                                         val last = lane.indexOfLast { it.active } 
+                                         if (last > maxStep) maxStep = last
+                                     }
+                                     val smartLen = ((maxStep / 16) + 1) * 16
+                                     val patternLen = (track.numPages * track.stepsPerPage)
+                                     val copyLen = smartLen.coerceIn(16, patternLen)
+
+                                     val trimmedDrums = track.drumSteps.map { it.take(copyLen) }
+                                     latestOnStateChange(latestState.copy(copiedDrumSteps = trimmedDrums, copiedSteps = null))
                                  } else {
-                                     latestOnStateChange(latestState.copy(copiedSteps = track.steps, copiedDrumSteps = null))
+                                     // Smart Copy: Trim to last active step (rounded up to 16)
+                                     val lastActive = track.steps.indexOfLast { it.active }
+                                     val smartLen = ((lastActive / 16) + 1) * 16
+                                     val patternLen = (track.numPages * track.stepsPerPage)
+                                     val copyLen = smartLen.coerceIn(16, patternLen)
+                                     
+                                     latestOnStateChange(latestState.copy(copiedSteps = track.steps.take(copyLen), copiedDrumSteps = null))
                                  }
                              },
                              modifier = Modifier.height(32.dp).width(45.dp),
@@ -110,18 +128,36 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                              onClick = {
                                  if (hasClipboard) {
                                      if (track.engineType == EngineType.FM_DRUM && latestState.copiedDrumSteps != null) {
-                                         val newDrumSteps = latestState.copiedDrumSteps!!
+                                         val srcDrumSteps = latestState.copiedDrumSteps!!
+                                         // Smart Paste for Drums? (Checking 8 dimensions is hard, defaulting to overwrite/merge logic if simple)
+                                         // User request specifically mentions "paste data shorter than sequence".
+                                         // We'll implement strict overwrite for drums for now unless requested, OR apply same logic per drum lane?
+                                         // Let's stick to simple overwrite for complex drum tracks to avoid partial states, OR try to find a global gap?
+                                         // Simplification: Direct overwrite for Drums as before (but using trimmed data).
+                                         val newDrumSteps = latestState.tracks[selectedTrackIndex].drumSteps.mapIndexed { idx, existingLane ->
+                                             if (idx < srcDrumSteps.size) {
+                                                 val srcLane = srcDrumSteps[idx]
+                                                 if (srcLane.size < existingLane.size) {
+                                                     // Smart Append for Drums?
+                                                     // Find gap in THIS lane? No, drum tracks should stay aligned.
+                                                     // Just pad it? Or repeat?
+                                                     // Let's just Paste at 0.
+                                                     val padded = existingLane.toMutableList()
+                                                     for(i in srcLane.indices) padded[i] = srcLane[i]
+                                                     padded
+                                                 } else srcLane
+                                             } else existingLane
+                                         }
+                                         
                                          // Update State
                                          latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
                                          // Update Native Engine (Sync)
                                          nativeLib.clearSequencer(selectedTrackIndex)
                                          newDrumSteps.forEachIndexed { drumIdx, steps ->
-                                              if (drumIdx < 8) { // Safety check
+                                              if (drumIdx < 8) {
                                                   steps.forEachIndexed { stepIdx, step -> 
                                                       if (step.active) {
-                                                           // Note: For drum tracks, we need to correctly trigger the specific drum voice note
                                                            val drumNote = 60 + drumIdx
-                                                           // We assume the copied steps have valid notes, but for drums we enforce the drum note mapping
                                                            val finalNotes = if (step.notes.isNotEmpty()) step.notes.toIntArray() else intArrayOf(drumNote)
                                                            nativeLib.setStep(selectedTrackIndex, stepIdx, true, finalNotes, step.velocity, step.ratchet, step.punch, step.probability, step.gate, step.isSkipped)
                                                       }
@@ -129,8 +165,43 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                               }
                                          }
                                      } else if (track.engineType != EngineType.FM_DRUM && latestState.copiedSteps != null) {
-                                         val newSteps = latestState.copiedSteps!!
+                                         val srcSteps = latestState.copiedSteps!!
+                                         val targetSteps = track.steps
+                                         val targetLen = targetSteps.size
+                                         val srcLen = srcSteps.size
+                                         
+                                         var pasteIndex = 0
+                                         // Smart Find Gap
+                                         if (srcLen < targetLen) {
+                                             // Find consecutive empty steps of length srcLen
+                                             for (i in 0..targetLen - srcLen) {
+                                                 var gapFound = true
+                                                 for (j in 0 until srcLen) {
+                                                     if (targetSteps[i + j].active) {
+                                                         gapFound = false
+                                                         break
+                                                     }
+                                                 }
+                                                 if (gapFound) {
+                                                     pasteIndex = i
+                                                     break
+                                                 }
+                                             }
+                                         }
+                                         
+                                         // Create merged list
+                                         val newSteps = targetSteps.toMutableList()
+                                         for (i in 0 until srcLen) {
+                                             if (pasteIndex + i < newSteps.size) {
+                                                 newSteps[pasteIndex + i] = srcSteps[i]
+                                             }
+                                         }
+                                         
                                          latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == selectedTrackIndex) t.copy(steps = newSteps) else t }))
+                                         
+                                         // Sync Native (Overwrite modified range)
+                                         // Ideally clear and set all, or just set? Clear and set is safer to remove old ghosts if we overwrote.
+                                         // But we are merging.
                                          nativeLib.clearSequencer(selectedTrackIndex)
                                          newSteps.forEachIndexed { stepIdx, step ->
                                               if (step.active) {

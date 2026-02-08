@@ -29,6 +29,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.MaterialTheme
 import com.groovebox.GrooveboxState
 import com.groovebox.LfoState
 import com.groovebox.MacroState
@@ -382,31 +384,50 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
+                onClick = { 
+                    // NEW PROJECT
+                    val newState = sanitizeGrooveboxState(GrooveboxState())
+                    onStateChange(newState)
+                    scope.launch(Dispatchers.IO) {
+                        syncNativeState(newState, nativeLib)
+                    }
+                    Toast.makeText(context, "New Project Created (Init)", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.weight(0.8f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                Text("NEW", fontSize = 10.sp)
+            }
+            Button(
                 onClick = { showSaveDialog = true },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("SAVE")
+                Spacer(Modifier.width(4.dp))
+                Text("SAVE", fontSize = 10.sp)
             }
             Button(
                 onClick = { showLoadDialog = true },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
+                contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("LOAD")
+                Spacer(Modifier.width(4.dp))
+                Text("LOAD", fontSize = 10.sp)
             }
             Button(
                 onClick = { showExportDialog = true },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A))
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A)),
+                contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
                 Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("EXPORT")
+                Spacer(Modifier.width(4.dp))
+                Text("EXPORT", fontSize = 10.sp)
             }
         }
         

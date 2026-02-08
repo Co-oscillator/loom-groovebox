@@ -53,9 +53,34 @@ public:
     if (destTrack < 0 || destTrack >= MAX_TRACKS)
       return;
 
-    // Find free slot or update existing?
-    // Usually simple append.
+    // Check for existing connection matching Source + Destination + ParamId
     int count = mCounts[destTrack];
+    for (int i = 0; i < count; ++i) {
+      if (mFastMatrix[destTrack][i].source == entry.source &&
+          mFastMatrix[destTrack][i].destination == entry.destination &&
+          mFastMatrix[destTrack][i].destParamId == entry.destParamId) {
+
+        // Found match. Update or Remove?
+        if (std::abs(entry.amount) < 0.001f) {
+          // Remove by swapping with last element
+          int last = count - 1;
+          if (i != last) {
+            mFastMatrix[destTrack][i] = mFastMatrix[destTrack][last];
+          }
+          mCounts[destTrack]--;
+        } else {
+          // Update amount
+          mFastMatrix[destTrack][i].amount = entry.amount;
+        }
+        return;
+      }
+    }
+
+    // No existing connection found. Used standard append if not removing.
+    if (std::abs(entry.amount) < 0.001f) {
+      return; // Don't add a new connection with 0 amount
+    }
+
     if (count < MAX_MODS) {
       mFastMatrix[destTrack][count] = entry;
       mCounts[destTrack]++;

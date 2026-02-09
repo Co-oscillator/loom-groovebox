@@ -275,9 +275,22 @@ fun PlayingPad(
             val widthPx = constraints.maxWidth.toFloat()
             val heightPx = constraints.maxHeight.toFloat()
             
-            // Target Density: ~10 rows, ~10 cols (alternating 10/9)
-            val targetRows = 10
-            val targetCols = 10
+            // Determine device type with override
+            val configuration = LocalConfiguration.current
+            val isTabletDetected = configuration.screenWidthDp >= 600 && configuration.screenHeightDp >= 480
+            
+            // Layout Mode: 0=Auto, 1=Phone, 2=Tablet
+            val isTablet = when(state.uiLayoutMode) {
+                1 -> false // Force Phone
+                2 -> true  // Force Tablet
+                else -> isTabletDetected // Auto
+            }
+            
+            // Target Density: 
+            // Tablet: ~10 rows, 10 cols (alternating 10/9)
+            // Phone: 9 rows, alternating 8/9 pads
+            val targetRows = if (isTablet) 10 else 9
+            val targetCols = if (isTablet) 10 else 9 // Max cols
 
             // Geometry constants (normalized to radius 1)
             // Hex Width (point to point horizontal) = 2 * radius (No, flat top?)
@@ -322,36 +335,27 @@ fun PlayingPad(
             val rootNote = state.rootNote
             
             (0 until rows).forEach { r ->
-                // Alternating columns: Even rows 10, Odd rows 9 (or vice versa based on centering)
-                // Let's do: 10, 9, 10, 9...
-                val numColsInRow = if (r % 2 == 0) 10 else 9
+                // Tablet: Alternating 10, 9, 10, 9...
+                // Phone: Alternating 8, 9, 8, 9... (Top row 8)
+                val numColsInRow = if (isTablet) {
+                    if (r % 2 == 0) 10 else 9
+                } else {
+                    if (r % 2 == 0) 8 else 9
+                }
                 
                 (0 until numColsInRow).forEach { c ->
-                    // Center the 9-col rows relative to the 10-col rows
-                    // 10-col row width = 10 * w
-                    // 9-col row width = 9 * w. Offset by 0.5 w? 
-                    // Pointy top hex grid typically offsets every other row by 0.5 w.
-                    // If row 0 (10 cols) starts at 0.
-                    // Row 1 (9 cols) should start at 0.5 w.
-                    // Visual check:
-                    // R0: O O O O O O O O O O
-                    // R1:  O O O O O O O O O
-                    // Yes.
+                    // Center the shorter rows based on configuration
                     
-                    val xOffset = if (r % 2 == 1) colWidth * 0.5f else 0f
-                    // Center the shorter row? (9 cols + 0.5 shift = 9.5 width vs 10 width. So it's narrower.
-                    // To align purely, standard hex grid logic works.
-                    // But if we want the 9 items centered under the 10, the standard 0.5 offset does that.
+                    val isShortRow = if (isTablet) (r % 2 != 0) else (r % 2 == 0)
+                    val xOffset = if (isShortRow) colWidth * 0.5f else 0f
                     
                     val xPos = startX + c * colWidth + xOffset
                     val yPos = startY + r * rowHeight
                     
                     // Note Mapping
-                    // Center (r=4, c=4) or similar to Root.
-                    // r from 0..9. Center row ~ 4 or 5.
-                    // c from 0..9. Center col ~ 4 or 5.
+                    // Center (r=rows/2, c=cols/2) to Root.
                     val rCenter = rows / 2
-                    val cCenter = cols / 2
+                    val cCenter = if (isTablet) 5 else 4 // Approx center col
                     
                     val rRel = (rows - 1 - r) - rCenter // Invert Y so up is higher pitch
                     val cRel = c - cCenter
@@ -361,7 +365,17 @@ fun PlayingPad(
                     if (noteVal in 0..127) {
                         val isBlack = isBlackKey(noteVal)
                         val isRootRel = (noteVal % 12) == (state.rootNote % 12)
-                        val pColor = if (isRootRel) engineColor else if (isBlack) engineColor.copy(alpha = 0.5f) else engineColor.copy(alpha = 0.3f)
+                        
+                        // New Shading Logic
+                        val pColor = if (isRootRel) {
+                            engineColor // Root: Full color
+                        } else if (isBlack) {
+                            // "Black" key: Darker shade of engine color
+                            androidx.compose.ui.graphics.lerp(Color.Black, engineColor, 0.6f)
+                        } else {
+                            // "White" key: Slightly desaturated or standard engine color
+                            engineColor.copy(alpha = 0.6f) 
+                        }
                         
                         // Spacing: Shrink visual pad within grid cell
                         val spacing = 6.dp
@@ -382,7 +396,7 @@ fun PlayingPad(
                                 padSize = 0.dp, // Ignore square size, use custom
                                 customWidth = visualW,
                                 customHeight = visualH,
-                                padColor = engineColor,
+                                padColor = pColor, // Use the computed shaded color
                                 isPlaying = state.isPlaying,
                                 currentStep = state.currentStep,
                                 nativeLib = nativeLib,
@@ -496,7 +510,14 @@ fun TouchStripsPanel(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
     val latestState by rememberUpdatedState(state)
     val latestOnStateChange by rememberUpdatedState(onStateChange)
     
-    val isWideScreen = (LocalConfiguration.current.screenWidthDp.toFloat() / LocalConfiguration.current.screenHeightDp.toFloat()) > 1.7f
+    val config = LocalConfiguration.current
+    val isWideScreenAuto = (config.screenWidthDp.toFloat() / config.screenHeightDp.toFloat()) > 1.7f
+    
+    val isWideScreen = when(state.uiLayoutMode) {
+        1 -> false // Force Phone (Narrower/Taller strip panel)
+        2 -> true  // Force Tablet (Wider/Shorter strip panel)
+        else -> isWideScreenAuto
+    }
 
     // Sidebar Area (Strips + Transport)
     Row(
@@ -703,7 +724,13 @@ fun AssignableKnobsPanel(state: GrooveboxState, onStateChange: (GrooveboxState) 
     val config = LocalConfiguration.current
     val ratio = config.screenWidthDp.toFloat() / config.screenHeightDp.toFloat()
     // STRICTER WideScreen: Must be > 600dp width AND > 480dp height (Tablet)
-    val isWideScreen = config.screenWidthDp >= 600 && config.screenHeightDp >= 480 && ratio > 1.3f
+    val isTabletAuto = config.screenWidthDp >= 600 && config.screenHeightDp >= 480 && ratio > 1.3f
+    
+    val isWideScreen = when(state.uiLayoutMode) {
+        1 -> false // Force Phone
+        2 -> true  // Force Tablet
+        else -> isTabletAuto
+    }
 
     // Column of 4 Knobs
     Column(

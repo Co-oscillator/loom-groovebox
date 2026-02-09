@@ -124,6 +124,38 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
             SoundFontCreditsDialog(onDismiss = { showCreditsDialog = false })
         }
 
+        // Interface Settings
+        Text("Interface", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("UI Layout Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val modes = listOf("Auto", "Phone", "Tablet")
+                    modes.forEachIndexed { index, label ->
+                        val isSelected = state.uiLayoutMode == index
+                        OutlinedButton(
+                            onClick = { onStateChange(state.copy(uiLayoutMode = index)) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (isSelected) Color.Cyan.copy(alpha = 0.2f) else Color.Transparent,
+                                contentColor = if (isSelected) Color.Cyan else Color.Gray
+                            ),
+                            border = BorderStroke(1.dp, if (isSelected) Color.Cyan else Color.Gray)
+                        ) {
+                            Text(label, fontSize = 12.sp, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+
         // Project Management Cluster
         Text("Project", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
         val scope = rememberCoroutineScope()

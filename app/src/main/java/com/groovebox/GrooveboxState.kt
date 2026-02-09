@@ -277,7 +277,8 @@ data class GrooveboxState(
     val copiedDrumSteps: List<List<StepState>>? = null,
     
     // UI State
-    val gridMode: GridMode = GridMode.GRID_4X4
+    val gridMode: GridMode = GridMode.GRID_4X4,
+    val uiLayoutMode: Int = 0 // 0=Auto, 1=Phone, 2=Tablet
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L

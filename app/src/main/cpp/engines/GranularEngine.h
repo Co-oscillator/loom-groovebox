@@ -1,8 +1,10 @@
 #ifndef GRANULAR_ENGINE_H
 #define GRANULAR_ENGINE_H
 
+#include "../Utils.h"
 #include "Adsr.h"
 #include <algorithm>
+#include <android/log.h>
 #include <atomic>
 #include <cmath>
 #include <memory>
@@ -520,22 +522,44 @@ public:
   void getPlayheads(PlayheadInfo *out, int maxCount) {
     int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
     const auto &source = mSourceBuffers[activeIdx];
+
+    // STABILIZATION FIX: Map first 'maxCount' active grains found, regardless
+    // of index. Previously we only checked the first 'maxCount' indices,
+    // missing grains at higher indices.
     int count = 0;
+
+    // DEBUG LOGGING: Inspect why grains aren't showing
+    // Only log occasionally to avoid spam
+    static int logTicker = 0;
+    bool shouldLog = (++logTicker % 60 == 0); // ~1Hz at 60fps
+
     for (const auto &g : mGrains) {
-      if (g.isActive && count < maxCount) {
-        out[count].pos = source.empty() ? 0.0f : g.position / source.size();
+      if (g.isActive) {
+        if (count < maxCount) {
+          float p = source.empty() ? 0.0f : g.position / source.size();
+          out[count].pos = p;
+          out[count].vol = g.envValue;
 
-        // VISIBILITY FIX: Multiply grain envelope by voice envelope so it fades
-        // correctly
-        float voiceEnv = 0.0f;
-        if (g.voiceIdx >= 0 && g.voiceIdx < 16) {
-          voiceEnv = mVoices[g.voiceIdx].envelope.getValue();
+          if (shouldLog) {
+            __android_log_print(ANDROID_LOG_DEBUG, "GranularEngine",
+                                "Grain[%d]: Pos=%.3f, Vol=%.3f, SrcSize=%zu",
+                                count, p, g.envValue, source.size());
+          }
+
+          count++;
+        } else {
+          break; // Filled output buffer
         }
-
-        out[count].vol = g.envValue * voiceEnv;
-        count++;
       }
     }
+
+    if (shouldLog && count == 0) {
+      __android_log_print(ANDROID_LOG_DEBUG, "GranularEngine",
+                          "No active grains found. Total Grains=%zu",
+                          mGrains.size());
+    }
+
+    // Fill remaining slots with empty
     for (int i = count; i < maxCount; ++i) {
       out[i].pos = -1.0f;
       out[i].vol = 0.0f;

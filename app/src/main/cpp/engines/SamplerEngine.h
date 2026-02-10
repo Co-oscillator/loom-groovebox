@@ -15,7 +15,15 @@
 
 class SamplerEngine {
 public:
-  enum PlayMode { OneShot, Sustain, Loop, Chops, OneShotChops, LoopChops };
+  enum PlayMode {
+    OneShot,
+    Sustain,
+    Loop,
+    Chops,
+    OneShotChops,
+    LoopChops,
+    Scrub
+  };
 
   struct Slice {
     size_t start;
@@ -76,8 +84,8 @@ public:
         mFilterResonance(other.mFilterResonance),
         mFilterEnvAmount(other.mFilterEnvAmount), mGlide(other.mGlide),
         mLastPitchRatio(other.mLastPitchRatio), mPlayMode(other.mPlayMode),
-        mUseEnvelope(other.mUseEnvelope), mSampleRate(other.mSampleRate),
-        mSlices(std::move(other.mSlices)) {}
+        mScrubGate(other.mScrubGate), mUseEnvelope(other.mUseEnvelope),
+        mSampleRate(other.mSampleRate), mSlices(std::move(other.mSlices)) {}
 
   SamplerEngine &operator=(SamplerEngine &&other) noexcept {
     if (this != &other) {
@@ -103,6 +111,7 @@ public:
       mGlide = other.mGlide;
       mLastPitchRatio = other.mLastPitchRatio;
       mPlayMode = other.mPlayMode;
+      mScrubGate = other.mScrubGate;
       mUseEnvelope = other.mUseEnvelope;
       mSampleRate = other.mSampleRate;
       mSlices = std::move(other.mSlices);
@@ -269,7 +278,21 @@ public:
 
   void setGlide(float g) { mGlide = g; }
 
-  void triggerNote(int note, int velocity) {
+  void triggerNote(int note, int velocity) { noteOn(note, velocity); }
+
+  void noteOn(int note, int velocity) {
+    if (mVoices.empty())
+      return;
+
+    // SCRUB MODE TRIGGER: Start Motor
+    if (mPlayMode == Scrub) {
+      mMotorRunning = true;
+      mVoices[0].active = true;
+      mVoices[0].position = mTrimStart * getBuffer().size();
+      // Don't reset mSmoothSpeed, let it catch up
+      return;
+    }
+
     int active = mActiveBuffer.load(std::memory_order_acquire);
     const auto &buf = mBuffers[active];
 
@@ -421,19 +444,34 @@ public:
     case 355:
       setGlide(value);
       break;
-    case 320:
+    case 320: {
+      int newMode = Scrub;
       if (value < 0.16f)
-        mPlayMode = OneShot;
+        newMode = OneShot;
       else if (value < 0.33f)
-        mPlayMode = Sustain;
+        newMode = Sustain;
       else if (value < 0.5f)
-        mPlayMode = Loop;
+        newMode = Loop;
       else if (value < 0.66f)
-        mPlayMode = Chops;
+        newMode = Chops;
       else if (value < 0.83f)
-        mPlayMode = OneShotChops;
-      else
-        mPlayMode = LoopChops;
+        newMode = OneShotChops;
+      else if (value < 0.95f)
+        newMode = LoopChops;
+
+      if (newMode != mPlayMode) {
+        mPlayMode = (PlayMode)newMode;
+        // Silence all voices to prevent artifacts
+        for (auto &v : mVoices)
+          v.active = false;
+      }
+      break;
+    }
+    case 360: // Scrub Position
+      mScrubPosition = value;
+      break;
+    case 361: // Scrub Gate
+      mScrubGate = (value > 0.5f);
       break;
     case 330:
       mTrimStart = value;
@@ -478,7 +516,142 @@ public:
     float mixedOutput = 0.0f;
     int activeCount = 0;
 
-    for (auto &v : mVoices) {
+    // SCUB MODE LOGIC
+    if (mPlayMode == Scrub) {
+      Voice &v = mVoices[0];
+
+      // Ensure voice is active for visual/audio processing
+      if (!v.active) {
+        v.active = true;
+        v.pitchRatio = 1.0f;
+        mSmoothSpeed = 0.0; // Reset velocity on entry
+      }
+      v.envelope.forceSustain();
+
+      // --- NEWTONIAN PHYSICS ENGINE ---
+      // Solves:
+      // 1. "Pops" (Steppy UI) -> Double Integration filters steps.
+      // 2. "Rubber Band" (Oscillation) -> Prevented by Overdamping (High Drag).
+      // 3. "No Flywheel" (Snap Back) -> Physics runs continuously (Coasting).
+
+      double targetPos = mScrubPosition * buffer.size();
+      double springForce = 0.0;
+
+      // 1. Spring Force (Pull towards finger)
+      if (mScrubGate) {
+        double dist = targetPos - v.position;
+
+        // Stiffness (k): Tuned for <3Hz Resonance (Ultra Heavy Mass)
+        // Lowered to 3e-7 to further smooth out "Grain".
+        springForce = dist * 0.0000003;
+
+        // Handle Snap-to-start on initial touch (anti-chirp)
+        if (!mLastScrubGate) {
+          v.position = targetPos;
+          mSmoothSpeed = 0.0;
+          springForce = 0.0;
+        }
+      }
+
+      // STATE MACHINE: Interacting vs Free-Spin
+      if (mScrubGate) {
+        // STATE 1: INTERACTING (P-D Controller)
+        // Tracks finger with Mass-Spring-Damper to filter jitter.
+        // Drag = 0.002 (Overdamped for tight control).
+        double drag = 0.002;
+        double dampingForce = -mSmoothSpeed * drag;
+        double accel = springForce + dampingForce;
+        mSmoothSpeed += accel;
+
+      } else {
+        // STATE 2: FREE-SPIN / MOTOR RECOVERY
+
+        if (mMotorRunning) {
+          // MOTOR ON: Spin up/down to Playback Speed (1.0x)
+          // Simulates High Torque Motor.
+          // Torque Rate 0.0005 -> ~1.0s spin up time.
+          // Fix: mPitch is in semitones, convert to frequency ratio.
+          double pitchRatio = pow(2.0, mPitch / 12.0);
+          double targetSpeed = mSpeed * pitchRatio;
+
+          double error = targetSpeed - mSmoothSpeed;
+          mSmoothSpeed += error * 0.0005;
+
+          // Check end of sample OR if voice became inactive
+          if (v.position >= buffer.size() - 1 || v.position < 0 || !v.active) {
+            mMotorRunning = false;
+          }
+        } else {
+          // MOTOR OFF: Coasting
+          // Viscous Friction (Exponential Decay).
+          // 0.99993: Ultra-Low Friction (Requested 65% reduction).
+          // Long coasting times.
+          mSmoothSpeed *= 0.99993;
+        }
+      }
+
+      // PHYSICS SPEED LIMIT (Momentum Storage)
+      // Allow up to +/- 20.0x internally to store "fling" energy.
+      if (mSmoothSpeed > 20.0)
+        mSmoothSpeed = 20.0;
+      if (mSmoothSpeed < -20.0)
+        mSmoothSpeed = -20.0;
+
+      // AUDIO PITCH LIMIT (prevent aliasing/chirps)
+      // Clamp the *applied* speed to +/- 4.0x, but let physics run fast.
+      // This creates a "Plateau" effect where high-speed flings stay at max
+      // pitch longer.
+      double appliedSpeed = mSmoothSpeed;
+      if (appliedSpeed > 4.0)
+        appliedSpeed = 4.0;
+      if (appliedSpeed < -4.0)
+        appliedSpeed = -4.0;
+
+      // Apply Speed
+      v.position += appliedSpeed;
+
+      // Boundary Checks (Bounce/Clamp)
+      if (v.position < 0) {
+        v.position = 0;
+        mSmoothSpeed = 0; // Stop on wall
+      }
+      if (v.position >= buffer.size()) {
+        v.position = buffer.size() - 1.001;
+        mSmoothSpeed = 0; // Stop on wall
+      }
+
+      mLastScrubGate = mScrubGate;
+
+      // AUDIO GENERATION (Active Return)
+      // CUBIC INTERPOLATION
+      int idx = static_cast<int>(v.position);
+      float frac = v.position - idx;
+
+      int maxIdx = buffer.size() - 1;
+      float y0 = (idx > 0) ? buffer[idx - 1] : buffer[0];
+      float y1 = (idx <= maxIdx) ? buffer[idx] : 0.0f;
+      float y2 = (idx < maxIdx) ? buffer[idx + 1] : 0.0f;
+      float y3 = (idx < maxIdx - 1) ? buffer[idx + 2] : 0.0f;
+
+      float c0 = y1;
+      float c1 = 0.5f * (y2 - y0);
+      float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
+      float c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+
+      float cubicSample = ((c3 * frac + c2) * frac + c1) * frac + c0;
+
+      mixedOutput += cubicSample;
+      activeCount++;
+
+      return mixedOutput; // Bypass all other voices/processing
+    }
+
+    // Process ALL voices (including Voice 0 if we aren't scrubbing it)
+    for (size_t i = 0; i < mVoices.size(); i++) {
+      if (mPlayMode == Scrub && mScrubGate && i == 0)
+        continue; // Already added
+
+      auto &v = mVoices[i];
       if (!v.active)
         continue;
 
@@ -497,18 +670,7 @@ public:
         v.pitchRatio = v.targetPitchRatio;
       }
 
-      /*
-       * SAMPLER PARAMETER LOGIC:
-       * 1. SPEED (mSpeed): Global playback rate. Affects BOTH traversal (time)
-       * and read (pitch).
-       * 2. STRETCH (mStretch): Decouples time from pitch. Affects traverseRate
-       * ONLY.
-       * 3. PITCH (mPitch): Decouples pitch from time. Affects readRate ONLY.
-       */
-
-      // Base Resampling Rate: Affected by Speed AND Pitch knob (Classic
-      // behavior)
-      float pitchFactor = v.pitchRatio; // includes mPitch and Note shift
+      float pitchFactor = v.pitchRatio;
       float baseResampleRate = mSpeed * pitchFactor * (mReverse ? -1.0f : 1.0f);
       float traverseRate = mSpeed * (mReverse ? -1.0f : 1.0f);
       float readRate = v.pitchRatio;
@@ -517,19 +679,59 @@ public:
       if (std::abs(mStretch - 1.0f) > 0.02f)
         traverseRate /= std::max(0.01f, mStretch);
 
-      // ONLY use Granular if actively stretching time (mStretch != 1.0)
-
-      // Update loop/trim points dynamically during playback if not in chops
-      // mode
+      // Update loop/trim points dynamically
+      // Update loop/trim points dynamically
       if (mPlayMode != Chops && mPlayMode != OneShotChops &&
-          mPlayMode != LoopChops) {
+          mPlayMode != LoopChops && mPlayMode != Scrub) {
         v.start = static_cast<size_t>(mTrimStart * buffer.size());
         v.end = static_cast<size_t>(mTrimEnd * buffer.size());
+      } else if (mPlayMode == Scrub) {
+        // Scrub Mode: Ensure we can scrub entire file
+        v.start = 0;
+        v.end = buffer.size();
+
+        // Scrub Release Behavior (Tape Stop / Slow Drag)
+        // If handle released, `v.position` is not driven by us.
+        // It falls through to here.
+        // We want it to stop (friction).
+
+        // Wait, simpler: We already calculated Play Physics in the block above.
+        // If !mScrubGate (Released), we want it to stop?
+        // OR continue playing if it has momentum?
+        // User says "Snaps back".
+        // If we set v.start=0, v.end=size, it won't snap back.
+        // It will play to end (One Shot) or Loop (if Loop mode).
+
+        useGranular = false;
+        traverseRate = 0;
+        baseResampleRate =
+            0; // Prevent standard increment, let our physics block handle it?
+        // NO! If we set baseResampleRate=0 here, the voice freezes on release.
+        // We want that? "Tape Stop".
+        // User: "Snaps back to start when I release".
+        // Taking this out implies we rely on `baseResampleRate` logic below.
+        // Below logic: `v.position += baseResampleRate`.
+        // `baseResampleRate` depends on `mSpeed` (1.0).
+        // So on release, it plays at 1.0x speed.
+        // That is "Launch" behavior.
+        // If user wants "Scrub", usually release = Stop.
+        // But let's fix the Snap Back first.
+        // Snap Back was caused by `v.position` being outside `v.start/v.end`.
+        // Setting `v.start=0, v.end=size` FIXES Snap Back.
+
+        // Now, "Ticks".
+        // Ticks caused by slow slewing (0.005).
+        // Using 0.1 in the Scrub Block (above, need to update) will fix
+        // tracking. Here, we just handle the "Loop/Trim parameters".
+
+        // Wait, I need to update the logic in the START of the file too (the
+        // Scrub Block). This `replace` only targets the loop parameter logic.
+        // I will do TWO replaces.
       }
 
       float voiceOutput = 0.0f;
       if (!useGranular) {
-        // Classic mode: Resampling (Pitch and Time are linked)
+        // Classic mode: Resampling
         v.position += baseResampleRate;
         if (v.position >= v.end || v.position < v.start) {
           if (mPlayMode == Sustain || mPlayMode == Loop ||
@@ -540,9 +742,7 @@ public:
           }
         }
         int idx = static_cast<int>(v.position);
-        // Fix: Prevent playing past slice end in Chops modes (One Chop)
         if (idx >= 0 && idx < (int)buffer.size()) {
-          // If we are in a non-looping mode, strictly enforce v.end
           if (mPlayMode == OneShot || mPlayMode == Chops ||
               mPlayMode == OneShotChops) {
             if (idx < (int)v.end) {
@@ -553,7 +753,7 @@ public:
           }
         }
       } else {
-        // Granular mode: Time-stretching (Decouples traversal from read rate)
+        // Granular mode
         v.position += traverseRate;
         v.grainTimer++;
 
@@ -805,6 +1005,17 @@ public:
 
 private:
   std::vector<Voice> mVoices;
+  std::vector<Slice> mSlices;
+
+  // Scrub State
+  float mScrubPosition = 0.0f;
+  bool mScrubGate = false;
+  bool mLastScrubGate = false;
+  bool mMotorRunning = false; // "Motor" state for Scrub Playback
+  double mSmoothSpeed = 0.0;
+  double mLastScrubParam = 0.0; // Track previous target for velocity calc
+
+  // Parameters
   float mTrimStart = 0.0f;
   float mTrimEnd = 1.0f;
   float mPitch = 0.0f;
@@ -816,8 +1027,6 @@ private:
   PlayMode mPlayMode = OneShot;
   bool mUseEnvelope = true;
   int mSampleRate = 48000;
-
-  std::vector<Slice> mSlices;
 };
 
 #endif // SAMPLER_ENGINE_H

@@ -38,6 +38,10 @@ import com.groovebox.EngineType
 import com.groovebox.StepState
 import com.groovebox.midi.EmpledManager
 import com.groovebox.ui.components.Knob
+import com.groovebox.ui.components.NativeFileDialog
+import com.groovebox.persistence.PersistenceManager
+import androidx.compose.ui.platform.LocalContext
+import java.io.File
 import com.groovebox.ui.theme.getEngineColor
 
 @Composable
@@ -65,6 +69,70 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                      horizontalArrangement = Arrangement.SpaceBetween,
                      verticalAlignment = Alignment.CenterVertically
                  ) {
+                     // Sequence File Management Logic
+                     var showSeqLoad by remember { mutableStateOf(false) }
+                     var showSeqSave by remember { mutableStateOf(false) }
+                     val context = LocalContext.current
+
+                     if (showSeqSave) {
+                         val defaultDir = File(PersistenceManager.getLoomFolder(context), "Sequences").apply { if(!exists()) mkdirs() }
+                         NativeFileDialog(
+                            directory = defaultDir,
+                            onDismiss = { showSeqSave = false },
+                            state = state,
+                            onFileSelected = { path ->
+                                val rawName = File(path).name.removeSuffix(".gbs")
+                                // Strip audio extensions if present
+                                val name = rawName.replace(Regex("\\.(wav|mp3|aif|ogg|flac)$", RegexOption.IGNORE_CASE), "")
+                                PersistenceManager.saveSequence(context, track, name)
+                            },
+                            isSave = true,
+                            trackIndex = selectedTrackIndex,
+                            extensions = listOf("gbs"),
+                            title = "SAVE SEQ"
+                         )
+                     }
+
+                     if (showSeqLoad) {
+                         val defaultDir = File(PersistenceManager.getLoomFolder(context), "Sequences").apply { if(!exists()) mkdirs() }
+                         NativeFileDialog(
+                            directory = defaultDir,
+                            onDismiss = { showSeqLoad = false },
+                            state = state,
+                            onFileSelected = { path ->
+                                val name = File(path).name.removeSuffix(".gbs")
+                                val newTrackState = PersistenceManager.loadSequence(context, track, name)
+                                if (newTrackState != null) {
+                                    val newTracks = state.tracks.toMutableList()
+                                    newTracks[selectedTrackIndex] = newTrackState.copy(id = track.id)
+                                    onStateChange(state.copy(tracks = newTracks))
+                                    
+                                    // SYNC TO ENGINE - CRITICAL FIX
+                                    val engineType = newTrackState.engineType
+                                    if (engineType == EngineType.FM_DRUM || engineType == EngineType.ANALOG_DRUM) {
+                                         for (instIdx in 0 until 16) {
+                                             val voiceSteps = newTrackState.drumSteps.getOrNull(instIdx) ?: emptyList()
+                                             voiceSteps.forEachIndexed { stepIdx, s ->
+                                                 nativeLib.setStep(selectedTrackIndex, stepIdx, s.active, intArrayOf(60 + instIdx), s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped, s.subStepOffset)
+                                                 s.parameterLocks.forEach { (pid, valAmt) -> nativeLib.setParameterLock(selectedTrackIndex, stepIdx, pid, valAmt) }
+                                             }
+                                         }
+                                    } else {
+                                         newTrackState.steps.forEachIndexed { stepIdx, s ->
+                                             val isActiveWithNotes = s.active && s.notes.isNotEmpty()
+                                             nativeLib.setStep(selectedTrackIndex, stepIdx, isActiveWithNotes, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped, s.subStepOffset)
+                                             s.parameterLocks.forEach { (pid, valAmt) -> nativeLib.setParameterLock(selectedTrackIndex, stepIdx, pid, valAmt) }
+                                         }
+                                    }
+                                }
+                            },
+                            isSave = false,
+                            trackIndex = selectedTrackIndex,
+                            extensions = listOf("gbs"),
+                            title = "LOAD SEQ"
+                         )
+                     }
+
                      // Bank Select
                      Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                          (0..3).forEach { bank ->
@@ -216,14 +284,67 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                              contentPadding = PaddingValues(0.dp),
                              colors = ButtonDefaults.buttonColors(containerColor = if (hasClipboard) Color.Gray else Color.DarkGray.copy(alpha = 0.5f))
                          ) { Text("PST", fontSize = 10.sp, color = Color.White) }
+
+                         // Sequence Save/Load
+                         Button(
+                             onClick = { showSeqSave = true },
+                             modifier = Modifier.height(32.dp).width(40.dp),
+                             contentPadding = PaddingValues(0.dp),
+                             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                         ) { Text("SAV", fontSize = 10.sp, color = Color.White) }
+
+                         Button(
+                             onClick = { showSeqLoad = true },
+                             modifier = Modifier.height(32.dp).width(40.dp),
+                             contentPadding = PaddingValues(0.dp),
+                             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                         ) { Text("LOD", fontSize = 10.sp, color = Color.White) }
                         
                          // 64-Step View Toggle
                          Button(
-                            onClick = { latestOnStateChange(latestState.copy(is64StepView = !latestState.is64StepView)) },
-                            modifier = Modifier.height(32.dp).width(32.dp),
+                             onClick = { 
+                                 val new64 = !latestState.is64StepView
+                                 // Auto-expand sequence length if entering 64-step view and length is short
+                                 val currentLength = track.numPages * track.stepsPerPage
+                                 if (new64 && currentLength < 64) {
+                                     // We need to update the engine state. 
+                                     // Assuming nativeLib.setSequencerConfig handles this or we need state update.
+                                     // Ideally, we update the state object and let the side-effect sync it?
+                                     // But setSequencerConfig definition in AudioEngine.cpp takes (numPages, stepsPerPage).
+                                     // 64 steps = 4 pages of 16.
+                                     nativeLib.setSequencerConfig(selectedTrackIndex, 4, 16)
+                                     
+                                     // Update Kotlin State
+                                     val newTrack = track.copy(numPages = 4, stepsPerPage = 16)
+                                     latestOnStateChange(latestState.copy(is64StepView = new64, tracks = latestState.tracks.mapIndexed { i, t -> if (i == selectedTrackIndex) newTrack else t }))
+                                 } else {
+                                     latestOnStateChange(latestState.copy(is64StepView = new64))
+                                 }
+                             },
+                             modifier = Modifier.height(32.dp).width(32.dp),
                              contentPadding = PaddingValues(0.dp),
                              colors = ButtonDefaults.buttonColors(containerColor = if (latestState.is64StepView) Color.Cyan else Color.DarkGray)
                          ) { Text("64", fontSize = 10.sp, color = if (latestState.is64StepView) Color.Black else Color.White) }
+                     }
+
+                     // Per-Track Humanize Knob
+                     Row(verticalAlignment = Alignment.CenterVertically) {
+                         Knob(
+                             label = "", // External label used
+                             initialValue = track.humanize,
+                             parameterId = -1,
+                             state = latestState,
+                             onStateChange = latestOnStateChange,
+                             nativeLib = nativeLib,
+                             knobSize = 32.dp,
+                             onValueChangeOverride = {
+                                 val newTracks = latestState.tracks.toMutableList()
+                                 newTracks[selectedTrackIndex] = track.copy(humanize = it)
+                                 latestOnStateChange(latestState.copy(tracks = newTracks))
+                                 nativeLib.setTrackHumanize(selectedTrackIndex, it)
+                             }
+                         )
+                         Text("HUMAN", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 4.dp), color = Color.White)
                      }
                      
                      // Right Side: Clear Button with "Hold to Clear" / "Confirm" logic
@@ -321,7 +442,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                     Spacer(modifier = Modifier.height(8.dp))
                 } else if (track.engineType == EngineType.ANALOG_DRUM) {
                      Row(modifier = Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("KICK", "SNARE", "OHH", "CHH", "CYMB").forEachIndexed { i, label ->
+                        listOf("KICK", "SNARE", "CYMB", "HAT C", "HAT O").forEachIndexed { i, label ->
                             Button(
                                 onClick = { 
                                     latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> 
@@ -381,7 +502,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         val padSize = minOf(maxWidth / (columns + 0.2f), maxHeight / (columns + 0.2f))
                         
                         // We need `isMultiTrack` to determine correct step indexing
-                        val isMultiTrack = track.engineType == EngineType.FM_DRUM 
+                        val isMultiTrack = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM 
                         
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(columns),
@@ -482,24 +603,28 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                         Text("${stepIndex + 1}", color = if (step.active) Color.Black else Color.White)
                                     }
                                     if (showStepPopup) {
+                                        // Fix: Fetch LIVE step state to ensure popup shows current values
+                                        val liveTrack = latestState.tracks[latestState.selectedTrackIndex]
+                                        val liveStep = if (isMultiTrack) liveTrack.drumSteps[liveTrack.selectedFmDrumInstrument][stepIndex] else liveTrack.steps[stepIndex]
+                                        
                                         PadOptionPopup(
                                             onDismiss = { showStepPopup = false },
-                                            stepState = step,
-                                             onApply = { ratchet: Int, punch: Boolean, probability: Float, gate: Float, notes: List<Int>, velocity: Float, isSkipped: Boolean, parameterLocks: Map<Int, Float> ->
+                                            stepState = liveStep,
+                                             onApply = { ratchet: Int, punch: Boolean, probability: Float, gate: Float, notes: List<Int>, velocity: Float, isSkipped: Boolean, parameterLocks: Map<Int, Float>, subStepOffset: Float ->
                                                 val currentTrack = latestState.tracks[latestState.selectedTrackIndex]
                                                 val currentStep = if (isMultiTrack) currentTrack.drumSteps[currentTrack.selectedFmDrumInstrument][stepIndex] else currentTrack.steps[stepIndex]
                                                 if (isMultiTrack) {
                                                     val instIdx = currentTrack.selectedFmDrumInstrument
                                                     val newDrumSteps = currentTrack.drumSteps.mapIndexed { di, dsteps ->
-                                                        if (di == instIdx) dsteps.mapIndexed { si, s -> if (si == stepIndex) s.copy(ratchet = ratchet, punch = punch, probability = probability, gate = gate, velocity = velocity, notes = notes, isSkipped = isSkipped, parameterLocks = parameterLocks) else s }
+                                                        if (di == instIdx) dsteps.mapIndexed { si, s -> if (si == stepIndex) s.copy(ratchet = ratchet, punch = punch, probability = probability, gate = gate, velocity = velocity, notes = notes, isSkipped = isSkipped, parameterLocks = parameterLocks, subStepOffset = subStepOffset) else s }
                                                         else dsteps
                                                     }
                                                     latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
-                                                    nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, currentStep.active, notes.toIntArray(), velocity, ratchet, punch, probability, gate, isSkipped)
+                                                    nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, currentStep.active, notes.toIntArray(), velocity, ratchet, punch, probability, gate, isSkipped, subStepOffset)
                                                 } else {
-                                                    val newSteps = currentTrack.steps.mapIndexed { si, s -> if (si == stepIndex) s.copy(ratchet = ratchet, punch = punch, probability = probability, gate = gate, notes = notes, velocity = velocity, isSkipped = isSkipped, parameterLocks = parameterLocks) else s }
+                                                    val newSteps = currentTrack.steps.mapIndexed { si, s -> if (si == stepIndex) s.copy(ratchet = ratchet, punch = punch, probability = probability, gate = gate, notes = notes, velocity = velocity, isSkipped = isSkipped, parameterLocks = parameterLocks, subStepOffset = subStepOffset) else s }
                                                     latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(steps = newSteps) else t }))
-                                                    nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, currentStep.active, notes.toIntArray(), velocity, ratchet, punch, probability, gate, isSkipped)
+                                                    nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, currentStep.active, notes.toIntArray(), velocity, ratchet, punch, probability, gate, isSkipped, subStepOffset)
                                                 }
                                             },
                                             onParamLock = {
@@ -522,7 +647,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
 fun PadOptionPopup(
     onDismiss: () -> Unit,
     stepState: StepState,
-    onApply: (Int, Boolean, Float, Float, List<Int>, Float, Boolean, Map<Int, Float>) -> Unit,
+    onApply: (Int, Boolean, Float, Float, List<Int>, Float, Boolean, Map<Int, Float>, Float) -> Unit, // Added Float
     onParamLock: () -> Unit
 ) {
     Popup(onDismissRequest = onDismiss) {
@@ -549,7 +674,7 @@ fun PadOptionPopup(
                             modifier = Modifier
                                 .size(32.dp)
                                 .background(if (stepState.ratchet == r) Color.Cyan else Color.DarkGray, CircleShape)
-                                .clickable { onApply(r, stepState.punch, stepState.probability, stepState.gate, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks) },
+                                .clickable { onApply(r, stepState.punch, stepState.probability, stepState.gate, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks, stepState.subStepOffset) },
                             contentAlignment = Alignment.Center
                         ) {
                             Text("x$r", style = MaterialTheme.typography.labelSmall, color = if (stepState.ratchet == r) Color.Black else Color.White)
@@ -627,7 +752,7 @@ fun PadOptionPopup(
                                         } else {
                                             stepState.notes + currentNote
                                         }
-                                        onApply(stepState.ratchet, stepState.punch, stepState.probability, stepState.gate, newNotes.sorted(), stepState.velocity, stepState.isSkipped, stepState.parameterLocks)
+                                        onApply(stepState.ratchet, stepState.punch, stepState.probability, stepState.gate, newNotes.sorted(), stepState.velocity, stepState.isSkipped, stepState.parameterLocks, stepState.subStepOffset)
                                     },
                                     modifier = Modifier.weight(1f).fillMaxHeight(),
                                     colors = ButtonDefaults.buttonColors(containerColor = bgColor),
@@ -646,7 +771,7 @@ fun PadOptionPopup(
                 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Button(
-                        onClick = { onApply(stepState.ratchet, !stepState.punch, stepState.probability, stepState.gate, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks) },
+                        onClick = { onApply(stepState.ratchet, !stepState.punch, stepState.probability, stepState.gate, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks, stepState.subStepOffset) },
                         colors = ButtonDefaults.buttonColors(containerColor = if (stepState.punch) Color(0xFFFF4500) else Color.DarkGray), // OrangeRed
                         modifier = Modifier.weight(1f)
                     ) { Text("PUNCH", color = Color.White) }
@@ -662,7 +787,7 @@ fun PadOptionPopup(
                 Text("Velocity: ${(stepState.velocity * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
                 Slider(
                     value = stepState.velocity,
-                    onValueChange = { onApply(stepState.ratchet, stepState.punch, stepState.probability, stepState.gate, stepState.notes, it, stepState.isSkipped, stepState.parameterLocks) },
+                    onValueChange = { onApply(stepState.ratchet, stepState.punch, stepState.probability, stepState.gate, stepState.notes, it, stepState.isSkipped, stepState.parameterLocks, stepState.subStepOffset) },
                     valueRange = 0f..1f,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -675,7 +800,7 @@ fun PadOptionPopup(
                 Text("Gate Length: $gateLabel", style = MaterialTheme.typography.labelMedium)
                  Slider(
                     value = currentGate,
-                    onValueChange = { onApply(stepState.ratchet, stepState.punch, stepState.probability, it, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks) },
+                    onValueChange = { onApply(stepState.ratchet, stepState.punch, stepState.probability, it, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks, stepState.subStepOffset) },
                     valueRange = 0.1f..4.0f,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -686,7 +811,20 @@ fun PadOptionPopup(
                 Text("Probability: ${(stepState.probability * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
                 Slider(
                     value = stepState.probability,
-                    onValueChange = { onApply(stepState.ratchet, stepState.punch, it, stepState.gate, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks) },
+                    onValueChange = { onApply(stepState.ratchet, stepState.punch, it, stepState.gate, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks, stepState.subStepOffset) },
+                    valueRange = 0f..1f,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Microtiming
+                // Microtiming
+                val microtimingPercent = (stepState.subStepOffset * 100).toInt()
+                Text("Microtiming: $microtimingPercent%", style = MaterialTheme.typography.labelMedium)
+                Slider(
+                    value = stepState.subStepOffset,
+                    onValueChange = { onApply(stepState.ratchet, stepState.punch, stepState.probability, stepState.gate, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks, it) },
                     valueRange = 0f..1f,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -694,7 +832,7 @@ fun PadOptionPopup(
                 Spacer(modifier = Modifier.height(12.dp))
                 
                  Button(
-                    onClick = { onApply(stepState.ratchet, stepState.punch, stepState.probability, stepState.gate, stepState.notes, stepState.velocity, !stepState.isSkipped, stepState.parameterLocks) },
+                    onClick = { onApply(stepState.ratchet, stepState.punch, stepState.probability, stepState.gate, stepState.notes, stepState.velocity, !stepState.isSkipped, stepState.parameterLocks, stepState.subStepOffset) },
                     colors = ButtonDefaults.buttonColors(containerColor = if (stepState.isSkipped) Color.Green else Color.DarkGray), 
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(if (stepState.isSkipped) "RESTORE STEP (UNSKIP)" else "SKIP STEP", color = Color.White) }

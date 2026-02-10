@@ -106,9 +106,14 @@ AudioEngine::AudioEngine() {
 
   // Reverb and Delay can stay wet-only by default too
   mDelayFx.setMix(1.0f);
+  mGlobalTranspose = 0;
 }
 
 AudioEngine::~AudioEngine() { stop(); }
+
+void AudioEngine::setGlobalTranspose(int semitones) {
+  mGlobalTranspose = std::clamp(semitones, -12, 12);
+}
 
 // Helper to reset a single track's parameters and engine state
 void AudioEngine::initTrack(int i) {
@@ -429,6 +434,15 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
       return;
     }
 
+    // Apply Global Transpose (Skip Drums and Slicers)
+    if (track.engineType != 5 && track.engineType != 6) {
+      bool isSliceMode =
+          (track.engineType == 2 && track.parameters[320] > 1.5f);
+      if (!isSliceMode) {
+        note += mGlobalTranspose;
+      }
+    }
+
     if (!isSequencerTrigger) {
       track.mPhysicallyHeldNoteCount++;
       if (track.arpeggiator.getMode() != ArpMode::OFF) {
@@ -564,7 +578,8 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
         // Do not record physical presses if Arp is handling them
       } else {
         double phase = (double)mSampleCount / (mSamplesPerStep + 0.001);
-        int stepOffset = (phase > 0.5) ? 1 : 0;
+        // MICROTIMING FIX: Always record to current step with precise offset
+        int stepOffset = 0;
         float subStep = static_cast<float>(phase);
 
         int currentStepIdx =
@@ -581,6 +596,7 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
           if (drumIdx >= 0 && drumIdx < 16) {
             Step &s =
                 track.drumSequencers[drumIdx].getStepsMutable()[currentStepIdx];
+            // Use precise subStep
             s.addNote(note, static_cast<float>(velocity) / 127.0f, subStep);
 
             track.mRecordingNotes.push_back({note, currentStepIdx, drumIdx,
@@ -734,7 +750,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       track.volume = std::max(0.001f, value);
       break;
     case 9:
-      track.pan = std::clamp(value, 0.0f, 1.0f);
+      track.pan = std::max(0.0f, std::min(value, 1.0f));
       {
         float angle = track.pan * (float)M_PI * 0.5f;
         track.panL = cosf(angle);
@@ -1078,6 +1094,11 @@ void AudioEngine::processCommands() {
     case AudioCommand::SET_TEMPO:
       mBpm = cmd.value;
       break;
+    case AudioCommand::SET_TRACK_HUMANIZE:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < 8) {
+        mTracks[cmd.trackIndex].humanize = cmd.value;
+      }
+      break;
     case AudioCommand::SET_PATTERN_LENGTH:
       mPatternLength = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
       // Propagate to all track sequencers
@@ -1095,7 +1116,7 @@ void AudioEngine::processCommands() {
         Step step;
         step.isSkipped = cmd.isSkipped;
         for (int n : cmd.notes) {
-          step.addNote(n, cmd.velocity, 0.0f);
+          step.addNote(n, cmd.velocity, cmd.subStepOffset);
         }
         step.active = cmd.bValue;
         step.ratchet = cmd.ratchet;
@@ -1723,11 +1744,11 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
     // Unified Processing Block (Control + Audio + NoteOff)
     {
-      // mLock REMOVED to avoid audio dropouts.
-      // State changes are now handled via processCommands() at the start of
-      // onAudioReady. Audio thread should run free. We rely on
-      // atomics/race-tolerance for params. Critical ops (like vector resize)
-      // should be guarded, but we don't resize tracks in realtime.
+      // AudioEngine must be thread-safe to prevent crashes/vector corruption.
+      // Re-enabling mLock as removing it caused deadlocks/crashes ("Frozen
+      // Playhead"). processCommands() runs before this loop, so UI interaction
+      // is safe.
+      std::lock_guard<std::recursive_mutex> lock(mLock);
 
       mSampleCount += framesToDo;
       while (mSampleCount >= samplesPerStep && samplesPerStep > 0.0f) {
@@ -1739,7 +1760,12 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
       for (int t = 0; t < (int)mTracks.size(); ++t) {
         Track &track = mTracks[t];
         float effectiveMultiplier = track.mClockMultiplier;
-        if (track.mArpTriplet && track.arpeggiator.getMode() != ArpMode::OFF) {
+
+        // Only run Arp logic if NOT a drum track to prevent
+        // dual-triggering/glitches
+        bool isDrumTrack = (track.engineType == 5 || track.engineType == 6);
+        if (!isDrumTrack && track.mArpTriplet &&
+            track.arpeggiator.getMode() != ArpMode::OFF) {
           effectiveMultiplier *= 1.5f;
         }
 
@@ -1775,20 +1801,52 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
               if (s.active) {
                 if (s.probability >= 1.0f || gRng.next() <= s.probability) {
                   for (const auto &ni : s.notes) {
+                    double randomOffset = 0.0;
+                    float velocityScale = 1.0f;
+                    double effectiveSubStep = ni.subStepOffset;
+
+                    if (track.humanize > 0.001f) {
+                      // Timing: +/- 10% of step duration
+                      randomOffset = (gRng.next() - 0.5f) * 0.2f *
+                                     track.humanize * trackSamplesPerStep;
+                      // Velocity: +/- 20%
+                      velocityScale =
+                          1.0f + ((gRng.next() - 0.5f) * 0.4f * track.humanize);
+                    }
+
+                    // Sanity Clamp
+                    if (effectiveSubStep < 0.0 || effectiveSubStep > 1.0)
+                      effectiveSubStep = 0.0;
+
+                    // FIX: Calculate offset within the current block accurately
+                    // mStepCountdown has just been incremented by
+                    // trackSamplesPerStep So the step event happened at:
+                    // framesToDo + (mStepCountdown - trackSamplesPerStep)
+                    double offsetInBlock =
+                        (double)framesToDo +
+                        (track.mStepCountdown - (double)trackSamplesPerStep);
+
                     double delayedSamples =
-                        ni.subStepOffset * trackSamplesPerStep +
-                        track.mStepCountdown;
+                        offsetInBlock + effectiveSubStep * trackSamplesPerStep +
+                        randomOffset;
+
                     float ratchetedGate =
                         s.gate / static_cast<float>(s.ratchet);
 
+                    // Apply velocity scaling
+                    int vel =
+                        static_cast<int>(ni.velocity * 127.0f * velocityScale);
+                    if (vel < 1)
+                      vel = 1;
+                    if (vel > 127)
+                      vel = 127;
+
                     if (delayedSamples <= 1.0) {
-                      triggerNoteLocked(t, ni.note,
-                                        static_cast<int>(ni.velocity * 127),
-                                        true, ratchetedGate);
+                      triggerNoteLocked(t, ni.note, vel, true, ratchetedGate);
                     } else {
-                      track.mPendingNotes.push_back(
-                          {ni.note, ni.velocity * 127.0f, delayedSamples,
-                           ratchetedGate, 1});
+                      track.mPendingNotes.push_back({ni.note, (float)vel,
+                                                     delayedSamples,
+                                                     ratchetedGate, 1});
                     }
 
                     if (s.ratchet > 1) {
@@ -1830,19 +1888,50 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                     if (ds.probability >= 1.0f ||
                         gRng.next() <= ds.probability) {
                       for (const auto &ni : ds.notes) {
+
+                        double randomOffset = 0.0;
+                        float velocityScale = 1.0f;
+                        double effectiveSubStep = ni.subStepOffset;
+
+                        // FIX: ADD HUMANIZE TO DRUM SEQUENCER
+                        if (track.humanize > 0.001f) {
+                          randomOffset = (gRng.next() - 0.5f) * 0.2f *
+                                         track.humanize * trackSamplesPerStep;
+                          velocityScale = 1.0f + ((gRng.next() - 0.5f) * 0.4f *
+                                                  track.humanize);
+                        }
+
+                        // Sanity Clamp
+                        if (effectiveSubStep < 0.0 || effectiveSubStep > 1.0)
+                          effectiveSubStep = 0.0;
+
+                        // FIX: Calculate offset within the current block
+                        // accurately
+                        double offsetInBlock =
+                            (double)framesToDo + (track.mStepCountdown -
+                                                  (double)trackSamplesPerStep);
+
                         double delayedSamples =
-                            ni.subStepOffset * trackSamplesPerStep +
-                            track.mStepCountdown;
+                            offsetInBlock +
+                            effectiveSubStep * trackSamplesPerStep +
+                            randomOffset;
+
                         float ratchetedGate =
                             ds.gate / static_cast<float>(ds.ratchet);
 
+                        int vel = static_cast<int>(ni.velocity * 127.0f *
+                                                   velocityScale);
+                        if (vel < 1)
+                          vel = 1;
+                        if (vel > 127)
+                          vel = 127;
+
                         if (delayedSamples <= 1.0) {
-                          triggerNoteLocked(t, ni.note,
-                                            static_cast<int>(ni.velocity * 127),
-                                            true, ratchetedGate, ds.punch);
+                          triggerNoteLocked(t, ni.note, vel, true,
+                                            ratchetedGate, ds.punch);
                         } else {
                           track.mPendingNotes.push_back(
-                              {ni.note, ni.velocity * 127.0f, delayedSamples,
+                              {ni.note, (float)vel, delayedSamples,
                                ratchetedGate, 1, ds.punch});
                         }
                         if (ds.ratchet > 1) {
@@ -1853,8 +1942,8 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                             double rDelay =
                                 delayedSamples + (r * ratchetInterval);
                             track.mPendingNotes.push_back(
-                                {ni.note, ni.velocity * 127.0f, rDelay,
-                                 ratchetedGate, 1, ds.punch});
+                                {ni.note, (float)vel, rDelay, ratchetedGate, 1,
+                                 ds.punch});
                           }
                         }
                       }
@@ -2027,7 +2116,7 @@ void AudioEngine::setArpRate(int trackIndex, float rate, int divisionMode) {
 void AudioEngine::setStep(int trackIndex, int stepIndex, bool active,
                           const std::vector<int> &notes, float velocity,
                           int ratchet, bool punch, float probability,
-                          float gate, bool isSkipped) {
+                          float gate, bool isSkipped, float subStepOffset) {
   AudioCommand cmd;
   cmd.type = AudioCommand::SET_STEP;
   cmd.trackIndex = trackIndex;
@@ -2040,6 +2129,7 @@ void AudioEngine::setStep(int trackIndex, int stepIndex, bool active,
   cmd.probability = probability;
   cmd.gate = gate;
   cmd.isSkipped = isSkipped;
+  cmd.subStepOffset = subStepOffset;
 
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
@@ -2108,6 +2198,13 @@ void AudioEngine::setPlaying(bool playing) {
       track.mInternalStepIndex = 0;
       track.mStepCountdown = 0.0;
       track.mPendingNotes.clear();
+
+      track.sequencer.jumpToStep(0);
+      if (track.engineType == 5 || track.engineType == 6 ||
+          (track.engineType == 2 && track.samplerEngine.getPlayMode() >= 3)) {
+        for (int d = 0; d < 16; ++d)
+          track.drumSequencers[d].jumpToStep(0);
+      }
       track.isActive = false;
       track.mPendingNotes.clear();
       track.isActive = false;
@@ -2127,6 +2224,16 @@ void AudioEngine::setPlaying(bool playing) {
       track.mInternalStepIndex = 0;
       track.mStepCountdown = 0.0;
       track.mPendingNotes.clear();
+
+      // FIX: Reset Sequencers to start from the beginning
+      track.sequencer.jumpToStep(0);
+      // Reset Drum Sequencers too
+      if (track.engineType == 5 || track.engineType == 6 ||
+          (track.engineType == 2 && track.samplerEngine.getPlayMode() >= 3)) {
+        for (int d = 0; d < 16; ++d) {
+          track.drumSequencers[d].jumpToStep(0);
+        }
+      }
     }
     // Clear Global FX Buffers on Start to prevent noise burst
     mDelayFx.clear();
@@ -2173,6 +2280,15 @@ void AudioEngine::setSwing(float swing) {
   AudioCommand cmd;
   cmd.type = AudioCommand::SET_SWING;
   cmd.value = swing;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::setTrackHumanize(int trackIndex, float amount) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TRACK_HUMANIZE;
+  cmd.trackIndex = trackIndex;
+  cmd.value = amount;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
 }
@@ -2438,7 +2554,8 @@ void AudioEngine::getGranularPlayheads(int trackIndex,
                                        int maxCount) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-    if (mTracks[trackIndex].engineType == 4) { // GRANULAR
+    // ENUM ID: SUB=0, FM=1, SAMP=2, GRAN=3, WAVE=4
+    if (mTracks[trackIndex].engineType == 3) { // GRANULAR
       mTracks[trackIndex].granularEngine.getPlayheads(out, maxCount);
     } else if (mTracks[trackIndex].engineType == 2) { // SAMPLER
       // Reuse PlayheadInfo struct but cast or map if they aren't bit-identical
@@ -2465,7 +2582,7 @@ void AudioEngine::saveSample(int trackIndex, const std::string &path) {
     std::vector<float> data = track.samplerEngine.getSampleData();
     std::vector<float> slices = track.samplerEngine.getSlicePoints();
     WavFileUtils::writeWav(path, data, 48000, 1, slices);
-  } else if (track.engineType == 3) { // Granular (Standardized to 3)
+  } else if (track.engineType == 3) { // Granular (3)
     std::vector<float> data = track.granularEngine.getSampleData();
     std::vector<float> slices;
     WavFileUtils::writeWav(path, data, 48000, 1, slices);
@@ -2485,9 +2602,9 @@ void AudioEngine::loadSample(int trackIndex, const std::string &path) {
     if (track.engineType == 2) {
       track.samplerEngine.loadSample(data);
       track.samplerEngine.setSlicePoints(slices);
-    } else if (track.engineType == 3) { // Granular (Standardized to 3)
+    } else if (track.engineType == 3) { // Granular (3)
       track.granularEngine.setSource(data);
-    } else if (track.engineType == 4) { // Wavetable
+    } else if (track.engineType == 4) { // Wavetable (4)
       track.wavetableEngine.loadWavetable(data);
     }
     track.lastSamplePath = path;
@@ -2931,7 +3048,38 @@ std::vector<Step> AudioEngine::getSequencerSteps(int trackIndex) {
 void AudioEngine::loadFmPreset(int trackIndex, int presetId) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
-    mTracks[trackIndex].fmEngine.loadPreset(presetId);
+    Track &track = mTracks[trackIndex];
+    track.fmEngine.loadPreset(presetId);
+
+    // SYNC: Read back parameters from Engine to Track State for UI
+    track.parameters[150] = (float)track.fmEngine.getAlgorithm();
+    track.parameters[151] = track.fmEngine.getCutoff();
+    track.parameters[152] = track.fmEngine.getResonance();
+    track.parameters[153] = (float)track.fmEngine.getCarrierMask();
+    track.parameters[154] = track.fmEngine.getFeedback();
+    track.parameters[155] = (float)track.fmEngine.getActiveMask();
+    track.parameters[156] = (float)track.fmEngine.getFilterMode();
+    track.parameters[157] =
+        track.fmEngine.getBrightness(); // Getter already normalizes (0.0-1.0)
+    track.parameters[158] = track.fmEngine.getDetune();
+    track.parameters[159] = track.fmEngine.getFeedbackDrive();
+
+    // Amp Envelope
+    track.parameters[100] = track.fmEngine.getAttack();
+    track.parameters[101] = track.fmEngine.getDecay();
+    track.parameters[102] = track.fmEngine.getSustain();
+    track.parameters[103] = track.fmEngine.getRelease();
+
+    // Operators
+    for (int op = 0; op < 6; ++op) {
+      int base = 160 + (op * 6);
+      track.parameters[base + 0] = track.fmEngine.getOpLevel(op);
+      track.parameters[base + 1] = track.fmEngine.getOpRatio(op);
+      track.parameters[base + 2] = track.fmEngine.getOpAttack(op);
+      track.parameters[base + 3] = track.fmEngine.getOpDecay(op);
+      track.parameters[base + 4] = track.fmEngine.getOpSustain(op);
+      track.parameters[base + 5] = track.fmEngine.getOpRelease(op);
+    }
   }
 }
 

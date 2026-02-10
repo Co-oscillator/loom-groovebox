@@ -57,6 +57,74 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
+                val purple = Color(0xFF6200EE)
+                Pedal("MASTER", purple, state, -1, onStateChange, nativeLib) { // -1 FX Index (Dummy)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                         // Transpose Knob (-12 to +12)
+                         // We use a paramId (e.g. 6000) but really we store it in state.globalTranspose
+                         // Knob usually works with float 0-1 or overridden value.
+                         val transposeVal = state.globalTranspose.toFloat()
+                         Knob(
+                            label = "XPOSE",
+                            initialValue = 0.5f, // Center
+                            parameterId = 6000,
+                            state = state,
+                            onStateChange = onStateChange,
+                            nativeLib = nativeLib,
+                            knobSize = 40.dp,
+                            overrideValue = (transposeVal + 12) / 24.0f, // Map -12..12 to 0..1
+                            overrideColor = purple,
+                            onValueChangeOverride = { v ->
+                                val semitones = ((v * 24.0f) - 12.0f).toInt()
+                                if (semitones != state.globalTranspose) {
+                                    nativeLib.setGlobalTranspose(semitones)
+                                    onStateChange(state.copy(globalTranspose = semitones, focusedValue = "TRANSPOSE: $semitones"))
+                                }
+                            },
+                            valueFormatter = { v -> "${((v * 24) - 12).toInt()} ST" }
+                        )
+                        
+                        // Master Volume
+                        Knob(
+                            label = "VOL",
+                            initialValue = 0.8f,
+                            parameterId = 6001,
+                            state = state,
+                            onStateChange = onStateChange,
+                            nativeLib = nativeLib,
+                            knobSize = 40.dp,
+                            overrideValue = state.masterVolume,
+                            overrideColor = purple,
+                            onValueChangeOverride = { v ->
+                                nativeLib.setMasterVolume(v)
+                                onStateChange(state.copy(masterVolume = v, focusedValue = "MASTER VOL: ${(v * 100).toInt()}%"))
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                         val bpm = state.tempo
+                         Knob(
+                            label = "TEMPO",
+                            initialValue = 0.5f, 
+                            parameterId = 6002,
+                            state = state,
+                            onStateChange = onStateChange,
+                            nativeLib = nativeLib,
+                            knobSize = 40.dp,
+                            overrideValue = (bpm - 40) / 260.0f, // 40-300 range
+                            overrideColor = purple,
+                            onValueChangeOverride = { v ->
+                                val newBpm = 40 + (v * 260)
+                                nativeLib.setTempo(newBpm)
+                                onStateChange(state.copy(tempo = newBpm, focusedValue = "TEMPO: ${newBpm.toInt()}"))
+                            },
+                            valueFormatter = { v -> "${(40 + v * 260).toInt()}" }
+                        )
+                    }
+                }
+            }
+            item {
                 val hotPink = Color(0xFFFF69B4)
                 Pedal("COMPRESSOR", hotPink, state, 8, onStateChange, nativeLib) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -638,7 +706,7 @@ fun SidechainSelectorDialog(
                 .fillMaxHeight(0.8f),
             shape = RoundedCornerShape(16.dp),
             color = Color(0xFF222222),
-            border = BorderStroke(1.dp, Color.Gray)
+            border = BorderStroke(1.dp, Color.LightGray)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -664,7 +732,7 @@ fun SidechainSelectorDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
-                                    .border(1.dp, if (isSelected || (state.sidechainSourceTrack == index && isDrum)) Color.Cyan else Color.Gray, RoundedCornerShape(4.dp))
+                                    .border(1.dp, if (isSelected || (state.sidechainSourceTrack == index && isDrum)) Color.Cyan else Color.LightGray, RoundedCornerShape(4.dp))
                                     .padding(8.dp)
                             ) {
                                 Text(
@@ -725,7 +793,7 @@ fun SidechainSelectorDialog(
                             val thumbY = scrollRatio * (viewportH - thumbHeight)
                             
                             drawRoundRect(
-                                color = Color.Gray.copy(alpha = 0.3f),
+                                color = Color.LightGray.copy(alpha = 0.3f),
                                 size = size,
                                 cornerRadius = CornerRadius(3f, 3f)
                             )

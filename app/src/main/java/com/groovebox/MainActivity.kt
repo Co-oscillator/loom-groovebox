@@ -1412,15 +1412,15 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
     val latestOnStateChange by rememberUpdatedState(onStateChange)
 
     val isWideScreen = (LocalConfiguration.current.screenWidthDp.toFloat() / LocalConfiguration.current.screenHeightDp.toFloat()) > 1.7f
-    val spacing = if (isWideScreen) 4.dp else 8.dp
+    val spacing = if (isWideScreen) 4.dp else 4.dp // Reduced vertical padding
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 2.dp, vertical = spacing),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = if (isWideScreen) Arrangement.spacedBy(4.dp) else Arrangement.spacedBy(16.dp)
+        verticalArrangement = if (isWideScreen) Arrangement.spacedBy(4.dp) else Arrangement.spacedBy(4.dp) // Reduced from 16.dp to 4.dp (75% reduction)
     ) {
         // Cluster 1: BPM and Swing
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (isWideScreen) 4.dp else 8.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (isWideScreen) 4.dp else 2.dp)) { // Reduced from 8.dp to 2.dp
             Knob("BPM", (latestState.tempo - 12f) / 228f, -1, latestState, latestOnStateChange, nativeLib, knobSize = if (isWideScreen) 40.dp else 56.dp, onValueChangeOverride = {
                 val newBpm = 12f + (it * 228f)
                 latestOnStateChange(latestState.copy(tempo = newBpm))
@@ -1446,17 +1446,21 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                 colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                 shape = RoundedCornerShape(4.dp)
             ) {
-                Text("TAP", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = Color.White)
+                Text("Tap${latestState.tempo.toInt()}", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = Color.White)
             }
-            Text("${latestState.tempo.toInt()}", style = MaterialTheme.typography.labelSmall, color = Color.White)
+            // Removed redundant BPM Text
             
-            Spacer(modifier = Modifier.height(2.dp))
+            // Removed Spacer
             
             Knob("SWNG", latestState.swing, -1, latestState, latestOnStateChange, nativeLib, knobSize = if (isWideScreen) 40.dp else 56.dp, onValueChangeOverride = {
                 latestOnStateChange(latestState.copy(swing = it))
                 nativeLib.setSwing(it)
             })
             if (!isWideScreen) Text("${(latestState.swing * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
+
+            // Removed Spacer
+
+
         }
 
         Divider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 8.dp))
@@ -1540,58 +1544,61 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
 
         Divider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 4.dp))
 
-        // Cluster 4: REV, PING-PONG, RND (Vertical Stack)
+        // Cluster 4: Playback Order (Consolidated)
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally, 
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
             modifier = Modifier.padding(bottom = 2.dp)
         ) {
-            val buttonModifier = Modifier.size(46.dp, 30.dp)
+            val buttonModifier = Modifier.size(if (isWideScreen) 34.dp else 46.dp, 30.dp)
             val buttonShape = RoundedCornerShape(8.dp)
-            val unselectedColor = Color.DarkGray.copy(alpha = 0.6f)
-
-            // REVERSE
+            
+            // Determine current state for display
+            val (label, color) = when {
+                latestState.isRandomOrder -> "RND" to Color.Magenta
+                latestState.playbackDirection == 2 -> "PNG" to Color.Cyan
+                latestState.playbackDirection == 1 -> "REV" to Color.Red
+                else -> "REG" to Color.Gray
+            }
+            
             Button(
-                onClick = { 
+                onClick = {
                     val current = latestState
-                    val nextDir = if (current.playbackDirection == 1) 0 else 1
-                    latestOnStateChange(current.copy(playbackDirection = nextDir))
-                    nativeLib.setPlaybackDirection(current.selectedTrackIndex, nextDir)
+                    // Cycle: REG -> REV -> PNG -> RND -> REG
+                    if (!current.isRandomOrder) {
+                        when (current.playbackDirection) {
+                            0 -> { // REG -> REV
+                                latestOnStateChange(current.copy(playbackDirection = 1))
+                                nativeLib.setPlaybackDirection(current.selectedTrackIndex, 1)
+                            }
+                            1 -> { // REV -> PNG
+                                latestOnStateChange(current.copy(playbackDirection = 2))
+                                nativeLib.setPlaybackDirection(current.selectedTrackIndex, 2)
+                            }
+                            2 -> { // PNG -> RND
+                                latestOnStateChange(current.copy(playbackDirection = 0, isRandomOrder = true))
+                                nativeLib.setPlaybackDirection(current.selectedTrackIndex, 0)
+                                nativeLib.setIsRandomOrder(current.selectedTrackIndex, true)
+                            }
+                        }
+                    } else {
+                        // RND -> REG
+                        latestOnStateChange(current.copy(isRandomOrder = false, playbackDirection = 0))
+                        nativeLib.setIsRandomOrder(current.selectedTrackIndex, false)
+                        nativeLib.setPlaybackDirection(current.selectedTrackIndex, 0)
+                    }
                 },
                 modifier = buttonModifier,
                 contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = if (latestState.playbackDirection == 1) Color.Red else unselectedColor),
+                colors = ButtonDefaults.buttonColors(containerColor = color),
                 shape = buttonShape
-            ) { Text("REV", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White) }
-
-            // PING-PONG
-            Button(
-                onClick = { 
-                    val current = latestState
-                    val nextDir = if (current.playbackDirection == 2) 0 else 2
-                    latestOnStateChange(current.copy(playbackDirection = nextDir))
-                    nativeLib.setPlaybackDirection(current.selectedTrackIndex, nextDir)
-                },
-                modifier = buttonModifier,
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = if (latestState.playbackDirection == 2) Color.Cyan else unselectedColor),
-                shape = buttonShape
-            ) { Text("PNG", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White) }
-
-            // RANDOM
-            Button(
-                onClick = { 
-                    val current = latestState
-                    val nextRand = !current.isRandomOrder
-                    latestOnStateChange(current.copy(isRandomOrder = nextRand))
-                    nativeLib.setIsRandomOrder(current.selectedTrackIndex, nextRand)
-                },
-                modifier = buttonModifier,
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = if (latestState.isRandomOrder) Color.Magenta else unselectedColor),
-                shape = buttonShape
-            ) { Text("RND", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White) }
+            ) { 
+                Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1) 
+            }
+            
+            Text("ORDER", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 8.sp)
         }
+
     }
 }
 

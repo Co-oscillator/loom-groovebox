@@ -41,7 +41,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setPlaying(
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
     JNIEnv *env, jobject thiz, jint track_index, jint step_index,
     jboolean active, jintArray notes, jfloat velocity, jint ratchet,
-    jboolean punch, jfloat probability, jfloat gate, jboolean is_skipped) {
+    jboolean punch, jfloat probability, jfloat gate, jboolean is_skipped,
+    jfloat sub_step_offset) {
   if (engine) {
     std::vector<int> noteVec;
     bool hasNotes = false;
@@ -65,6 +66,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
     float safeGate = std::max(0.0f, std::min(8.0f, gate));
     float safeProb = std::max(0.0f, std::min(1.0f, probability));
     int safeRatchet = std::max(1, std::min(16, ratchet));
+    float safeSubStep = std::max(0.0f, std::min(1.0f, sub_step_offset));
 
     // Clamp notes to MIDI range 0-127
     for (int &n : noteVec) {
@@ -75,7 +77,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
     }
 
     engine->setStep(track_index, step_index, safeActive, noteVec, safeVelocity,
-                    safeRatchet, punch, safeProb, safeGate, is_skipped);
+                    safeRatchet, punch, safeProb, safeGate, is_skipped,
+                    safeSubStep);
   }
 }
 
@@ -147,6 +150,12 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_groovebox_NativeLib_setSwing(JNIEnv *env, jobject thiz, jfloat swing) {
   if (engine)
     engine->setSwing(swing);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setTrackHumanize(
+    JNIEnv *env, jobject thiz, jint track_index, jfloat amount) {
+  if (engine)
+    engine->setTrackHumanize(track_index, amount);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -279,10 +288,16 @@ Java_com_groovebox_NativeLib_panic(JNIEnv *env, jobject thiz) {
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_groovebox_NativeLib_getGranularPlayheads(JNIEnv *env, jobject thiz,
                                                   jint track_index) {
-  const int MAX_GRAINS = 32;
+  const int MAX_GRAINS = 64;
   jfloatArray result = env->NewFloatArray(MAX_GRAINS * 2);
   if (engine) {
     GranularEngine::PlayheadInfo info[MAX_GRAINS];
+    // Initialize with -1.0f (inactive) to avoid garbage data
+    for (int i = 0; i < MAX_GRAINS; ++i) {
+      info[i].pos = -1.0f;
+      info[i].vol = 0.0f;
+    }
+
     engine->getGranularPlayheads(track_index, info, MAX_GRAINS);
 
     jfloat buffer[MAX_GRAINS * 2];
@@ -488,6 +503,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setMasterVolume(
     JNIEnv *env, jobject thiz, jfloat volume) {
   if (engine) {
     engine->setMasterVolume(volume);
+  }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_setGlobalTranspose(JNIEnv *env, jobject thiz,
+                                                jint semitones) {
+  if (engine) {
+    engine->setGlobalTranspose(semitones);
   }
 }
 

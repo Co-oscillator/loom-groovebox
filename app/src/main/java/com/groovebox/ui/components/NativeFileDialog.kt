@@ -139,7 +139,7 @@ fun NativeFileDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val loomFolders = listOf("samples", "granular", "wavetables", "recordings", "sessions", "soundfonts")
+            val loomFolders = listOf("samples", "granular", "wavetables", "recordings", "sessions", "soundfonts", "presets", "sequences")
             Card(
                 modifier = Modifier
                     .widthIn(max = 600.dp)
@@ -176,20 +176,30 @@ fun NativeFileDialog(
                     loomFolders.forEach { folderName ->
                         val rootDir = PersistenceManager.getLoomFolder(context)
                         val folderFile = File(rootDir, folderName).apply { if (!exists()) mkdirs() }
-                        val isSelected = currentDir.absolutePath == folderFile.absolutePath
+                        // Special handling for Presets/EngineType subfolders
+                        // If currentDir is .../Presets/Subtractive, we still want "presets" to be selected
+                        val isSelected = currentDir.absolutePath.contains("/$folderName")
                         
                         Surface(
                             onClick = { 
-                                currentDir = folderFile
+                                currentDir = if (folderName == "presets") {
+                                    // If we have a track index/state, try to go to the specific engine folder
+                                    if (trackIndex != -1 && state != null) {
+                                        File(folderFile, state.tracks[trackIndex].engineType.name).apply { if (!exists()) mkdirs() }
+                                    } else folderFile
+                                } else folderFile
+                                
                                 currentExtensions = when(folderName) {
                                     "wavetables" -> listOf("wav", "wt")
                                     "samples", "granular", "recordings" -> listOf("wav")
                                     "sessions" -> listOf("gbx")
-                                "soundfonts" -> listOf("sf2", "sf3", "SF2", "SF3")
-                                else -> listOf("wav")
-                            }
-                            refreshKey++ 
-                        },
+                                    "soundfonts" -> listOf("sf2", "sf3", "SF2", "SF3")
+                                    "presets" -> listOf("gbp")
+                                    "sequences" -> listOf("gbs")
+                                    else -> listOf("wav")
+                                }
+                                refreshKey++ 
+                            },
                             color = if (isSelected) Color.White.copy(alpha = 0.1f) else Color.Transparent,
                             border = BorderStroke(1.dp, if (isSelected) Color.White else Color.Gray.copy(alpha = 0.3f)),
                             shape = RoundedCornerShape(4.dp)

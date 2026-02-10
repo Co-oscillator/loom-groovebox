@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.groovebox.ui.theme.getEngineColor
 import com.groovebox.ui.components.Knob
 import com.groovebox.ui.components.EngineIcon
+import com.groovebox.ui.components.EngineIcon
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.filled.Close
 
@@ -232,10 +233,10 @@ fun PlayingPad(
             EngineType.ANALOG_DRUM -> {
                 val drumMap = mapOf(
                     60 to "Kick",
-                    62 to "Snare",
-                    64 to "Cymbal",
-                    66 to "Hat",
-                    67 to "Open"
+                    61 to "Snare",
+                    62 to "Cymb",
+                    63 to "Hat C",
+                    64 to "Hat O"
                 )
                 drumMap[note] ?: "Pad $padIndex"
             }
@@ -458,10 +459,10 @@ fun PadGrid(
                                 if (localIdx < 5) {
                                     when(localIdx) {
                                         0 -> 60 // Kick
-                                        1 -> 62 // Snare
-                                        2 -> 64 // Cymbal
-                                        3 -> 66 // Hat Closed
-                                        4 -> 67 // Hat Open
+                                        1 -> 61 // Snare
+                                        2 -> 62 // "Cymbal" (Clap engine voice, matches Param Screen)
+                                        3 -> 63 // Hat Closed
+                                        4 -> 64 // Hat Open
                                         else -> -1
                                     }
                                 } else -1
@@ -1369,7 +1370,11 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 val isWideScreen = screenRatio > 1.8f && screenConfig.screenHeightDp < 500
                 val spacing = 6.dp
                 
-                if (isWideScreen) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (isWideScreen) {
                     // --- PHONE LAYOUT (Side Column) ---
                     val controlsWidth = 90.dp
                     val padSize = minOf(
@@ -1587,8 +1592,8 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 } else {
                     // --- TABLET LAYOUT (Top Row Controls) ---
                     val padSize = minOf(
-                        (maxWidth - (spacing * (cols - 1))) / cols,
-                        (maxHeight - (spacing * (rows - 1)) - 65.dp) / rows,
+                        (currentMaxWidth - (spacing * (cols - 1))) / cols,
+                        (currentMaxHeight - (spacing * (rows - 1)) - 65.dp) / rows,
                         135.dp
                     ).coerceAtLeast(40.dp)
                     val gridWidth = (padSize * cols) + (spacing * (cols - 1))
@@ -1724,6 +1729,8 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
+            } // End of weighted Box
+            } // End of Column (PlayheadStrip wrapper)
             }
         }
     }

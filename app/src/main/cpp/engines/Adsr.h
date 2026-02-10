@@ -40,6 +40,11 @@ public:
     mValue = 0.0f;
   }
 
+  void forceSustain() {
+    mStage = AdsrStage::Sustain;
+    mValue = 1.0f;
+  }
+
   float nextValue() {
     switch (mStage) {
     case AdsrStage::Idle:

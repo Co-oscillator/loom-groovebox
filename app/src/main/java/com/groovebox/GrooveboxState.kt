@@ -35,6 +35,7 @@ data class TrackState(
     val id: Int,
     val volume: Float = 0.7f,
     val pan: Float = 0.5f,
+    val humanize: Float = 0.0f,
     val engineType: EngineType = EngineType.SUBTRACTIVE,
     val isActive: Boolean = true,
     val isMuted: Boolean = false,
@@ -112,6 +113,7 @@ data class StepState(
     val punch: Boolean = false, // 1.1x volume + overdrive
     val probability: Float = 1.0f,
     val gate: Float = 1.0f, // 0.0 to 1.0 (1/128 to 1 full step)
+    val subStepOffset: Float = 0.0f, // 0.0 to 1.0 (Microtiming)
     val parameterLocks: Map<Int, Float> = emptyMap() // parameterId -> value (max 4)
 ) : java.io.Serializable {
     companion object {
@@ -203,6 +205,7 @@ data class GrooveboxState(
     val currentStep: Int = 0,
     val selectedTab: Int = 0,
     val masterVolume: Float = 0.8f,
+    val globalTranspose: Int = 0,
     val globalParameters: Map<Int, Float> = emptyMap(), 
     val sidechainSourceTrack: Int = -1,
     val sidechainSourceDrumIdx: Int = 0,
@@ -230,6 +233,7 @@ data class GrooveboxState(
 
     // Transport & Sequencing Logic
     val swing: Float = 0f, // -0.23f to +0.23f
+    // humanize moved to TrackState
     val playbackDirection: Int = 0, // 0=Forward, 1=Reverse, 2=Ping-Pong
     val isRandomOrder: Boolean = false,
     val isJumpMode: Boolean = false,

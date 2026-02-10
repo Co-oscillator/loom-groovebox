@@ -32,36 +32,24 @@ public:
       return input;
 
     float activeGain = 1.0f;
+    applySlice(activeGain, mRate1, mActive1, sampleCount, samplesPerStep);
+    applySlice(activeGain, mRate2, mActive2, sampleCount, samplesPerStep);
+    applySlice(activeGain, mRate3, mActive3, sampleCount, samplesPerStep);
 
-    // Slicer 1
-    if (mActive1 && mRate1 > 0) {
-      double cycle = samplesPerStep / (double)mRate1;
-      double pos = std::fmod(sampleCount, cycle) / cycle;
-      if (pos > 0.5)
-        activeGain *= (1.0f - mDepth);
-    }
-
-    // Slicer 2
-    if (mActive2 && mRate2 > 0) {
-      double cycle = samplesPerStep / (double)mRate2;
-      double pos = std::fmod(sampleCount, cycle) / cycle;
-      if (pos > 0.5)
-        activeGain *= (1.0f - mDepth);
-    }
-
-    // Slicer 3
-    if (mActive3 && mRate3 > 0) {
-      double cycle = samplesPerStep / (double)mRate3;
-      double pos = std::fmod(sampleCount, cycle) / cycle;
-      if (pos > 0.5)
-        activeGain *= (1.0f - mDepth);
-    }
-
-    // Standard Amplitude Modulation: return input * gain
     return input * activeGain;
   }
 
 private:
+  void applySlice(float &gain, float rate, bool active, double sampleCount,
+                  double samplesPerStep) {
+    if (active && rate > 0) {
+      double cycle = samplesPerStep / (double)rate;
+      double pos = std::fmod(sampleCount, cycle) / cycle;
+      if (pos > 0.5)
+        gain *= (1.0f - mDepth);
+    }
+  }
+
   float mRate1 = 1.0f;
   float mRate2 = 1.0f;
   float mRate3 = 1.0f;

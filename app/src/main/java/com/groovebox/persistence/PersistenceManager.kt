@@ -7,6 +7,7 @@ import com.groovebox.StripRouting
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import com.groovebox.StepState
 
 import java.io.*
 
@@ -284,4 +285,171 @@ object PersistenceManager {
             e.printStackTrace()
         }
     }
+    fun saveTrackPreset(context: Context, trackState: com.groovebox.TrackState, name: String) {
+        try {
+            val engineDir = File(File(getLoomFolder(context), "Presets"), trackState.engineType.name)
+            if (!engineDir.exists()) engineDir.mkdirs()
+            
+            val safeName = if (name.endsWith(".gbp")) name else "$name.gbp"
+            val file = File(engineDir, safeName)
+            ObjectOutputStream(FileOutputStream(file)).use { it.writeObject(trackState) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun loadTrackPreset(context: Context, engineType: EngineType, name: String): com.groovebox.TrackState? {
+        try {
+            val engineDir = File(File(getLoomFolder(context), "Presets"), engineType.name)
+            val file = File(engineDir, if (name.endsWith(".gbp")) name else "$name.gbp")
+            
+            if (!file.exists()) return null
+            ObjectInputStream(FileInputStream(file)).use { return it.readObject() as? com.groovebox.TrackState }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
+    }
+
+    fun listTrackPresets(context: Context, engineType: EngineType): List<String> {
+        val engineDir = File(File(getLoomFolder(context), "Presets"), engineType.name)
+        if (!engineDir.exists()) return emptyList()
+        return engineDir.listFiles { _, name -> name.endsWith(".gbp") }?.map { it.name.removeSuffix(".gbp") } ?: emptyList()
+    }
+
+    fun saveSequence(context: Context, trackState: com.groovebox.TrackState, name: String) {
+        try {
+            // Save as a partial TrackState or a specialized Sequence object? 
+            // For simplicity, we save the whole TrackState but lazily only load what we need.
+            val seqDir = File(getLoomFolder(context), "Sequences")
+            if (!seqDir.exists()) seqDir.mkdirs()
+            
+            val safeName = if (name.endsWith(".gbs")) name else "$name.gbs"
+            val file = File(seqDir, safeName)
+            ObjectOutputStream(FileOutputStream(file)).use { it.writeObject(trackState) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun listSequences(context: Context): List<String> {
+        val seqDir = File(getLoomFolder(context), "Sequences")
+        if (!seqDir.exists()) return emptyList()
+        return seqDir.listFiles { _, name -> name.endsWith(".gbs") }?.map { it.name.removeSuffix(".gbs") } ?: emptyList()
+    }
+
+    fun loadSequence(context: Context, targetTrack: com.groovebox.TrackState, name: String): com.groovebox.TrackState? {
+        try {
+            val seqDir = File(getLoomFolder(context), "Sequences")
+            val file = File(seqDir, if (name.endsWith(".gbs")) name else "$name.gbs")
+            if (!file.exists()) return null
+            
+            val sourceTrack = ObjectInputStream(FileInputStream(file)).use { it.readObject() as? com.groovebox.TrackState } ?: return null
+            
+            // Compatibility Check
+            // If engines match, we can keep everything (including P-Locks)
+            // If incompatible, we keep Steps (Notes) but strip P-locks
+            
+            val isCompatible = targetTrack.engineType == sourceTrack.engineType
+            
+            // If completely different types (e.g. Drum vs Synth), we might need to map notes?
+            // For now, raw copy of steps is usually "safe" enough, just might sound weird.
+            // But P-Locks MUST be stripped if incompatible to avoid crashing/weirdness.
+            
+            // Deep copy / Transfer logic
+            return if (isCompatible) {
+                targetTrack.copy(
+                    steps = sourceTrack.steps,
+                    drumSteps = sourceTrack.drumSteps,
+                    numPages = sourceTrack.numPages,
+                    stepsPerPage = sourceTrack.stepsPerPage,
+                    arpConfig = sourceTrack.arpConfig
+                )
+            } else {
+                 // Check if loading Melodic -> Drum (FM_DRUM)
+                 if (targetTrack.engineType == EngineType.FM_DRUM && sourceTrack.engineType != EngineType.FM_DRUM) {
+                      // Map Melodic Steps to Drum Lanes
+                      // Smart Mapping: Map notes 60-67 to Lanes 0-7. Else map to Lane 0 (Kick).
+                      // Note: TrackState.drumSteps is List<List<StepState>> (8 lanes x 64 steps) usually
+                      val newDrumSteps = MutableList(8) { MutableList(64) { StepState() } }
+                      
+                      sourceTrack.steps.forEachIndexed { i, step ->
+                          if (step.active) {
+                              if (step.notes.isNotEmpty()) {
+                                  step.notes.forEach { note ->
+                                      val lane = if (note in 60..67) note - 60 else 0
+                                      // Copy step properties but strip locks/notes
+                                      newDrumSteps[lane][i] = step.copy(notes = emptyList(), parameterLocks = emptyMap())
+                                  }
+                              } else {
+                                  // Active but no notes? Map to Kick
+                                  newDrumSteps[0][i] = step.copy(notes = emptyList(), parameterLocks = emptyMap())
+                              }
+                          }
+                      }
+                      
+                      return targetTrack.copy(
+                          drumSteps = newDrumSteps, // We must cast/convert to Immutable List?
+                          steps = List(64) { StepState() },
+                          numPages = sourceTrack.numPages,
+                          stepsPerPage = sourceTrack.stepsPerPage,
+                          arpConfig = sourceTrack.arpConfig
+                      )
+                 }
+                 // Check if loading Drum -> Melodic
+                 else if (sourceTrack.engineType == EngineType.FM_DRUM && targetTrack.engineType != EngineType.FM_DRUM) {
+                      // Flatten Drum Lanes to Single Melodic Sequence
+                      val newSteps = MutableList(64) { StepState() }
+                      for (i in 0 until 64) {
+                          val activeNotes = mutableListOf<Int>()
+                          var maxVel = 0f
+                          
+                          // Check all lanes
+                          // sourceTrack.drumSteps might be empty if not initialized? Safe check.
+                          if (sourceTrack.drumSteps.isNotEmpty()) {
+                              sourceTrack.drumSteps.forEachIndexed { lane, laneSteps ->
+                                  val step = laneSteps.getOrNull(i)
+                                  if (step?.active == true) {
+                                      activeNotes.add(60 + lane)
+                                      if (step.velocity > maxVel) maxVel = step.velocity
+                                  }
+                              }
+                          }
+                          
+                          if (activeNotes.isNotEmpty()) {
+                              newSteps[i] = StepState(
+                                  active = true, 
+                                  notes = activeNotes, 
+                                  velocity = if (maxVel > 0f) maxVel else 0.8f,
+                                  isSkipped = false // Simplify
+                              )
+                          }
+                      }
+                      
+                      return targetTrack.copy(
+                          steps = newSteps,
+                          drumSteps = List(16) { List(64) { StepState() } }, // Clear drums
+                          numPages = sourceTrack.numPages,
+                          stepsPerPage = sourceTrack.stepsPerPage,
+                          arpConfig = sourceTrack.arpConfig
+                      )
+                 }
+
+                 // Default Fallback: Strip P-Locks from Steps
+                 val cleanSteps = sourceTrack.steps.map { s -> s.copy(parameterLocks = emptyMap()) }
+                 val cleanDrumSteps = sourceTrack.drumSteps.map { ds -> ds.map { s -> s.copy(parameterLocks = emptyMap()) } }
+                 
+                 return targetTrack.copy(
+                    steps = cleanSteps,
+                    drumSteps = cleanDrumSteps,
+                    numPages = sourceTrack.numPages,
+                    stepsPerPage = sourceTrack.stepsPerPage,
+                    arpConfig = sourceTrack.arpConfig
+                 )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
+        }
 }

@@ -67,7 +67,8 @@ public:
   void setStep(int trackIndex, int stepIndex, bool active,
                const std::vector<int> &notes, float velocity = 0.8f,
                int ratchet = 1, bool punch = false, float probability = 1.0f,
-               float gate = 1.0f, bool isSkipped = false);
+               float gate = 1.0f, bool isSkipped = false,
+               float subStepOffset = 0.0f);
   void setSequencerConfig(int trackIndex, int numPages, int stepsPerPage);
   // New helper for modulation without affecting UI state
   void updateEngineParameter(int trackIndex, int parameterId, float value,
@@ -85,6 +86,7 @@ public:
                     bool immediate = false);
   void setParameterPreview(int trackIndex, int parameterId, float value);
   void setSwing(float swing);
+  void setTrackHumanize(int trackIndex, float amount);
   void setPatternLength(int length);
   void setPlaybackDirection(int trackIndex, int direction);
   void setIsRandomOrder(int trackIndex, bool isRandom);
@@ -165,6 +167,9 @@ public:
   void setMacroValue(int macroIndex, float value);
   void setFxChain(int sourceFx, int destFx);
 
+  // Global Transpose
+  void setGlobalTranspose(int semitones);
+
   // MIDI Mode
   struct MidiMessage {
     int type;    // 0x90 (NoteOn), 0x80 (NoteOff)
@@ -200,7 +205,8 @@ private:
       SET_STEP,
       SET_ARP_RATE,
       SET_SWING,
-      SET_SLICES
+      SET_SLICES,
+      SET_TRACK_HUMANIZE
     };
     Type type;
     int trackIndex;
@@ -219,6 +225,7 @@ private:
     std::vector<int> sliceEnds;   // For SET_SLICES
     int extraData;                // extra
     bool immediate;               // For P-Locks (Snap)
+    float subStepOffset;          // For SET_STEP (Microtiming)
   };
   std::vector<AudioCommand> mCommandQueue;
   std::mutex mCommandLock;
@@ -234,7 +241,9 @@ private:
     float volume = 0.8f;
     float smoothedVolume = 0.8f;
     float pan = 0.5f;
+
     float smoothedPan = 0.5f;
+    float humanize = 0.0f;
     int engineType = 0; // 0=Subtractive, 1=FM, 2=Sampler, etc.
     int selectedFmDrumInstrument = 0;
     SubtractiveEngine subtractiveEngine;
@@ -334,6 +343,7 @@ private:
   double mSamplesPerStep = 0;
   int mGlobalStepIndex = 0;
   int mPatternLength = 16;
+  float mTempo = 120.0f;
   float mSwing = 0.0f;
   long mStartupFrames = 10000; // Wait ~200ms at 48k
   double mSampleRate = 44100.0;
@@ -405,6 +415,7 @@ public:
   uint32_t mInputReadPtr = 0;
   std::atomic<int> mGlobalVoiceCount{0};
   std::string mAppDataDir = "";
+  int mGlobalTranspose = 0;
 };
 
 #endif // AUDIO_ENGINE_H

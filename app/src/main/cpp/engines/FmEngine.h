@@ -164,6 +164,43 @@ public:
   void setFeedback(float fb) { mFeedback = fb; }
   void setPitchSweep(float sweep) { mPitchSweepAmount = sweep; }
 
+  // Getters for UI Sync
+  int getAlgorithm() const { return mAlgorithm; }
+  float getCutoff() const { return mCutoff; }
+  float getResonance() const { return mResonance; }
+  int getCarrierMask() const { return mCarrierMask; }
+  float getFeedback() const { return mFeedback; }
+  int getActiveMask() const { return mActiveMask; }
+  int getFilterMode() const { return mFilterMode; }
+  float getBrightness() const {
+    return mBrightness * 0.5f;
+  } // Normalized back from *2
+  float getDetune() const { return mDetune; }
+  float getFeedbackDrive() const { return mFeedbackDrive; }
+
+  // Op Getters
+  float getOpRatio(int op) const {
+    return (op >= 0 && op < 6) ? mOpRatios[op] : 1.0f;
+  }
+  float getOpAttack(int op) const {
+    return (op >= 0 && op < 6) ? mOpAttack[op] : 0.0f;
+  }
+  float getOpDecay(int op) const {
+    return (op >= 0 && op < 6) ? mOpDecay[op] : 0.0f;
+  }
+  float getOpSustain(int op) const {
+    return (op >= 0 && op < 6) ? mOpSustain[op] : 1.0f;
+  }
+  float getOpRelease(int op) const {
+    return (op >= 0 && op < 6) ? mOpRelease[op] : 0.0f;
+  }
+
+  // Amp Env Getters
+  float getAttack() const { return mAttack; }
+  float getDecay() const { return mDecay; }
+  float getSustain() const { return mSustain; }
+  float getRelease() const { return mRelease; }
+
   void triggerNote(int note, int velocity) {
     int idx = -1;
     for (int i = 0; i < 16; ++i)

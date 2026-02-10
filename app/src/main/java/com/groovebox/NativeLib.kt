@@ -17,12 +17,13 @@ class NativeLib {
     external fun setPlaying(playing: Boolean)
     external fun triggerNote(trackIndex: Int, note: Int, velocity: Int)
     external fun releaseNote(trackIndex: Int, note: Int)
-    external fun setStep(trackIndex: Int, stepIndex: Int, active: Boolean, notes: IntArray, velocity: Float, ratchet: Int, punch: Boolean, probability: Float, gate: Float, isSkipped: Boolean)
+    external fun setStep(trackIndex: Int, stepIndex: Int, active: Boolean, notes: IntArray, velocity: Float, ratchet: Int, punch: Boolean, probability: Float, gate: Float, isSkipped: Boolean, subStepOffset: Float = 0.0f)
     external fun setSequencerConfig(trackIndex: Int, numPages: Int, stepsPerPage: Int)
     external fun setRouting(destTrack: Int, sourceTrack: Int, source: Int, dest: Int, amount: Float, destParamId: Int = -1)
     external fun setParameter(trackIndex: Int, parameterId: Int, value: Float)
     external fun setParameterPreview(trackIndex: Int, parameterId: Int, value: Float)
     external fun setSwing(swing: Float)
+    external fun setTrackHumanize(trackIndex: Int, amount: Float)
     external fun setPlaybackDirection(trackIndex: Int, direction: Int) // 0: Forward, 1: Backward
     external fun setIsRandomOrder(trackIndex: Int, isRandom: Boolean)
     external fun setIsJumpMode(trackIndex: Int, isJump: Boolean)
@@ -59,6 +60,7 @@ class NativeLib {
     external fun getSlicePoints(trackIndex: Int): FloatArray
     external fun clearSequencer(trackIndex: Int)
     external fun setMasterVolume(volume: Float)
+    external fun setGlobalTranspose(semitones: Int)
     external fun panic()
     external fun getActiveNoteMask(trackIndex: Int): Int
     external fun getCpuLoad(): Float

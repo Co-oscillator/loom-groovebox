@@ -88,7 +88,8 @@ public:
   int getPresetCount() { return mTsf ? tsf_get_presetcount(mTsf) : 0; }
 
   void noteOn(int note, int velocity) {
-    if (mTsf) {
+    if (mMutex && mTsf) {
+      std::lock_guard<std::mutex> lock(*mMutex);
       if (mLastNote != -1 && mGlide > 0.001f) {
         mCurrentPitchWheel = (float)(mLastNote - note);
       } else {
@@ -101,8 +102,10 @@ public:
   }
 
   void noteOff(int note) {
-    if (mTsf)
+    if (mMutex && mTsf) {
+      std::lock_guard<std::mutex> lock(*mMutex);
       tsf_channel_note_off(mTsf, 0, note);
+    }
   }
 
   void render(float *left, float *right, int numFrames) {
@@ -137,47 +140,53 @@ public:
   }
 
   void allNotesOff() {
-    if (mTsf)
+    if (mMutex && mTsf) {
+      std::lock_guard<std::mutex> lock(*mMutex);
       tsf_note_off_all(mTsf);
+    }
   }
 
   void setParameter(int id, float value) {
-    if (id == 355) {
-      setGlide(value);
-    } else if (id == 0) { // Level -> CC 7 (Volume)
-      midiControl(7, (int)(value * 127));
-    } else if (id == 6) { // Detune -> RPN Fine Tune
-      int val14 = (int)(value * 16383.0f);
-      int msb = (val14 >> 7) & 0x7F;
-      int lsb = val14 & 0x7F;
-      // RPN 00 01 (Fine Tuning)
-      midiControl(101, 0);
-      midiControl(100, 1);
-      midiControl(6, msb);
-      midiControl(38, lsb);
-      // Reset RPN
-      midiControl(101, 127);
-      midiControl(100, 127);
-    } else if (id == 7) { // Rate -> CC 76 (Vibrato Rate)
-      midiControl(76, (int)(value * 127));
-    } else if (id == 8) { // Depth -> CC 1 (Mod Wheel)
-      midiControl(1, (int)(value * 127));
-    } else if (id == 100) { // Attack -> CC 73
-      midiControl(73, (int)(value * 127));
-    } else if (id == 101) { // Decay -> CC 75
-      midiControl(75, (int)(value * 127));
-    } else if (id == 103) { // Release -> CC 72
-      midiControl(72, (int)(value * 127));
-    } else if (id == 112 || id == 1) { // Cutoff -> CC 74 (Brightness)
-      midiControl(74, (int)(value * 127));
-    } else if (id == 113 || id == 2) { // Resonance -> CC 71 (Harmonic Content)
-      midiControl(71, (int)(value * 127));
-    } else if (id == 150) { // Reverb Send -> CC 91
-      midiControl(91, (int)(value * 127));
-    } else if (id == 151) { // Chorus Send -> CC 93
-      midiControl(93, (int)(value * 127));
-    } else if (id == 152) { // Pan -> CC 10
-      midiControl(10, (int)(value * 127));
+    if (mMutex && mTsf) {
+      std::lock_guard<std::mutex> lock(*mMutex);
+      if (id == 355) {
+        setGlide(value);
+      } else if (id == 0) { // Level -> CC 7 (Volume)
+        midiControl(7, (int)(value * 127));
+      } else if (id == 6) { // Detune -> RPN Fine Tune
+        int val14 = (int)(value * 16383.0f);
+        int msb = (val14 >> 7) & 0x7F;
+        int lsb = val14 & 0x7F;
+        // RPN 00 01 (Fine Tuning)
+        midiControl(101, 0);
+        midiControl(100, 1);
+        midiControl(6, msb);
+        midiControl(38, lsb);
+        // Reset RPN
+        midiControl(101, 127);
+        midiControl(100, 127);
+      } else if (id == 7) { // Rate -> CC 76 (Vibrato Rate)
+        midiControl(76, (int)(value * 127));
+      } else if (id == 8) { // Depth -> CC 1 (Mod Wheel)
+        midiControl(1, (int)(value * 127));
+      } else if (id == 100) { // Attack -> CC 73
+        midiControl(73, (int)(value * 127));
+      } else if (id == 101) { // Decay -> CC 75
+        midiControl(75, (int)(value * 127));
+      } else if (id == 103) { // Release -> CC 72
+        midiControl(72, (int)(value * 127));
+      } else if (id == 112 || id == 1) { // Cutoff -> CC 74 (Brightness)
+        midiControl(74, (int)(value * 127));
+      } else if (id == 113 ||
+                 id == 2) { // Resonance -> CC 71 (Harmonic Content)
+        midiControl(71, (int)(value * 127));
+      } else if (id == 150) { // Reverb Send -> CC 91
+        midiControl(91, (int)(value * 127));
+      } else if (id == 151) { // Chorus Send -> CC 93
+        midiControl(93, (int)(value * 127));
+      } else if (id == 152) { // Pan -> CC 10
+        midiControl(10, (int)(value * 127));
+      }
     }
   }
 

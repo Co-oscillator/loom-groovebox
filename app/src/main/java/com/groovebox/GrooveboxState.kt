@@ -22,6 +22,7 @@ data class ArpConfig(
     val randomSequence: List<Int> = emptyList(), // The 8-step random seed
     val arpRate: Float = 1.0f,
     val arpDivisionMode: Int = 0, // 0=Reg, 1=Dotted, 2=Triplet
+    val strum: Float = 0.0f, // 0.0 to 1.0 (Time Spread)
     val isChordProgEnabled: Boolean = false,
     val chordProgMood: Int = 0,
     val chordProgComplexity: Int = 0
@@ -39,6 +40,7 @@ data class TrackState(
     val engineType: EngineType = EngineType.SUBTRACTIVE,
     val isActive: Boolean = true,
     val isMuted: Boolean = false,
+    val transpose: Int = 0,
     val steps: List<StepState> = List(64) { StepState() },
     val drumSteps: List<List<StepState>> = List(16) { List(64) { StepState() } },
     val numPages: Int = 1,
@@ -96,7 +98,10 @@ data class TrackState(
         // FM Drum Gains
         205 to 0.7f, 215 to 0.7f, 225 to 0.7f, 235 to 0.7f, 
         245 to 0.7f, 255 to 0.7f, 265 to 0.7f, 275 to 0.7f
-    )
+    ),
+    val isChainEnabled: Boolean = false,
+    val songChainNames: List<String?> = List(16) { null },
+    val songChainLength: Int = 1
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L
@@ -113,7 +118,9 @@ data class StepState(
     val punch: Boolean = false, // 1.1x volume + overdrive
     val probability: Float = 1.0f,
     val gate: Float = 1.0f, // 0.0 to 1.0 (1/128 to 1 full step)
-    val subStepOffset: Float = 0.0f, // 0.0 to 1.0 (Microtiming)
+    val subStepOffset: Float = 0.0f, // 0.0 to 1.0 (Microtiming - applied to ALL notes if noteOffsets is empty)
+    val noteOffsets: List<Float> = emptyList(), // Per-note microtiming (matches notes array)
+    val noteVelocities: List<Float> = emptyList(), // Per-note velocity (matches notes array)
     val parameterLocks: Map<Int, Float> = emptyMap() // parameterId -> value (max 4)
 ) : java.io.Serializable {
     companion object {
@@ -245,6 +252,7 @@ data class GrooveboxState(
     val isRecording: Boolean = false,
     val isParameterLocking: Boolean = false,
     val isResampling: Boolean = false, 
+    val recordingSource: Int = 0, // 0=Mic, 1=Resample, 2=System
     val isRecordingSample: Boolean = false,
     val isRecordingLocked: Boolean = false,
     val recordingTrackIndex: Int = -1,
@@ -256,7 +264,7 @@ data class GrooveboxState(
     
     // Routing Screen State
     val lfos: List<LfoState> = List(6) { LfoState() },
-    val macros: List<MacroState> = List(6) { i -> MacroState(label="Macro ${i+1}") },
+    val macros: List<MacroState> = List(8) { MacroState() },
     val routingConnections: List<RoutingConnection> = emptyList(),
     val fxChain: Map<Int, Int> = emptyMap(), // Legacy map, keeping for safety but moving to slots
     val fxChainSlots: List<Int> = List(5) { -1 }, // 5 Serial Slots. -1 = Empty

@@ -16,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +71,39 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                      horizontalArrangement = Arrangement.SpaceBetween,
                      verticalAlignment = Alignment.CenterVertically
                  ) {
+                     // Clock Divider Controls (Refined v1.11.3 - Knob)
+                     Row(verticalAlignment = Alignment.CenterVertically) {
+                         Text("CLK:", color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(end = 4.dp))
+                         val divisions = listOf(0.333f, 0.5f, 0.6666f, 0.75f, 0.8f, 1.0f, 1.25f, 1.5f, 2.0f)
+                         val labels = listOf("1/3", "1/2", "2/3", "3/4", "4/5", "1x", "1.25", "1.5", "2x")
+                         
+                         // Find current index to set initial value
+                         val currentIdx = divisions.mapIndexed { idx, it -> idx to Math.abs(it - track.clockMultiplier) }
+                             .minByOrNull { it.second }?.first ?: 5 // Default to 1x (index 5)
+                             
+                         Knob(
+                             label = "",
+                             initialValue = currentIdx.toFloat() / (divisions.size - 1),
+                             parameterId = -1,
+                             state = latestState,
+                             onStateChange = latestOnStateChange,
+                             nativeLib = nativeLib,
+                             knobSize = 32.dp,
+                             onValueChangeOverride = { v ->
+                                 val idx = (v * (divisions.size - 1) + 0.5f).toInt().coerceIn(0, divisions.size - 1)
+                                 val speed = divisions[idx]
+                                 val newTracks = latestState.tracks.toMutableList()
+                                 newTracks[selectedTrackIndex] = track.copy(clockMultiplier = speed)
+                                 latestOnStateChange(latestState.copy(tracks = newTracks))
+                                 nativeLib.setClockMultiplier(selectedTrackIndex, speed)
+                             },
+                             valueFormatter = { v -> 
+                                 val idx = (v * (divisions.size - 1) + 0.5f).toInt().coerceIn(0, divisions.size - 1)
+                                 labels[idx]
+                             }
+                         )
+                     }
+                     
                      // Sequence File Management Logic
                      var showSeqLoad by remember { mutableStateOf(false) }
                      var showSeqSave by remember { mutableStateOf(false) }
@@ -109,18 +144,33 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     
                                     // SYNC TO ENGINE - CRITICAL FIX
                                     val engineType = newTrackState.engineType
+                                    
+                                    // Set Config First
+                                    nativeLib.setSequencerConfig(selectedTrackIndex, newTrackState.numPages, newTrackState.stepsPerPage)
+                                    if (selectedTrackIndex == state.selectedTrackIndex) {
+                                        nativeLib.setPatternLength(newTrackState.numPages * newTrackState.stepsPerPage)
+                                    }
+
                                     if (engineType == EngineType.FM_DRUM || engineType == EngineType.ANALOG_DRUM) {
                                          for (instIdx in 0 until 16) {
                                              val voiceSteps = newTrackState.drumSteps.getOrNull(instIdx) ?: emptyList()
                                              voiceSteps.forEachIndexed { stepIdx, s ->
-                                                 nativeLib.setStep(selectedTrackIndex, stepIdx, s.active, intArrayOf(60 + instIdx), s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped, s.subStepOffset)
+                                                 nativeLib.setStep(
+                                                    selectedTrackIndex, stepIdx, s.active, intArrayOf(60 + instIdx), 
+                                                    s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped, 
+                                                    s.subStepOffset, s.noteOffsets.toFloatArray(), s.noteVelocities.toFloatArray()
+                                                 )
                                                  s.parameterLocks.forEach { (pid, valAmt) -> nativeLib.setParameterLock(selectedTrackIndex, stepIdx, pid, valAmt) }
                                              }
                                          }
                                     } else {
                                          newTrackState.steps.forEachIndexed { stepIdx, s ->
                                              val isActiveWithNotes = s.active && s.notes.isNotEmpty()
-                                             nativeLib.setStep(selectedTrackIndex, stepIdx, isActiveWithNotes, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped, s.subStepOffset)
+                                             nativeLib.setStep(
+                                                selectedTrackIndex, stepIdx, isActiveWithNotes, s.notes.toIntArray(), 
+                                                s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped, 
+                                                s.subStepOffset, s.noteOffsets.toFloatArray(), s.noteVelocities.toFloatArray()
+                                             )
                                              s.parameterLocks.forEach { (pid, valAmt) -> nativeLib.setParameterLock(selectedTrackIndex, stepIdx, pid, valAmt) }
                                          }
                                     }
@@ -133,8 +183,8 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                          )
                      }
 
-                     // Bank Select
-                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                     // Bank Select (1, 2, 3, 4 + 64)
+                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                          (0..3).forEach { bank ->
                              val isSelected = state.currentSequencerBank == bank && !state.is64StepView
                              val hasSteps = if (track.engineType == EngineType.FM_DRUM) {
@@ -154,10 +204,36 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                  colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) engineColor else if (hasSteps) Color.Gray else Color.DarkGray)
                              ) { Text("${bank + 1}", color = if (isSelected) Color.Black else Color.White, fontSize = 10.sp) }
                          }
+
+                         // 64-Step View Toggle (Moved here)
+                         Button(
+                             onClick = { 
+                                 val new64 = !latestState.is64StepView
+                                 // Auto-expand sequence length if entering 64-step view and length is short
+                                 val currentLength = track.numPages * track.stepsPerPage
+                                 if (new64 && currentLength < 64) {
+                                     // We need to update the engine state. 
+                                     nativeLib.setSequencerConfig(selectedTrackIndex, 4, 16)
+                                     nativeLib.setPatternLength(64) // CRITICAL: Ensure engine progresses through 64 steps
+                                     
+                                     // Update Kotlin State
+                                     val newTrack = track.copy(numPages = 4, stepsPerPage = 16)
+                                     latestOnStateChange(latestState.copy(is64StepView = new64, patternLength = 64, tracks = latestState.tracks.mapIndexed { i, t -> if (i == selectedTrackIndex) newTrack else t }))
+                                 } else {
+                                     latestOnStateChange(latestState.copy(is64StepView = new64))
+                                     // Ensure pattern length is explicitly set if transitioning back or just to be safe
+                                     nativeLib.setPatternLength(if (new64) 64 else 16)
+                                 }
+                             },
+                             modifier = Modifier.height(32.dp).width(32.dp),
+                             contentPadding = PaddingValues(0.dp),
+                             colors = ButtonDefaults.buttonColors(containerColor = if (latestState.is64StepView) Color.Cyan else Color.DarkGray)
+                         ) { Text("64", fontSize = 10.sp, color = if (latestState.is64StepView) Color.Black else Color.White) }
                      }
                      
-                     // Sequencer Tools (Copy/Paste/64)
-                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                     // Sequencer Tools (Copy/Paste / Save/Load)
+                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                         Spacer(modifier = Modifier.width(30.dp)) // ADDED BUFFER
                          // COPY
                          Button(
                              onClick = {
@@ -219,64 +295,89 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                          
                                          // Update State
                                          latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
-                                         // Update Native Engine (Sync)
-                                         nativeLib.clearSequencer(selectedTrackIndex)
-                                         newDrumSteps.forEachIndexed { drumIdx, steps ->
-                                              if (drumIdx < 8) {
-                                                  steps.forEachIndexed { stepIdx, step -> 
-                                                      if (step.active) {
-                                                           val drumNote = 60 + drumIdx
-                                                           val finalNotes = if (step.notes.isNotEmpty()) step.notes.toIntArray() else intArrayOf(drumNote)
-                                                           nativeLib.setStep(selectedTrackIndex, stepIdx, true, finalNotes, step.velocity, step.ratchet, step.punch, step.probability, step.gate, step.isSkipped)
+                                           // Sync Native Engine (Apply Overwrite)
+                                           newDrumSteps.forEachIndexed { drumIdx, steps ->
+                                                if (drumIdx < 8) {
+                                                    steps.forEachIndexed { stepIdx, step -> 
+                                                        if (step.active) {
+                                                             val drumNote = 60 + drumIdx
+                                                             val finalNotes = if (step.notes.isNotEmpty()) step.notes.toIntArray() else intArrayOf(drumNote)
+                                                             nativeLib.setStep(
+                                                                 selectedTrackIndex, stepIdx, true, finalNotes, 
+                                                                 step.velocity, step.ratchet, step.punch, 
+                                                                 step.probability, step.gate, step.isSkipped,
+                                                                 step.subStepOffset, 
+                                                                 step.noteOffsets.toFloatArray(),
+                                                                 step.noteVelocities.toFloatArray()
+                                                             )
+                                                        } else {
+                                                             nativeLib.setStep(selectedTrackIndex, stepIdx, false, intArrayOf(), 0f, 1, false, 0f, 0f, false, 0.0f, null, null)
+                                                        }
+                                                    }
+                                                }
+                                           }
+                                         } else if (track.engineType != EngineType.FM_DRUM && latestState.copiedSteps != null) {
+                                              val srcSteps = latestState.copiedSteps!!
+                                              val targetSteps = track.steps
+                                              val targetLen = targetSteps.size
+                                              val srcLen = srcSteps.size
+                                              
+                                              var pasteIndex = 0
+                                              // Smart Find Gap
+                                              if (srcLen < targetLen) {
+                                                  // Find consecutive empty steps of length srcLen
+                                                  for (i in 0..targetLen - srcLen) {
+                                                      var gapFound = true
+                                                      for (j in 0 until srcLen) {
+                                                          if (targetSteps[i + j].active) {
+                                                              gapFound = false
+                                                              break
+                                                          }
+                                                      }
+                                                      if (gapFound) {
+                                                          pasteIndex = i
+                                                          break
                                                       }
                                                   }
                                               }
-                                         }
-                                     } else if (track.engineType != EngineType.FM_DRUM && latestState.copiedSteps != null) {
-                                         val srcSteps = latestState.copiedSteps!!
-                                         val targetSteps = track.steps
-                                         val targetLen = targetSteps.size
-                                         val srcLen = srcSteps.size
-                                         
-                                         var pasteIndex = 0
-                                         // Smart Find Gap
-                                         if (srcLen < targetLen) {
-                                             // Find consecutive empty steps of length srcLen
-                                             for (i in 0..targetLen - srcLen) {
-                                                 var gapFound = true
-                                                 for (j in 0 until srcLen) {
-                                                     if (targetSteps[i + j].active) {
-                                                         gapFound = false
-                                                         break
-                                                     }
-                                                 }
-                                                 if (gapFound) {
-                                                     pasteIndex = i
-                                                     break
-                                                 }
-                                             }
-                                         }
-                                         
-                                         // Create merged list
-                                         val newSteps = targetSteps.toMutableList()
-                                         for (i in 0 until srcLen) {
-                                             if (pasteIndex + i < newSteps.size) {
-                                                 newSteps[pasteIndex + i] = srcSteps[i]
-                                             }
-                                         }
-                                         
-                                         latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == selectedTrackIndex) t.copy(steps = newSteps) else t }))
-                                         
-                                         // Sync Native (Overwrite modified range)
-                                         // Ideally clear and set all, or just set? Clear and set is safer to remove old ghosts if we overwrote.
-                                         // But we are merging.
-                                         nativeLib.clearSequencer(selectedTrackIndex)
-                                         newSteps.forEachIndexed { stepIdx, step ->
-                                              if (step.active) {
-                                                  nativeLib.setStep(selectedTrackIndex, stepIdx, true, step.notes.toIntArray(), step.velocity, step.ratchet, step.punch, step.probability, step.gate, step.isSkipped)
+                                              
+                                              // Create merged list
+                                              val newSteps = targetSteps.toMutableList()
+                                              for (i in 0 until srcLen) {
+                                                  if (pasteIndex + i < newSteps.size) {
+                                                      // Ensure we copy the FULL StepState including notes!
+                                                      val srcStep = srcSteps[i]
+                                                      if (srcStep.active) {
+                                                          newSteps[pasteIndex + i] = srcStep
+                                                      }
+                                                  }
+                                              }
+                                              
+                                              latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == selectedTrackIndex) t.copy(steps = newSteps) else t }))
+                                              
+                                              // Sync Native (Full Sync for consistency after paste)
+                                              newSteps.forEachIndexed { stepIdx, step ->
+                                                   if (step.active) {
+                                                       // Better note handling: Use stored notes or fallback to 60 (C4)
+                                                       val finalNotes = if (step.notes.isNotEmpty()) {
+                                                           step.notes.toIntArray()
+                                                       } else {
+                                                           intArrayOf(60) // Default pitch if none stored
+                                                       }
+                                                       
+                                                       nativeLib.setStep(
+                                                           selectedTrackIndex, stepIdx, true, finalNotes, 
+                                                           step.velocity, step.ratchet, step.punch, 
+                                                           step.probability, step.gate, step.isSkipped,
+                                                           step.subStepOffset,
+                                                           step.noteOffsets.toFloatArray(),
+                                                           step.noteVelocities.toFloatArray()
+                                                       )
+                                                   } else {
+                                                       nativeLib.setStep(selectedTrackIndex, stepIdx, false, intArrayOf(), 0f, 1, false, 0f, 0f, false, 0.0f, null, null)
+                                                   }
                                               }
                                          }
-                                     }
                                  }
                              },
                              enabled = hasClipboard,
@@ -299,32 +400,6 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                              contentPadding = PaddingValues(0.dp),
                              colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
                          ) { Text("LOD", fontSize = 10.sp, color = Color.White) }
-                        
-                         // 64-Step View Toggle
-                         Button(
-                             onClick = { 
-                                 val new64 = !latestState.is64StepView
-                                 // Auto-expand sequence length if entering 64-step view and length is short
-                                 val currentLength = track.numPages * track.stepsPerPage
-                                 if (new64 && currentLength < 64) {
-                                     // We need to update the engine state. 
-                                     // Assuming nativeLib.setSequencerConfig handles this or we need state update.
-                                     // Ideally, we update the state object and let the side-effect sync it?
-                                     // But setSequencerConfig definition in AudioEngine.cpp takes (numPages, stepsPerPage).
-                                     // 64 steps = 4 pages of 16.
-                                     nativeLib.setSequencerConfig(selectedTrackIndex, 4, 16)
-                                     
-                                     // Update Kotlin State
-                                     val newTrack = track.copy(numPages = 4, stepsPerPage = 16)
-                                     latestOnStateChange(latestState.copy(is64StepView = new64, tracks = latestState.tracks.mapIndexed { i, t -> if (i == selectedTrackIndex) newTrack else t }))
-                                 } else {
-                                     latestOnStateChange(latestState.copy(is64StepView = new64))
-                                 }
-                             },
-                             modifier = Modifier.height(32.dp).width(32.dp),
-                             contentPadding = PaddingValues(0.dp),
-                             colors = ButtonDefaults.buttonColors(containerColor = if (latestState.is64StepView) Color.Cyan else Color.DarkGray)
-                         ) { Text("64", fontSize = 10.sp, color = if (latestState.is64StepView) Color.Black else Color.White) }
                      }
 
                      // Per-Track Humanize Knob
@@ -459,7 +534,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 } else {
                      // Check for Sampler Chop Mode
                      val samplerMode = track.parameters[320] ?: 0f
-                     val isSamplerChops = track.engineType == EngineType.SAMPLER && samplerMode >= 0.6f
+                     val isSamplerChops = track.engineType == EngineType.SAMPLER && samplerMode >= 0.49f
                      
                      if (isSamplerChops) {
                         Column(modifier = Modifier.fillMaxWidth()) {
@@ -502,7 +577,20 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         val padSize = minOf(maxWidth / (columns + 0.2f), maxHeight / (columns + 0.2f))
                         
                         // We need `isMultiTrack` to determine correct step indexing
-                        val isMultiTrack = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM 
+                        val isSamplerChop = track.engineType == EngineType.SAMPLER && (track.parameters[320] ?: 0f).let { v -> 
+                            // 320: 0.491-0.65 is CHOP, 0.651-0.82 is 1-CP, 0.821-0.94 is L-CP
+                            v >= 0.49f && v <= 0.94f 
+                        }
+                        val isMultiTrack = track.engineType == EngineType.FM_DRUM || 
+                                         track.engineType == EngineType.ANALOG_DRUM ||
+                                         isSamplerChop
+
+                        val instrumentLabel = if (isSamplerChop) "SLICE" else "INST"
+                        val selectedInst = track.selectedFmDrumInstrument
+                        
+                        if (isMultiTrack) {
+                            Text("$instrumentLabel ${selectedInst + 1}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                        }
                         
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(columns),
@@ -637,8 +725,277 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                             }
                         }
                     }
+
+                    // Seq Chain UI (Added v1.12.0)
+                    var showChainSelect by remember { mutableStateOf(false) }
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 8.dp, end = 8.dp)
+                            .offset(x = (-30).dp) // Balanced position (30dp from right edge)
+                            .background(
+                                if (track.isChainEnabled) getEngineColor(track.engineType).copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.6f), 
+                                RoundedCornerShape(8.dp)
+                            )
+                            .border(
+                                width = if (track.isChainEnabled) 1.dp else 0.dp,
+                                color = if (track.isChainEnabled) getEngineColor(track.engineType).copy(alpha = 0.5f) else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(8.dp)
+                            .width(100.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val engineColor = getEngineColor(track.engineType)
+                        Text("SEQ CHAIN", style = MaterialTheme.typography.labelSmall, color = if (track.isChainEnabled) engineColor else Color.Gray, fontSize = 9.sp)
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Length Knob
+                            Knob(
+                                label = "LEN",
+                                initialValue = (track.songChainLength - 1) / 15f,
+                                parameterId = -1,
+                                state = latestState,
+                                onStateChange = latestOnStateChange,
+                                nativeLib = nativeLib,
+                                knobSize = 32.dp,
+                                onValueChangeOverride = { v ->
+                                    val newLen = (v * 15 + 1).toInt().coerceIn(1, 16)
+                                    val newTracks = latestState.tracks.toMutableList()
+                                    newTracks[selectedTrackIndex] = track.copy(songChainLength = newLen)
+                                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                                    nativeLib.setChainLength(selectedTrackIndex, newLen)
+                                },
+                                valueFormatter = { v -> "${(v * 15 + 1).toInt()}" }
+                            )
+                            
+                            // On/Off Toggle (Small Round Button)
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(if (track.isChainEnabled) engineColor else Color.DarkGray)
+                                    .clickable {
+                                        val newState = !track.isChainEnabled
+                                        val newTracks = latestState.tracks.toMutableList()
+                                        newTracks[selectedTrackIndex] = track.copy(isChainEnabled = newState)
+                                        latestOnStateChange(latestState.copy(tracks = newTracks))
+                                        nativeLib.setChainEnabled(selectedTrackIndex, newState)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(if (track.isChainEnabled) Color.Black else Color.Gray))
+                            }
+                        }
+                        
+                        // SELECT Button (Bar shaped)
+                        Button(
+                            onClick = { showChainSelect = true },
+                            modifier = Modifier.fillMaxWidth().height(32.dp),
+                            shape = RoundedCornerShape(4.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                        ) {
+                            Text("SELECT", fontSize = 10.sp, color = Color.White)
+                        }
+                    }
+
+                    // Transpose UI (Relocated v1.11.3 - Lower Left)
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                            .background(
+                                if (track.transpose != 0) getEngineColor(track.engineType).copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.6f), 
+                                RoundedCornerShape(8.dp)
+                            )
+                            .border(
+                                width = if (track.transpose != 0) 1.dp else 0.dp,
+                                color = if (track.transpose != 0) getEngineColor(track.engineType).copy(alpha = 0.5f) else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val engineColor = getEngineColor(track.engineType)
+                        Text("TRANSPOSE", style = MaterialTheme.typography.labelSmall, color = if (track.transpose != 0) engineColor else Color.Gray, fontSize = 9.sp)
+                        val st = track.transpose
+                        val sign = if (st > 0) "+" else ""
+                        Text("$sign$st", style = MaterialTheme.typography.titleMedium, color = if (st != 0) Color.White else engineColor, fontWeight = FontWeight.Bold)
+                        
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Button(
+                                onClick = {
+                                    val newVal = (track.transpose - 12).coerceIn(-36, 36)
+                                    val newTracks = latestState.tracks.toMutableList()
+                                    newTracks[selectedTrackIndex] = track.copy(transpose = newVal)
+                                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                                    nativeLib.setTrackTranspose(selectedTrackIndex, newVal)
+                                },
+                                modifier = Modifier.size(36.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) { Text("-12", fontSize = 9.sp) }
+                            Button(
+                                onClick = {
+                                    val newVal = (track.transpose + 12).coerceIn(-36, 36)
+                                    val newTracks = latestState.tracks.toMutableList()
+                                    newTracks[selectedTrackIndex] = track.copy(transpose = newVal)
+                                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                                    nativeLib.setTrackTranspose(selectedTrackIndex, newVal)
+                                },
+                                modifier = Modifier.size(36.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) { Text("+12", fontSize = 9.sp) }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Button(
+                                onClick = {
+                                    val newVal = (track.transpose - 1).coerceIn(-36, 36)
+                                    val newTracks = latestState.tracks.toMutableList()
+                                    newTracks[selectedTrackIndex] = track.copy(transpose = newVal)
+                                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                                    nativeLib.setTrackTranspose(selectedTrackIndex, newVal)
+                                },
+                                modifier = Modifier.size(36.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) { Text("-1", fontSize = 10.sp) }
+                            Button(
+                                onClick = {
+                                    val newVal = (track.transpose + 1).coerceIn(-36, 36)
+                                    val newTracks = latestState.tracks.toMutableList()
+                                    newTracks[selectedTrackIndex] = track.copy(transpose = newVal)
+                                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                                    nativeLib.setTrackTranspose(selectedTrackIndex, newVal)
+                                },
+                                modifier = Modifier.size(36.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) { Text("+1", fontSize = 10.sp) }
+                        }
+                    }
+
+                    if (showChainSelect) {
+                        ChainSlotPopup(
+                            onDismiss = { showChainSelect = false },
+                            track = track,
+                            state = latestState,
+                            onStateChange = latestOnStateChange,
+                            nativeLib = nativeLib,
+                            trackIndex = selectedTrackIndex
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ChainSlotPopup(
+    onDismiss: () -> Unit,
+    track: com.groovebox.TrackState,
+    state: GrooveboxState,
+    onStateChange: (GrooveboxState) -> Unit,
+    nativeLib: NativeLib,
+    trackIndex: Int
+) {
+    val context = LocalContext.current
+    var showFilePickerForSlot by remember { mutableStateOf<Int?>(null) }
+    
+    Popup(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.width(320.dp).padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("SEQUENCE CHAIN", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
+                    modifier = Modifier.height(240.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(track.songChainLength) { i ->
+                        val name = track.songChainNames.getOrNull(i)
+                        val engineColor = getEngineColor(track.engineType)
+                        
+                        Box(
+                            modifier = Modifier
+                                .aspectRatio(1.5f)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (name != null) engineColor.copy(alpha = 0.8f) else Color.DarkGray)
+                                .clickable { showFilePickerForSlot = i },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("${i + 1}", fontSize = 9.sp, color = if (name != null) Color.Black else Color.Gray)
+                                if (name != null) {
+                                    Text(name.take(6), fontSize = 10.sp, color = Color.Black, fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text("EMPTY", fontSize = 8.sp, color = Color.Gray)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        showFilePickerForSlot?.let { slotIdx ->
+            val defaultDir = File(PersistenceManager.getLoomFolder(context), "Sequences").apply { if(!exists()) mkdirs() }
+            NativeFileDialog(
+                directory = defaultDir,
+                onDismiss = { showFilePickerForSlot = null },
+                state = state,
+                onFileSelected = { path ->
+                    val name = File(path).name.removeSuffix(".gbs")
+                    // Load the sequence to get the steps
+                    val loadedState = PersistenceManager.loadSequence(context, track, name)
+                    if (loadedState != null) {
+                        val newChainNames = track.songChainNames.toMutableList()
+                        newChainNames[slotIdx] = name
+                        
+                        val newTracks = state.tracks.toMutableList()
+                        newTracks[trackIndex] = track.copy(songChainNames = newChainNames)
+                        onStateChange(state.copy(tracks = newTracks))
+                        
+                        // Sync with Engine
+                        val engineType = loadedState.engineType
+                        if (engineType == EngineType.FM_DRUM || engineType == EngineType.ANALOG_DRUM) {
+                            for (lane in 0 until 16) {
+                                val laneSteps = loadedState.drumSteps.getOrNull(lane) ?: emptyList()
+                                nativeLib.setChainSlot(trackIndex, slotIdx, lane, laneSteps.toTypedArray())
+                            }
+                        } else {
+                            nativeLib.setChainSlot(trackIndex, slotIdx, -1, loadedState.steps.toTypedArray())
+                        }
+                    }
+                    showFilePickerForSlot = null
+                },
+                isSave = false,
+                trackIndex = trackIndex,
+                extensions = listOf("gbs"),
+                title = "SELECT SEQUENCE"
+            )
         }
     }
 }
@@ -837,7 +1194,7 @@ fun PadOptionPopup(
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(if (stepState.isSkipped) "RESTORE STEP (UNSKIP)" else "SKIP STEP", color = Color.White) }
                 
-                 Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }

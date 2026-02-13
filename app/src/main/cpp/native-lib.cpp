@@ -42,10 +42,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
     JNIEnv *env, jobject thiz, jint track_index, jint step_index,
     jboolean active, jintArray notes, jfloat velocity, jint ratchet,
     jboolean punch, jfloat probability, jfloat gate, jboolean is_skipped,
-    jfloat sub_step_offset) {
+    jfloat sub_step_offset, jfloatArray note_offsets,
+    jfloatArray note_velocities) {
   if (engine) {
     std::vector<int> noteVec;
+    std::vector<float> offsetVec;
+    std::vector<float> velVec;
     bool hasNotes = false;
+
     if (notes != nullptr) {
       jsize len = env->GetArrayLength(notes);
       if (len > 0) {
@@ -55,6 +59,25 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
         for (int i = 0; i < cap; ++i)
           noteVec.push_back(elems[i]);
         env->ReleaseIntArrayElements(notes, elems, JNI_ABORT);
+
+        // Parse Offsets
+        if (note_offsets != nullptr &&
+            env->GetArrayLength(note_offsets) >= cap) {
+          jfloat *offElems = env->GetFloatArrayElements(note_offsets, nullptr);
+          for (int i = 0; i < cap; ++i)
+            offsetVec.push_back(offElems[i]);
+          env->ReleaseFloatArrayElements(note_offsets, offElems, JNI_ABORT);
+        }
+
+        // Parse Velocities
+        if (note_velocities != nullptr &&
+            env->GetArrayLength(note_velocities) >= cap) {
+          jfloat *velElems =
+              env->GetFloatArrayElements(note_velocities, nullptr);
+          for (int i = 0; i < cap; ++i)
+            velVec.push_back(velElems[i]);
+          env->ReleaseFloatArrayElements(note_velocities, velElems, JNI_ABORT);
+        }
       }
     }
     // Safety: If no notes are provided, the step CANNOT be active.
@@ -78,7 +101,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setStep(
 
     engine->setStep(track_index, step_index, safeActive, noteVec, safeVelocity,
                     safeRatchet, punch, safeProb, safeGate, is_skipped,
-                    safeSubStep);
+                    safeSubStep, offsetVec, velVec);
   }
 }
 
@@ -120,6 +143,12 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setArpRate(
     jint division_mode) {
   if (engine)
     engine->setArpRate(track_index, rate, division_mode);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setArpStrum(
+    JNIEnv *env, jobject thiz, jint track_index, jfloat strum) {
+  if (engine)
+    engine->setArpStrum(track_index, strum);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setParameter(
@@ -212,6 +241,26 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setResampling(
     JNIEnv *env, jobject thiz, jboolean is_resampling) {
   if (engine)
     engine->setResampling(is_resampling);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_setRecordingSource(JNIEnv *env, jobject thiz,
+                                                jint source) {
+  if (engine)
+    engine->setRecordingSource(source);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_pushSystemAudioSamples(JNIEnv *env, jobject thiz,
+                                                    jfloatArray data) {
+  if (engine && data != nullptr) {
+    jsize len = env->GetArrayLength(data);
+    jfloat *elems = env->GetFloatArrayElements(data, nullptr);
+    if (elems != nullptr) {
+      engine->pushSystemAudioSamples(elems, len);
+      env->ReleaseFloatArrayElements(data, elems, JNI_ABORT);
+    }
+  }
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setPatternLength(
@@ -436,6 +485,81 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_clearSequencer(
     engine->clearSequencer(track_index);
 }
 
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_groovebox_NativeLib_getStepNotes(JNIEnv *env, jobject thiz,
+                                          jint track_index, jint step_index,
+                                          jint drum_index) {
+  if (engine) {
+    std::lock_guard<std::recursive_mutex> lock(engine->getLock());
+    const std::vector<AudioEngine::Track> &tracks = engine->getTracks();
+    std::vector<int> notes;
+    if (track_index >= 0 && track_index < (int)tracks.size()) {
+      const AudioEngine::Track &t = tracks[track_index];
+      const Sequencer &seq = (drum_index >= 0 && drum_index < 16)
+                                 ? t.drumSequencers[drum_index]
+                                 : t.sequencer;
+      const std::vector<Step> &steps = seq.getSteps();
+      if (step_index >= 0 && step_index < (int)steps.size()) {
+        for (const auto &ni : steps[step_index].notes) {
+          notes.push_back(ni.note);
+        }
+      }
+    }
+    jintArray result = env->NewIntArray(notes.size());
+    if (notes.size() > 0) {
+      env->SetIntArrayRegion(result, 0, notes.size(),
+                             (const jint *)notes.data());
+    }
+    return result;
+  }
+  return env->NewIntArray(0);
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_groovebox_NativeLib_getStepVelocity(JNIEnv *env, jobject thiz,
+                                             jint track_index, jint step_index,
+                                             jint drum_index) {
+  if (engine) {
+    std::lock_guard<std::recursive_mutex> lock(engine->getLock());
+    const std::vector<AudioEngine::Track> &tracks = engine->getTracks();
+    if (track_index >= 0 && track_index < (int)tracks.size()) {
+      const AudioEngine::Track &t = tracks[track_index];
+      const Sequencer &seq = (drum_index >= 0 && drum_index < 16)
+                                 ? t.drumSequencers[drum_index]
+                                 : t.sequencer;
+      const std::vector<Step> &steps = seq.getSteps();
+      if (step_index >= 0 && step_index < (int)steps.size()) {
+        if (!steps[step_index].notes.empty()) {
+          return steps[step_index].notes[0].velocity;
+        }
+      }
+    }
+  }
+  return 0.8f;
+}
+
+extern "C" JNIEXPORT jfloat JNICALL Java_com_groovebox_NativeLib_getStepSubStep(
+    JNIEnv *env, jobject thiz, jint track_index, jint step_index,
+    jint drum_index) {
+  if (engine) {
+    std::lock_guard<std::recursive_mutex> lock(engine->getLock());
+    const std::vector<AudioEngine::Track> &tracks = engine->getTracks();
+    if (track_index >= 0 && track_index < (int)tracks.size()) {
+      const AudioEngine::Track &t = tracks[track_index];
+      const Sequencer &seq = (drum_index >= 0 && drum_index < 16)
+                                 ? t.drumSequencers[drum_index]
+                                 : t.sequencer;
+      const std::vector<Step> &steps = seq.getSteps();
+      if (step_index >= 0 && step_index < (int)steps.size()) {
+        if (!steps[step_index].notes.empty()) {
+          return steps[step_index].notes[0].subStepOffset;
+        }
+      }
+    }
+  }
+  return 0.0f;
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_groovebox_NativeLib_getStepActive(JNIEnv *env, jobject thiz,
                                            jint track_index, jint step_index,
@@ -507,10 +631,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setMasterVolume(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_groovebox_NativeLib_setGlobalTranspose(JNIEnv *env, jobject thiz,
-                                                jint semitones) {
+Java_com_groovebox_NativeLib_setTrackTranspose(JNIEnv *env, jobject thiz,
+                                               jint trackIndex,
+                                               jint semitones) {
   if (engine) {
-    engine->setGlobalTranspose(semitones);
+    engine->setTrackTranspose(trackIndex, semitones);
   }
 }
 
@@ -763,4 +888,74 @@ Java_com_groovebox_NativeLib_setSidechainConfig(JNIEnv *env, jobject thiz,
   if (engine) {
     engine->setSidechainConfig(track_index, drum_index);
   }
+}
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setChainEnabled(
+    JNIEnv *env, jobject thiz, jint track_index, jboolean enabled) {
+  if (engine)
+    engine->setChainEnabled(track_index, enabled);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setChainLength(
+    JNIEnv *env, jobject thiz, jint track_index, jint length) {
+  if (engine)
+    engine->setChainLength(track_index, length);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setChainSlot(
+    JNIEnv *env, jobject thiz, jint track_index, jint slot_index,
+    jint lane_index, jobjectArray steps) {
+  if (!engine || steps == nullptr)
+    return;
+
+  jsize len = env->GetArrayLength(steps);
+  std::vector<Step> stepVec;
+
+  jclass stepClass = env->FindClass("com/groovebox/StepState");
+  jfieldID activeField = env->GetFieldID(stepClass, "active", "Z");
+  jfieldID notesField = env->GetFieldID(stepClass, "notes", "Ljava/util/List;");
+  jfieldID velocityField = env->GetFieldID(stepClass, "velocity", "F");
+  jfieldID ratchetField = env->GetFieldID(stepClass, "ratchet", "I");
+  jfieldID punchField = env->GetFieldID(stepClass, "punch", "Z");
+  jfieldID probabilityField = env->GetFieldID(stepClass, "probability", "F");
+  jfieldID gateField = env->GetFieldID(stepClass, "gate", "F");
+  jfieldID skippedField = env->GetFieldID(stepClass, "isSkipped", "Z");
+  jfieldID subStepField = env->GetFieldID(stepClass, "subStepOffset", "F");
+
+  jclass listClass = env->FindClass("java/util/List");
+  jmethodID sizeMethod = env->GetMethodID(listClass, "size", "()I");
+  jmethodID getMethod =
+      env->GetMethodID(listClass, "get", "(I)Ljava/lang/Object;");
+
+  jclass integerClass = env->FindClass("java/lang/Integer");
+  jmethodID intValueMethod = env->GetMethodID(integerClass, "intValue", "()I");
+
+  for (int i = 0; i < len; ++i) {
+    jobject stepObj = env->GetObjectArrayElement(steps, i);
+    Step s;
+    s.active = env->GetBooleanField(stepObj, activeField);
+    s.isSkipped = env->GetBooleanField(stepObj, skippedField);
+    s.ratchet = env->GetIntField(stepObj, ratchetField);
+    s.punch = env->GetBooleanField(stepObj, punchField);
+    s.probability = env->GetFloatField(stepObj, probabilityField);
+    s.gate = env->GetFloatField(stepObj, gateField);
+
+    jobject notesList = env->GetObjectField(stepObj, notesField);
+    if (notesList) {
+      int listSize = env->CallIntMethod(notesList, sizeMethod);
+      float subStep = env->GetFloatField(stepObj, subStepField);
+      float vel = env->GetFloatField(stepObj, velocityField);
+
+      for (int j = 0; j < listSize; ++j) {
+        jobject intObj = env->CallObjectMethod(notesList, getMethod, j);
+        int note = env->CallIntMethod(intObj, intValueMethod);
+        s.addNote(note, vel, subStep);
+        env->DeleteLocalRef(intObj);
+      }
+      env->DeleteLocalRef(notesList);
+    }
+    stepVec.push_back(s);
+    env->DeleteLocalRef(stepObj);
+  }
+
+  engine->setChainSlot(track_index, slot_index, lane_index, stepVec);
 }

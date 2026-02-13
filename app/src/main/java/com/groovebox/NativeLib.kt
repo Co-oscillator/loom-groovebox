@@ -17,7 +17,7 @@ class NativeLib {
     external fun setPlaying(playing: Boolean)
     external fun triggerNote(trackIndex: Int, note: Int, velocity: Int)
     external fun releaseNote(trackIndex: Int, note: Int)
-    external fun setStep(trackIndex: Int, stepIndex: Int, active: Boolean, notes: IntArray, velocity: Float, ratchet: Int, punch: Boolean, probability: Float, gate: Float, isSkipped: Boolean, subStepOffset: Float = 0.0f)
+    external fun setStep(trackIndex: Int, stepIndex: Int, active: Boolean, notes: IntArray, velocity: Float, ratchet: Int, punch: Boolean, probability: Float, gate: Float, isSkipped: Boolean, subStepOffset: Float = 0.0f, noteOffsets: FloatArray? = null, noteVelocities: FloatArray? = null)
     external fun setSequencerConfig(trackIndex: Int, numPages: Int, stepsPerPage: Int)
     external fun setRouting(destTrack: Int, sourceTrack: Int, source: Int, dest: Int, amount: Float, destParamId: Int = -1)
     external fun setParameter(trackIndex: Int, parameterId: Int, value: Float)
@@ -34,6 +34,7 @@ class NativeLib {
     external fun loadFmPreset(trackIndex: Int, presetId: Int)
     external fun setIsRecording(isRecording: Boolean)
     external fun setResampling(isResampling: Boolean)
+    external fun setRecordingSource(source: Int)
     external fun loadSample(trackIndex: Int, path: String)
     external fun loadWavetable(trackIndex: Int, path: String)
     external fun loadDefaultWavetable(trackIndex: Int)
@@ -48,6 +49,9 @@ class NativeLib {
     external fun trimSample(trackIndex: Int)
     external fun getCurrentStep(trackIndex: Int, drumIndex: Int = -1): Int
     external fun getStepActive(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Boolean
+    external fun getStepNotes(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): IntArray
+    external fun getStepVelocity(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Float
+    external fun getStepSubStep(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Float
     external fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray)
     external fun setChordProgConfig(trackIndex: Int, enabled: Boolean, mood: Int, complexity: Int)
     external fun setScaleConfig(rootNote: Int, intervals: IntArray)
@@ -60,7 +64,7 @@ class NativeLib {
     external fun getSlicePoints(trackIndex: Int): FloatArray
     external fun clearSequencer(trackIndex: Int)
     external fun setMasterVolume(volume: Float)
-    external fun setGlobalTranspose(semitones: Int)
+    external fun setTrackTranspose(trackIndex: Int, semitones: Int)
     external fun panic()
     external fun getActiveNoteMask(trackIndex: Int): Int
     external fun getCpuLoad(): Float
@@ -80,6 +84,7 @@ class NativeLib {
     // Audio Export
     external fun exportAudio(numRepeats: Int, path: String)
     external fun setArpRate(trackIndex: Int, rate: Float, divisionMode: Int)
+    external fun setArpStrum(trackIndex: Int, strum: Float)
     external fun setClockMultiplier(trackIndex: Int, multiplier: Float)
     external fun setFilterMode(trackIndex: Int, mode: Int) // 0=LP, 1=HP, 2=BP
     
@@ -96,4 +101,10 @@ class NativeLib {
     external fun getFxChain(): IntArray
     external fun setSlicePosition(trackIndex: Int, sliceIndex: Int, position: Float)
     external fun setSidechainConfig(trackIndex: Int, drumIndex: Int)
+    external fun pushSystemAudioSamples(data: FloatArray)
+    
+    // Sequence Chaining
+    external fun setChainEnabled(trackIndex: Int, enabled: Boolean)
+    external fun setChainLength(trackIndex: Int, length: Int)
+    external fun setChainSlot(trackIndex: Int, slotIndex: Int, laneIndex: Int, steps: Array<StepState>)
 }

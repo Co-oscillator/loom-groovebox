@@ -26,8 +26,8 @@ public:
       : mMode(ArpMode::OFF), mStep(0), mOctaves(0), mInversion(0),
         mIsLatched(false), mIsWaitingForNewGesture(false), mUpperLane1Index(0),
         mUpperLane2Index(0), mRng(std::random_device{}()) {
-    // Default: Lane 0 (Root) active, Lanes 1 & 2 inactive
-    mRhythms.resize(3, std::vector<bool>(16, false));
+    // Default: Lane 0 (Root) active, Lanes 1-3 inactive
+    mRhythms.resize(4, std::vector<bool>(16, false));
     std::fill(mRhythms[0].begin(), mRhythms[0].end(), true);
     mScaleIntervals = {0, 2, 4, 5, 7, 9, 11}; // Default Major
 
@@ -176,9 +176,20 @@ public:
       }
     }
 
+    // Lane 3: +3 Walk
+    if (mRhythms.size() > 3 && mRhythms[3][stepIndex]) {
+      if (seqSize > 3) {
+        int idx = (mStep + 3) % seqSize;
+        mNotesToPlay.push_back(mSequence[idx]);
+      }
+    }
+
     mStep++;
     return mNotesToPlay;
   }
+
+  void setStrum(float strum) { mStrum = strum; }
+  float getStrum() const { return mStrum; }
 
   void reset() { mStep = 0; }
 
@@ -187,6 +198,7 @@ private:
   int mStep;
   int mOctaves;
   int mInversion;
+  float mStrum = 0.0f; // 0.0 to 1.0 (Spread over step duration)
   bool mIsLatched;
   bool mIsMutated = false;
   bool mIsWaitingForNewGesture;

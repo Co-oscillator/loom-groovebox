@@ -38,6 +38,8 @@
 
 class AudioEngine : public oboe::AudioStreamCallback {
 public:
+  enum RecordingSource { MIC = 0, RESAMPLE = 1, SYSTEM = 2 };
+
   AudioEngine();
   virtual ~AudioEngine();
 
@@ -68,7 +70,9 @@ public:
                const std::vector<int> &notes, float velocity = 0.8f,
                int ratchet = 1, bool punch = false, float probability = 1.0f,
                float gate = 1.0f, bool isSkipped = false,
-               float subStepOffset = 0.0f);
+               float subStepOffset = 0.0f,
+               const std::vector<float> &noteOffsets = {},
+               const std::vector<float> &noteVelocities = {});
   void setSequencerConfig(int trackIndex, int numPages, int stepsPerPage);
   // New helper for modulation without affecting UI state
   void updateEngineParameter(int trackIndex, int parameterId, float value,
@@ -99,7 +103,8 @@ public:
   float getOpLevel(int trackIndex, int op) const;
   void clearParameterLocks(int trackIndex, int stepIndex);
   void setIsRecording(bool isRecording);
-  void setResampling(bool isResampling); // New: Resampling Mode Setter
+  void setResampling(bool isResampling); // Deprecated: Use setRecordingSource
+  void setRecordingSource(int source);   // New: MIC, RESAMPLE, or SYSTEM
   int getCurrentStep(int trackIndex, int drumIndex = -1);
   void setArpConfig(int trackIndex, int mode, int octaves, int inversion,
                     bool isLatched, bool isMutated,
@@ -144,6 +149,7 @@ public:
   void setFilterMode(int trackIndex, int mode);
   void setArpTriplet(int trackIndex, bool isTriplet);
   void setArpRate(int trackIndex, float rate, int divisionMode);
+  void setArpStrum(int trackIndex, float strum);
   float getCpuLoad();
   void setInputDevice(int deviceId);
   void setSidechainConfig(int trackIndex, int drumIndex);
@@ -153,10 +159,17 @@ public:
   void setSlices(int trackIndex, const std::vector<int> &starts,
                  const std::vector<int> &ends);
 
+  void setChainEnabled(int trackIndex, bool enabled);
+  void setChainLength(int trackIndex, int length);
+  void setChainSlot(int trackIndex, int slotIndex, int laneIndex,
+                    const std::vector<Step> &steps);
+
   // Audio Export
   void renderToWav(int numCycles, const std::string &path);
   void renderStereo(float *outBuffer, int numFrames);
   void updateSampleRate(float sampleRate);
+  void pushSystemAudioSamples(const float *data,
+                              int numSamples); // New: for System Audio
 
   // Track Management
   void initTrack(int i);
@@ -168,7 +181,7 @@ public:
   void setFxChain(int sourceFx, int destFx);
 
   // Global Transpose
-  void setGlobalTranspose(int semitones);
+  void setTrackTranspose(int trackIndex, int semitones);
 
   // MIDI Mode
   struct MidiMessage {
@@ -204,28 +217,37 @@ private:
       SET_PATTERN_LENGTH,
       SET_STEP,
       SET_ARP_RATE,
+      SET_ARP_STRUM,
       SET_SWING,
       SET_SLICES,
-      SET_TRACK_HUMANIZE
+      SET_TRACK_HUMANIZE,
+      SET_TRACK_TRANSPOSE,
+      SET_CHAIN_ENABLED,
+      SET_CHAIN_LENGTH,
+      SET_CHAIN_SLOT
     };
     Type type;
     int trackIndex;
-    int data1;                    // note, or paramId
-    int data2;                    // Second data field (e.g. stepIndex)
-    float value;                  // velocity, or paramValue
-    bool bValue;                  // Boolean value
-    std::vector<int> notes;       // For SET_STEP
-    float velocity;               // For SET_STEP
-    int ratchet;                  // For SET_STEP
-    bool punch;                   // For SET_STEP
-    float probability;            // For SET_STEP
-    float gate;                   // For SET_STEP
-    bool isSkipped;               // For SET_STEP
-    std::vector<int> sliceStarts; // For SET_SLICES
-    std::vector<int> sliceEnds;   // For SET_SLICES
-    int extraData;                // extra
-    bool immediate;               // For P-Locks (Snap)
-    float subStepOffset;          // For SET_STEP (Microtiming)
+    int data1;                         // note, or paramId
+    int data2;                         // Second data field (e.g. stepIndex)
+    float value;                       // velocity, or paramValue
+    bool bValue;                       // Boolean value
+    std::vector<int> notes;            // For SET_STEP
+    float velocity;                    // For SET_STEP
+    int ratchet;                       // For SET_STEP
+    bool punch;                        // For SET_STEP
+    float probability;                 // For SET_STEP
+    float gate;                        // For SET_STEP
+    bool isSkipped;                    // For SET_STEP
+    std::vector<int> sliceStarts;      // For SET_SLICES
+    std::vector<int> sliceEnds;        // For SET_SLICES
+    int extraData;                     // extra
+    bool immediate;                    // For P-Locks (Snap)
+    float subStepOffset;               // For SET_STEP (Microtiming)
+    std::vector<float> noteOffsets;    // For SET_STEP (Per-Note Microtiming)
+    std::vector<float> noteVelocities; // For SET_STEP (Per-Note Velocity)
+    std::vector<Step> steps;           // For SET_CHAIN_SLOT
+    int laneIndex;                     // For SET_CHAIN_SLOT (-1 for melodic)
   };
   std::vector<AudioCommand> mCommandQueue;
   std::mutex mCommandLock;
@@ -237,10 +259,12 @@ private:
   std::shared_ptr<oboe::AudioStream> mStream;
   std::shared_ptr<oboe::AudioStream> mInputStream;
 
+public:
   struct Track {
     float volume = 0.8f;
     float smoothedVolume = 0.8f;
     float pan = 0.5f;
+    int transpose = 0;
 
     float smoothedPan = 0.5f;
     float humanize = 0.0f;
@@ -295,6 +319,13 @@ private:
       bool punch = false;
     };
     std::vector<PendingNote> mPendingNotes;
+
+    struct PendingParam {
+      int id;
+      float value;
+      double samplesRemaining;
+    };
+    std::vector<PendingParam> mPendingParams;
     float mClockMultiplier = 1.0f;
     float mArpRate = 1.0f;    // 1.0 = 1/16th, 0.5 = 1/8th, etc.
     int mArpDivisionMode = 0; // 0=Reg, 1=Dotted, 2=Triplet
@@ -325,6 +356,18 @@ private:
     int mDrumLastTriggeredNote[16] = {-1, -1, -1, -1, -1, -1, -1, -1,
                                       -1, -1, -1, -1, -1, -1, -1, -1};
     std::string lastSamplePath = "";
+    struct ChainSlot {
+      std::vector<Step> steps; // For melodic
+      std::vector<std::vector<Step>> drumLanes =
+          std::vector<std::vector<Step>>(16);
+      bool hasSequence = false;
+    };
+
+    std::vector<ChainSlot> chainSlots = std::vector<ChainSlot>(16);
+    int currentChainSlot = 0;
+    int chainLength = 1;
+    bool isChainEnabled = false;
+
     int mSilenceFrames = 0;
   };
 
@@ -333,7 +376,7 @@ private:
   std::atomic<bool> mIsPlaying{false};
   std::atomic<bool> mIsRecording{false};       // Transport record (sequencer)
   std::atomic<bool> mIsRecordingSample{false}; // Sample capture
-  std::atomic<bool> mIsResampling{false};      // New: Record Master Mix
+  std::atomic<int> mRecordingSource{0};        // 0=Mic, 1=Resample, 2=System
   std::atomic<bool> mIsRecordingLocked{false};
   std::atomic<bool> mSampleRateChanged{false};
   std::atomic<float> mPendingSampleRate{48000.0f};
@@ -415,7 +458,10 @@ public:
   uint32_t mInputReadPtr = 0;
   std::atomic<int> mGlobalVoiceCount{0};
   std::string mAppDataDir = "";
-  int mGlobalTranspose = 0;
+  int mGlobalTranspose =
+      0; // Keeping it for compatibility but will use per-track
+  std::recursive_mutex &getLock() { return mLock; }
+  const std::vector<Track> &getTracks() const { return mTracks; }
 };
 
 #endif // AUDIO_ENGINE_H

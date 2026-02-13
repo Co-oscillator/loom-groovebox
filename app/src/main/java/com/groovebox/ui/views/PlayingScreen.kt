@@ -1106,7 +1106,7 @@ fun ArpSettingsSheet(
                                                 onStateChange(state.copy(tracks = newTracks))
                                                 nativeLib.setArpRate(state.selectedTrackIndex, config.arpRate, index)
                                             },
-                                            modifier = Modifier.height(28.dp).width(54.dp),
+                                            modifier = Modifier.height(28.dp).width(50.dp),
                                             contentPadding = PaddingValues(0.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Cyan else Color.DarkGray),
                                             shape = RoundedCornerShape(4.dp)
@@ -1116,38 +1116,26 @@ fun ArpSettingsSheet(
                                     }
                                 }
                                 
-                                // Randomize Rhythm (Refinement v1.11.2)
-                                Column(verticalArrangement = Arrangement.Center, modifier = Modifier.padding(start = 8.dp)) {
-                                    Button(
-                                        onClick = {
-                                            val currentTrack = state.tracks[state.selectedTrackIndex]
-                                            val currentConfig = currentTrack.arpConfig
-                                            val newRhythms = currentConfig.rhythms.mapIndexed { laneIdx, _ ->
-                                                if (laneIdx == 0) List(16) { Math.random() < 0.7 }
-                                                else List(16) { false }
-                                            }
-                                            val updatedConfig = currentConfig.copy(rhythms = newRhythms)
-                                            val updatedTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = updatedConfig) else t }
-                                            onStateChange(state.copy(tracks = updatedTracks))
-                                            nativeLib.setArpConfig(
-                                                state.selectedTrackIndex,
-                                                updatedConfig.mode.ordinal,
-                                                updatedConfig.octaves,
-                                                updatedConfig.inversion,
-                                                updatedConfig.isLatched,
-                                                updatedConfig.isMutated,
-                                                newRhythms.map { it.toBooleanArray() }.toTypedArray(),
-                                                updatedConfig.randomSequence.toIntArray()
-                                            )
+                                // Strum Knob (Time Spread)
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Knob(
+                                        label = "STRUM",
+                                        initialValue = config.strum,
+                                        parameterId = -98, // Custom
+                                        state = state,
+                                        onStateChange = { newState ->
+                                            val v = newState.tracks[state.selectedTrackIndex].parameters[-98] ?: config.strum
+                                            val newConfig = config.copy(strum = v)
+                                            val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                            onStateChange(state.copy(tracks = newTracks))
+                                            nativeLib.setArpStrum(state.selectedTrackIndex, v)
                                         },
-                                        modifier = Modifier.height(28.dp).width(64.dp), // Slightly wider, matching height
-                                        contentPadding = PaddingValues(0.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Magenta),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text("RAND RHY", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = Color.White)
-                                    }
+                                        nativeLib = nativeLib,
+                                        knobSize = 60.dp,
+                                        valueFormatter = { v -> "${(v * 100).toInt()}%" }
+                                    )
                                 }
+                                
                             }
                         }
 
@@ -1251,7 +1239,7 @@ fun ArpSettingsSheet(
                                                 onStateChange(state.copy(tracks = newTracks))
                                                 nativeLib.setChordProgConfig(state.selectedTrackIndex, config.isChordProgEnabled, config.chordProgMood, index)
                                             },
-                                            modifier = Modifier.height(28.dp).width(80.dp),
+                                            modifier = Modifier.height(28.dp).width(70.dp),
                                             contentPadding = PaddingValues(0.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color.Cyan else Color.DarkGray),
                                             shape = RoundedCornerShape(4.dp)
@@ -1259,6 +1247,37 @@ fun ArpSettingsSheet(
                                             Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = if (isSelected) Color.Black else Color.White)
                                         }
                                     }
+                                }
+                                
+                                // Randomize Rhythm (Relocated v1.11.3)
+                                Button(
+                                    onClick = {
+                                        val currentTrack = state.tracks[state.selectedTrackIndex]
+                                        val currentConfig = currentTrack.arpConfig
+                                        val newRhythms = currentConfig.rhythms.mapIndexed { laneIdx, _ ->
+                                            if (laneIdx == 0) List(16) { Math.random() < 0.7 }
+                                            else List(16) { false }
+                                        }
+                                        val updatedConfig = currentConfig.copy(rhythms = newRhythms)
+                                        val updatedTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = updatedConfig) else t }
+                                        onStateChange(state.copy(tracks = updatedTracks))
+                                        nativeLib.setArpConfig(
+                                            state.selectedTrackIndex,
+                                            updatedConfig.mode.ordinal,
+                                            updatedConfig.octaves,
+                                            updatedConfig.inversion,
+                                            updatedConfig.isLatched,
+                                            updatedConfig.isMutated,
+                                            newRhythms.map { it.toBooleanArray() }.toTypedArray(),
+                                            updatedConfig.randomSequence.toIntArray()
+                                        )
+                                    },
+                                    modifier = Modifier.height(36.dp).widthIn(min = 64.dp).padding(start = 8.dp), // Increased height to 36dp
+                                    contentPadding = PaddingValues(horizontal = 4.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Magenta),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text("RAND\nRHY", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = Color.White, textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 10.sp)
                                 }
                             }
                         }
@@ -1270,13 +1289,11 @@ fun ArpSettingsSheet(
                         Text("(Bottom=Root, Upper=Polyphonic Cycle)", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = Color.DarkGray)
                         Spacer(modifier = Modifier.height(4.dp))
                         
-                        // 3 Lanes (Reverse order: Lane 2 (Top) -> Lane 0 (Bottom/Root))
-                        // Swap Labels to ensure Root is clearly bottom (which is Lane 0)
-                        // Lane 2=Top, Lane 0=Bottom. The loop iterates 2 downTo 0. 
-                        // So Lane 2 (Top) is rendered first.
-                        val laneLabels = listOf("ROOT", "UP 1", "UP 2") // Indices 0,1,2.
-                        val laneColors = listOf(Color(0xFF43A047), Color(0xFF1E88E5), Color(0xFF8E24AA)) 
-                        (2 downTo 0).forEach { laneIdx ->
+                        // 4 Lanes (Reverse order: Lane 3 (Top) -> Lane 0 (Bottom/Root))
+                        // Lane 3=Top, Lane 0=Bottom. The loop iterates 3 downTo 0. 
+                        val laneLabels = listOf("ROOT", "UP 1", "UP 2", "UP 3") // Indices 0,1,2,3.
+                        val laneColors = listOf(Color(0xFF43A047), Color(0xFF1E88E5), Color(0xFF8E24AA), Color(0xFFE91E63)) 
+                        (3 downTo 0).forEach { laneIdx ->
                              Row(
                                  verticalAlignment = Alignment.CenterVertically, 
                                  modifier = Modifier
@@ -1798,25 +1815,23 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
 
     // Transpose Menu
     if (showTransposeMenu) {
-        val config = LocalConfiguration.current
-        val isWide = config.screenWidthDp > 600
-
-        androidx.compose.ui.window.Popup(
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
             onDismissRequest = { showTransposeMenu = false },
-            alignment = Alignment.BottomStart
+            sheetState = sheetState,
+            containerColor = Color(0xFF111111),
+            scrimColor = Color.Black.copy(alpha = 0.5f),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.Gray) }
         ) {
-            val popupHeight = if (isWide) 84.dp else 120.dp
-            
-            Surface(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(popupHeight)
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                color = Color(0xFF1E1E1E),
-                shape = RoundedCornerShape(12.dp),
-                tonalElevation = 8.dp,
-                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+                    .padding(16.dp)
+                    .padding(bottom = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Text("SELECT ROOT NOTE", style = MaterialTheme.typography.titleMedium, color = Color.Gray, modifier = Modifier.padding(bottom = 16.dp))
+                
                 val noteNames = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
                 
                 // Helper for button rendering
@@ -1829,37 +1844,26 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                             nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
                             showTransposeMenu = false
                         },
-                        color = if (state.rootNote % 12 == i) Color.Cyan else Color.Transparent,
-                        border = if (state.rootNote % 12 == i) null else BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f)),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.size(34.dp)
+                        color = if (state.rootNote % 12 == i) Color.Cyan else Color.DarkGray,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.size(50.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            // Only show text, octave is implied
-                            Text(name, style = MaterialTheme.typography.labelSmall, color = if (state.rootNote % 12 == i) Color.Black else Color.White)
+                            Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = if (state.rootNote % 12 == i) Color.Black else Color.White)
                         }
                     }
                 }
 
-                if (isWide) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        noteNames.forEachIndexed { i, name -> renderButton(i, name) }
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(vertical = 6.dp),
-                        verticalArrangement = Arrangement.SpaceEvenly,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            noteNames.take(6).forEachIndexed { i, name -> renderButton(i, name) }
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            noteNames.drop(6).forEachIndexed { i, name -> renderButton(i + 6, name) }
+                // Grid of notes
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    maxItemsInEachRow = 6
+                ) {
+                    noteNames.forEachIndexed { i, name -> 
+                        Box(modifier = Modifier.padding(horizontal = 4.dp)) {
+                            renderButton(i, name)
                         }
                     }
                 }

@@ -30,9 +30,23 @@ public:
     size_t end;
   };
 
+  struct SliceParams {
+    float pitch = 0.0f;
+    float attack = 0.01f;
+    float decay = 0.1f;
+    float sustain = 0.8f;
+    float release = 0.2f;
+    float cutoff = 1.0f;
+    float resonance = 0.0f;
+    float reverse = 0.0f;       // 0 or 1
+    float fxSends[17] = {0.0f}; // Per-slice FX sends
+    bool active = false;        // Whether this slice has overridden params
+  };
+
   struct Voice {
     bool active = false;
     int note = -1;
+    int sliceIdx = -1;
     double position = 0.0;      // Traversal position
     double grainPosition = 0.0; // Phase within grain (or offset)
     size_t start = 0;
@@ -40,6 +54,14 @@ public:
     float baseVelocity = 1.0f;
     float pitchRatio = 1.0f;
     float targetPitchRatio = 1.0f;
+
+    // Captured Params for Slice Locking
+    float slicePitch = 0.0f;
+    float sliceReverse = 0.0f;
+    float sliceCutoff = 1.0f;
+    float sliceResonance = 0.0f;
+    float fxSends[17] = {0.0f};
+
     Adsr envelope;
     TSvf filter;
 
@@ -52,12 +74,18 @@ public:
     void reset() {
       active = false;
       note = -1;
+      sliceIdx = -1;
       position = 0.0;
       grainPosition = 0.0;
       grainTimer = 0;
       envelope.reset();
       pitchRatio = 1.0f;
       targetPitchRatio = 1.0f;
+      slicePitch = 0.0f;
+      sliceReverse = 0.0f;
+      sliceCutoff = 1.0f;
+      sliceResonance = 0.0f;
+      std::fill(std::begin(fxSends), std::end(fxSends), 0.0f);
     }
   };
 
@@ -121,6 +149,11 @@ public:
 
   void resetToDefaults() {
     mPitch = 0.0f;
+    mSliceIndex = -1; // -1 means use note-based indexing
+    mSliceLockEnabled = false;
+    for (int i = 0; i < 16; i++) {
+      mSliceParams[i] = SliceParams();
+    }
     mStretch = 1.0f;
     mSpeed = 1.0f;
     mAttack = 0.002f; // Fast attack but no click
@@ -170,6 +203,16 @@ public:
                        : buf.size();
       if (start < end)
         mSlices.push_back({start, end});
+    }
+  }
+
+  void setSlicePoints(const std::vector<int> &starts,
+                      const std::vector<int> &ends) {
+    std::lock_guard<std::mutex> lock(mSliceLock);
+    mSlices.clear();
+    for (size_t i = 0; i < starts.size() && i < ends.size(); ++i) {
+      mSlices.push_back(
+          {static_cast<size_t>(starts[i]), static_cast<size_t>(ends[i])});
     }
   }
 
@@ -330,10 +373,13 @@ public:
     if ((mPlayMode == Chops || mPlayMode == OneShotChops ||
          mPlayMode == LoopChops) &&
         !mSlices.empty()) {
-      // Map Note 60 -> Slice 0. Safe modulo.
+      // In CHOP modes, slice index is determined by the MIDI note (Note 60 =
+      // Slice 0) mSliceIndex is now used ONLY for UI parameter focus in "Slice
+      // Lock" mode.
       int sliceIdx = 0;
-      if (note >= 60)
+      if (note >= 60) {
         sliceIdx = (note - 60);
+      }
 
       // Explicitly cycle through slices
       if (!mSlices.empty()) {
@@ -344,6 +390,7 @@ public:
 
       v.start = mSlices[sliceIdx].start;
       v.end = mSlices[sliceIdx].end;
+      v.sliceIdx = sliceIdx;
     } else {
       v.start = static_cast<size_t>(mTrimStart * buf.size());
       v.end = static_cast<size_t>(mTrimEnd * buf.size());
@@ -351,28 +398,55 @@ public:
         v.end = buf.size();
       if (v.start >= v.end && v.end > 0)
         v.start = v.end - 1;
+      v.sliceIdx = -1;
     }
 
-    // Fix: Start at end if reverse
-    if (mReverse) {
+    // Capture Per-Slice Parameters if LOCK is enabled
+    if (mSliceLockEnabled && v.sliceIdx >= 0 && v.sliceIdx < 16) {
+      const auto &p = mSliceParams[v.sliceIdx];
+      v.envelope.setParameters(p.attack, p.decay, p.sustain, p.release);
+      v.filter.setParams(p.cutoff * 10000.0f, p.resonance, 48000.0f);
+      v.slicePitch = p.pitch;
+      v.sliceReverse = p.reverse;
+      v.sliceCutoff = p.cutoff;
+      v.sliceResonance = p.resonance;
+      std::copy(std::begin(p.fxSends), std::end(p.fxSends),
+                std::begin(v.fxSends));
+    } else {
+      v.envelope.setParameters(mAttack, mDecay, mSustain, mRelease);
+      v.filter.setParams(mFilterCutoff * 10000.0f, mFilterResonance, 48000.0f);
+      v.slicePitch = 0.0f;
+      v.sliceReverse = 0.0f;
+      v.sliceCutoff = 0.0f;    // Default to 0 if not slice-locked
+      v.sliceResonance = 0.0f; // Default to 0 if not slice-locked
+    }
+    v.envelope.trigger();
+
+    float keyShift = (mPlayMode == Chops || mPlayMode == OneShotChops ||
+                      mPlayMode == LoopChops)
+                         ? 0.0f
+                         : (float)(note - 60);
+
+    float pShift = mSliceLockEnabled ? v.slicePitch : mPitch;
+    float targetRatio = powf(2.0f, (pShift + keyShift) / 12.0f) * mSpeed;
+    v.targetPitchRatio = targetRatio;
+    v.pitchRatio = (mGlide > 0.001f) ? mLastPitchRatio : targetRatio;
+    mLastPitchRatio = targetRatio;
+
+    // Apply Slice-Specific Reverse
+    if (mSliceLockEnabled && v.sliceReverse > 0.5f) {
+      v.position = (double)v.end - 1.0;
+    } else if (mReverse) {
       v.position = (double)v.end - 1.0;
     } else {
       v.position = (double)v.start;
     }
     v.grainPosition = v.position;
     v.grainTimer = 0;
-
-    float keyShift = (mPlayMode == Chops || mPlayMode == OneShotChops ||
-                      mPlayMode == LoopChops)
-                         ? 0.0f
-                         : (float)(note - 60);
-    float targetRatio = powf(2.0f, (mPitch + keyShift) / 12.0f) * mSpeed;
-    v.targetPitchRatio = targetRatio;
-    v.pitchRatio = (mGlide > 0.001f) ? mLastPitchRatio : targetRatio;
-    mLastPitchRatio = targetRatio;
   }
 
   int getPlayMode() const { return mPlayMode; } // Added Getter for AudioEngine
+  bool isSliceLockEnabled() const { return mSliceLockEnabled; }
 
   void releaseNote(int note) {
     for (auto &v : mVoices) {
@@ -490,6 +564,14 @@ public:
       findConstrainedSlices(count);
       break;
     }
+    case 341: { // Slice Index Lock
+      mSliceIndex = value;
+      break;
+    }
+    case 342: { // Slice Lock ENABLED
+      mSliceLockEnabled = value > 0.5f;
+      break;
+    }
     case 118: // Filter Env Amount
       setFilterEnvAmount(value);
       break;
@@ -508,7 +590,7 @@ public:
   void setFilterResonance(float v) { mFilterResonance = v; }
   void setFilterEnvAmount(float v) { mFilterEnvAmount = v; }
 
-  float render() {
+  float render(float *fxBusesL = nullptr, float *fxBusesR = nullptr) {
     const auto &buffer = getBuffer();
     if (buffer.empty())
       return 0.0f;
@@ -671,8 +753,12 @@ public:
       }
 
       float pitchFactor = v.pitchRatio;
-      float baseResampleRate = mSpeed * pitchFactor * (mReverse ? -1.0f : 1.0f);
-      float traverseRate = mSpeed * (mReverse ? -1.0f : 1.0f);
+      float direction = mReverse ? -1.0f : 1.0f;
+      if (mSliceLockEnabled) {
+        direction = (v.sliceReverse > 0.5f) ? -1.0f : 1.0f;
+      }
+      float baseResampleRate = mSpeed * pitchFactor * direction;
+      float traverseRate = mSpeed * direction;
       float readRate = v.pitchRatio;
       bool useGranular = (std::abs(traverseRate - readRate) > 0.001f) ||
                          (std::abs(mStretch - 1.0f) > 0.02f);
@@ -810,16 +896,31 @@ public:
 
       // Filter Processing
       if (v.controlCounter++ % 16 == 0) {
-        float cutoff = 20.0f + (mFilterCutoff * mFilterCutoff * 18000.0f);
+        float baseCutoff = mSliceLockEnabled ? v.sliceCutoff : mFilterCutoff;
+        float baseReson =
+            mSliceLockEnabled ? v.sliceResonance : mFilterResonance;
+
+        float cutoff = 20.0f + (baseCutoff * baseCutoff * 18000.0f);
         // Integrate envelope to filter cutoff
         cutoff += env * mFilterEnvAmount * 12000.0f;
         cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
 
-        v.filter.setParams(cutoff, 0.7f + mFilterResonance * 5.0f, 48000.0f);
+        v.filter.setParams(cutoff, 0.7f + baseReson * 5.0f, 48000.0f);
       }
       voiceOutput = v.filter.process(voiceOutput, TSvf::LowPass);
 
-      mixedOutput += voiceOutput * env * v.baseVelocity;
+      float finalSample = voiceOutput * env * v.baseVelocity;
+      mixedOutput += finalSample;
+
+      // Accumulate into per-slice FX buses if enabled
+      if (mSliceLockEnabled && fxBusesL && fxBusesR) {
+        for (int b = 0; b < 17; ++b) {
+          if (v.fxSends[b] > 0.0001f) {
+            fxBusesL[b] += finalSample * v.fxSends[b];
+            fxBusesR[b] += finalSample * v.fxSends[b];
+          }
+        }
+      }
     }
 
     if (activeCount > 1)
@@ -987,6 +1088,66 @@ public:
     }
   }
 
+  void setSliceParameter(int sliceIdx, int paramId, float value) {
+    if (sliceIdx < 0 || sliceIdx >= 16)
+      return;
+    auto &p = mSliceParams[sliceIdx];
+    p.active = true;
+    switch (paramId) {
+    case 0: // Pitch
+      p.pitch = (value - 0.5f) * 48.0f;
+      break;
+    case 1: // Cutoff
+      p.cutoff = value;
+      break;
+    case 2: // Resonance
+      p.resonance = value;
+      break;
+    case 3: // Reverse
+      p.reverse = value;
+      break;
+    case 4: // Attack
+      p.attack = value;
+      break;
+    case 5: // Decay
+      p.decay = value;
+      break;
+    case 6: // Sustain
+      p.sustain = value;
+      break;
+    case 7: // Release
+      p.release = value;
+      break;
+    default:
+      if (paramId >= 8 && paramId < 8 + 17) {
+        p.fxSends[paramId - 8] = value;
+      }
+      break;
+    }
+
+    // Apply to active voices playing this slice
+    for (auto &v : mVoices) {
+      if (v.active && v.sliceIdx == sliceIdx) {
+        if (paramId == 0) { // Pitch
+          float keyShift = (mPlayMode == Chops || mPlayMode == OneShotChops ||
+                            mPlayMode == LoopChops)
+                               ? 0.0f
+                               : (float)(v.note - 60);
+          v.targetPitchRatio =
+              powf(2.0f, (p.pitch + keyShift) / 12.0f) * mSpeed;
+        } else if (paramId == 3) { // Reverse
+          v.sliceReverse = value;
+        } else if (paramId == 1) { // Cutoff
+          v.sliceCutoff = value;
+        } else if (paramId == 2) { // Resonance
+          v.sliceResonance = value;
+        } else if (paramId >= 8 && paramId < 8 + 17) {
+          v.fxSends[paramId - 8] = value;
+        }
+      }
+    }
+  }
+
   bool isActive() const {
     for (const auto &v : mVoices)
       if (v.active)
@@ -1025,8 +1186,11 @@ private:
   float mFilterCutoff = 1.0f, mFilterResonance = 0.0f, mFilterEnvAmount = 0.0f;
   float mGlide = 0.0f, mLastPitchRatio = 1.0f;
   PlayMode mPlayMode = OneShot;
+  float mSliceIndex = -1.0f; // Range 0.0 to 1.0, -1 means use note
   bool mUseEnvelope = true;
   int mSampleRate = 48000;
+  SliceParams mSliceParams[16];
+  bool mSliceLockEnabled = false;
 };
 
 #endif // SAMPLER_ENGINE_H

@@ -66,10 +66,17 @@ fun RoutingScreen(
         ) {
             (0 until 6).forEach { index ->
                 Box(modifier = Modifier.weight(1f)) {
+                    // Check if any Macro uses this LFO
+                    val macroUser = state.macros.indexOfFirst { it.sourceType == 3 && it.sourceIndex == index }
+                    val displayLabel = if (state.lfos[index].targetId != -1) state.lfos[index].targetLabel 
+                                       else if (macroUser != -1) "Macro ${macroUser + 1}" 
+                                       else "None"
+
                     LfoModule(
                         index = index,
                         lfoState = state.lfos[index],
                         isLearning = state.lfoLearnActive && state.lfoLearnLfoIndex == index,
+                        displayLabelOverride = displayLabel,
                         onUpdate = { newState ->
                             val newLfos = state.lfos.toMutableList()
                             newLfos[index] = newState
@@ -143,6 +150,7 @@ fun LfoModule(
     index: Int, 
     lfoState: LfoState, 
     isLearning: Boolean,
+    displayLabelOverride: String? = null,
     onUpdate: (LfoState) -> Unit,
     onToggleLearn: () -> Unit,
     appState: GrooveboxState,
@@ -171,7 +179,7 @@ fun LfoModule(
                     modifier = Modifier.height(18.dp)
                 ) {
                     Text(
-                        if (isLearning) "TAP..." else lfoState.targetLabel.take(8),
+                        if (isLearning) "TAP..." else (displayLabelOverride ?: lfoState.targetLabel).take(8),
                         fontSize = 8.sp,
                         color = if (isLearning) Color.Black else Color.Cyan
                     )

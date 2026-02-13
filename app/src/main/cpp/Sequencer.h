@@ -1,6 +1,7 @@
 #ifndef SEQUENCER_H
 #define SEQUENCER_H
 
+#include <algorithm>
 #include <map>
 #include <vector>
 
@@ -61,19 +62,77 @@ public:
       mSteps[index] = step;
   }
 
+  bool advance() {
+    int totalSteps = mNumPages * mStepsPerPage;
+    if (totalSteps <= 0)
+      return false;
+
+    bool looped = false;
+    mCurrentStep = mNextStep;
+
+    if (mIsJumpMode) {
+      mNextStep = mCurrentStep;
+      return false;
+    }
+
+    int searchLimit = totalSteps;
+    int searchCount = 0;
+
+    do {
+      if (mIsRandom) {
+        mNextStep = rand() % totalSteps;
+      } else {
+        if (mDirection == 0) { // Forward
+          mNextStep = mCurrentStep + 1;
+          if (mNextStep >= totalSteps) {
+            mNextStep = 0;
+            looped = true;
+          }
+        } else if (mDirection == 1) { // Backward
+          mNextStep = mCurrentStep - 1;
+          if (mNextStep < 0) {
+            mNextStep = totalSteps - 1;
+            looped = true;
+          }
+        } else if (mDirection == 2) { // Ping-Pong
+          if (mPingPongForward) {
+            mNextStep = mCurrentStep + 1;
+            if (mNextStep >= totalSteps) {
+              mNextStep = std::max(0, totalSteps - 2);
+              mPingPongForward = false;
+              looped = true;
+            }
+          } else {
+            mNextStep = mCurrentStep - 1;
+            if (mNextStep < 0) {
+              mNextStep = std::min(totalSteps - 1, 1);
+              mPingPongForward = true;
+              looped = true;
+            }
+          }
+        }
+      }
+      mCurrentStep = mNextStep;
+      searchCount++;
+    } while (mSteps[mNextStep].isSkipped && searchCount < searchLimit);
+
+    return looped;
+  }
+
+  const Step &getCurrentStep() const { return mSteps[mCurrentStep]; }
+  int getCurrentStepIndex() const { return mCurrentStep; }
+  int getCurrentPage() const { return mCurrentStep / mStepsPerPage; }
+
+  float getSwing() const { return mSwing; }
+  bool isEvenStep() const { return (mCurrentStep % 2) == 0; }
+  const std::vector<Step> &getSteps() const { return mSteps; }
+  std::vector<Step> &getStepsMutable() { return mSteps; }
+  void setSteps(const std::vector<Step> &steps) { mSteps = steps; }
+
   void setSwing(float swing) { mSwing = swing; }
-  void setPlaybackDirection(int direction) {
-    mDirection = direction;
-  } // 0: Fwd, 1: Rev, 2: Ping-Pong
+  void setPlaybackDirection(int direction) { mDirection = direction; }
   void setIsRandomOrder(bool isRandom) { mIsRandom = isRandom; }
   void setIsJumpMode(bool isJump) { mIsJumpMode = isJump; }
-
-  void jumpToStep(int step) {
-    if (step >= 0 && step < (int)mSteps.size()) {
-      mNextStep = step;
-      mCurrentStep = step;
-    }
-  }
 
   void setParameterLock(int stepIndex, int parameterId, float value) {
     if (stepIndex >= 0 && stepIndex < 64) {
@@ -87,67 +146,20 @@ public:
     }
   }
 
+  void jumpToStep(int stepIndex) {
+    mNextStep = stepIndex % (mNumPages * mStepsPerPage);
+  }
+
   void clear() {
     for (auto &step : mSteps) {
       step.active = false;
       step.notes.clear();
       step.parameterLocks.clear();
+      step.ratchet = 1;
+      step.punch = false;
+      step.isSkipped = false;
     }
   }
-
-  void advance() {
-    int totalSteps = mNumPages * mStepsPerPage;
-    if (totalSteps <= 0)
-      return;
-
-    mCurrentStep = mNextStep;
-
-    if (mIsJumpMode) {
-      // In Jump Mode, we stay on the current step (Repeat)
-      mNextStep = mCurrentStep;
-      return;
-    }
-
-    int searchLimit = totalSteps;
-    int searchCount = 0;
-
-    do {
-      if (mIsRandom) {
-        mNextStep = rand() % totalSteps;
-      } else {
-        if (mDirection == 0) { // Forward
-          mNextStep = (mCurrentStep + 1) % totalSteps;
-        } else if (mDirection == 1) { // Backward
-          mNextStep = (mCurrentStep - 1 + totalSteps) % totalSteps;
-        } else if (mDirection == 2) { // Ping-Pong
-          if (mPingPongForward) {
-            mNextStep = mCurrentStep + 1;
-            if (mNextStep >= totalSteps) {
-              mNextStep = std::max(0, totalSteps - 2);
-              mPingPongForward = false;
-            }
-          } else {
-            mNextStep = mCurrentStep - 1;
-            if (mNextStep < 0) {
-              mNextStep = std::min(totalSteps - 1, 1);
-              mPingPongForward = true;
-            }
-          }
-        }
-      }
-      mCurrentStep = mNextStep; // Update reference for loop check
-      searchCount++;
-    } while (mSteps[mNextStep].isSkipped && searchCount < searchLimit);
-  }
-
-  const Step &getCurrentStep() const { return mSteps[mCurrentStep]; }
-  int getCurrentStepIndex() const { return mCurrentStep; }
-  int getCurrentPage() const { return mCurrentStep / mStepsPerPage; }
-
-  float getSwing() const { return mSwing; }
-  bool isEvenStep() const { return (mCurrentStep % 2) == 0; }
-  const std::vector<Step> &getSteps() const { return mSteps; }
-  std::vector<Step> &getStepsMutable() { return mSteps; }
 
 private:
   std::vector<Step> mSteps;

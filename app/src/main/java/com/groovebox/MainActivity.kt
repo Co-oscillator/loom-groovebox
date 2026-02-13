@@ -41,6 +41,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.groovebox.utils.*
+import android.media.projection.MediaProjectionManager
+import android.media.projection.MediaProjection
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.AudioPlaybackCaptureConfiguration
+import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -254,6 +260,7 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
     nativeLib.setTempo(state.tempo)
     nativeLib.setMasterVolume(state.masterVolume)
     nativeLib.setScaleConfig(state.rootNote, state.scaleType.intervals.toIntArray())
+    nativeLib.setRecordingSource(state.recordingSource)
     
     // Sync Global Parameters (sent to Track 0)
     state.globalParameters.forEach { (pid, v) -> nativeLib.setParameter(0, pid, v) }
@@ -267,6 +274,7 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         Log.d("Groovebox", "SyncTrack ID $trackIdx Type ${t.engineType} Vol $safeVol Act ${t.isActive}")
         
         nativeLib.setTrackVolume(trackIdx, safeVol)
+        nativeLib.setTrackTranspose(trackIdx, t.transpose)
         nativeLib.setTrackActive(trackIdx, t.isActive)
         nativeLib.setTrackPan(trackIdx, t.pan) // Re-added Pan sync
         
@@ -451,6 +459,23 @@ class MainActivity : ComponentActivity() {
     private lateinit var empledManager: EmpledManager
     private var grooveboxState by mutableStateOf(createInitialState())
 
+    private var mediaProjectionManager: MediaProjectionManager? = null
+
+    private val projectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            val intent = Intent(this, AudioCaptureService::class.java).apply {
+                action = AudioCaptureService.ACTION_START
+                putExtra(AudioCaptureService.EXTRA_RESULT_DATA, result.data)
+            }
+            ContextCompat.startForegroundService(this, intent)
+        } else {
+            // Revert recording source to MIC if denied
+            grooveboxState = grooveboxState.copy(recordingSource = 0)
+            nativeLib.setRecordingSource(0)
+            Toast.makeText(this, "System Audio Capture Permission Denied", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun createInitialState(): GrooveboxState {
         val tracks = List(8) { i ->
             when(i) {
@@ -481,6 +506,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         
         // Prevent Tablet Idle Crash by keeping screen on
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -747,7 +773,7 @@ class MainActivity : ComponentActivity() {
 
             GrooveboxTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    MainScreen(empledManager, nativeLib, grooveboxState, midiManager) { grooveboxState = it }
+                    MainScreen(empledManager, nativeLib, grooveboxState, midiManager, onRecordingSourceChange = ::handleRecordingSourceChange) { grooveboxState = it }
                     
                     // RETRY HANDSHAKE after UI load
                     // Some devices aren't ready for input instantly after connection
@@ -780,7 +806,30 @@ class MainActivity : ComponentActivity() {
         PersistenceManager.saveProject(this, grooveboxState, "last_session.gbx")
     }
 
+    private fun stopLoopbackCapture() {
+        val intent = Intent(this, AudioCaptureService::class.java).apply {
+            action = AudioCaptureService.ACTION_STOP
+        }
+        stopService(intent)
+    }
+
+    fun handleRecordingSourceChange(source: Int) {
+        if (grooveboxState.recordingSource == source) return
+        
+        if (source == 2) { // SYSTEM
+            val intent = mediaProjectionManager?.createScreenCaptureIntent()
+            if (intent != null) projectionLauncher.launch(intent)
+        } else {
+            if (grooveboxState.recordingSource == 2) {
+                stopLoopbackCapture()
+            }
+        }
+        grooveboxState = grooveboxState.copy(recordingSource = source)
+        nativeLib.setRecordingSource(source)
+    }
+
     override fun onDestroy() {
+        stopLoopbackCapture()
         super.onDestroy()
         nativeLib.stop()
         midiManager.close()
@@ -823,7 +872,14 @@ fun SplashScreen() {
 }
 
 @Composable
-fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: GrooveboxState, midiManager: MidiManager, onStateChange: (GrooveboxState) -> Unit) {
+fun MainScreen(
+    empledManager: EmpledManager,
+    nativeLib: NativeLib,
+    state: GrooveboxState,
+    midiManager: MidiManager,
+    onRecordingSourceChange: (Int) -> Unit = {},
+    onStateChange: (GrooveboxState) -> Unit
+) {
     
     var localFocusedValue by remember { mutableStateOf<String?>(null) }
     
@@ -1080,10 +1136,20 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
                                     val newSteps = dsteps.mapIndexed { si, s ->
                                         if (si < nativeStates.size) {
                                             val nativeActive = nativeStates[si]
-                                            if (nativeActive != s.active) {
-                                                drumChanged = true
-                                                s.copy(active = nativeActive)
-                                            } else s
+                                            if (nativeActive) {
+                                                val nativeNotes = nativeLib.getStepNotes(tIdx, si, di).toList()
+                                                val nativeVel = nativeLib.getStepVelocity(tIdx, si, di)
+                                                
+                                                if (nativeActive != s.active || nativeNotes != s.notes || Math.abs(nativeVel - s.velocity) > 0.01f) {
+                                                    drumChanged = true
+                                                    s.copy(active = nativeActive, notes = nativeNotes, velocity = nativeVel)
+                                                } else s
+                                            } else {
+                                                if (s.active) {
+                                                    drumChanged = true
+                                                    s.copy(active = false)
+                                                } else s
+                                            }
                                         } else s
                                     }
                                     if (drumChanged) stateNeedsUpdate = true
@@ -1096,10 +1162,23 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
                             val newSteps = t.steps.mapIndexed { si, s ->
                                 if (si < nativeStates.size) {
                                     val nativeActive = nativeStates[si]
-                                    if (nativeActive != s.active) {
-                                        trackChanged = true
-                                        s.copy(active = nativeActive)
-                                    } else s
+                                    if (nativeActive) {
+                                        // Pull recorded data from engine
+                                        // Pull recorded data from engine
+                                        val nativeNotes = nativeLib.getStepNotes(tIdx, si).toList()
+                                        val nativeVel = nativeLib.getStepVelocity(tIdx, si)
+                                        val nativeSub = nativeLib.getStepSubStep(tIdx, si)
+                                        
+                                        if (nativeActive != s.active || nativeNotes != s.notes || Math.abs(nativeVel - s.velocity) > 0.01f) {
+                                            trackChanged = true
+                                            s.copy(active = nativeActive, notes = nativeNotes, velocity = nativeVel, subStepOffset = nativeSub)
+                                        } else s
+                                    } else {
+                                        if (s.active) {
+                                            trackChanged = true
+                                            s.copy(active = false)
+                                        } else s
+                                    }
                                 } else s
                             }
                             if (trackChanged) stateNeedsUpdate = true
@@ -1134,7 +1213,8 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
         val viewingLastStep = (state.currentSequencerBank + 1) * 16 - 1
         maxUsedStep = maxUsedStep.coerceAtLeast(viewingLastStep)
         
-        val newLength = if (maxUsedStep < 16) 16
+        val newLength = if (state.is64StepView) 64
+                        else if (maxUsedStep < 16) 16
                         else if (maxUsedStep < 32) 32
                         else if (maxUsedStep < 48) 48
                         else 64
@@ -1175,7 +1255,7 @@ fun MainScreen(empledManager: EmpledManager, nativeLib: NativeLib, state: Groove
         ) {
             when (state.selectedTab) {
                 0 -> PlayingScreen(state, onStateChange, nativeLib, empledManager, midiManager)
-                1 -> ParametersScreen(state, state.selectedTrackIndex, onStateChange, nativeLib)
+                1 -> ParametersScreen(state, state.selectedTrackIndex, onStateChange, nativeLib, onRecordingSourceChange = onRecordingSourceChange)
                 2 -> SequencerView(state, onStateChange, nativeLib, empledManager)
                 3 -> GlobalEffectsView(state, onStateChange, nativeLib)
                 4 -> RoutingScreen(state, onStateChange, nativeLib)
@@ -1421,11 +1501,17 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
     ) {
         // Cluster 1: BPM and Swing
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (isWideScreen) 4.dp else 2.dp)) { // Reduced from 8.dp to 2.dp
-            Knob("BPM", (latestState.tempo - 12f) / 228f, -1, latestState, latestOnStateChange, nativeLib, knobSize = if (isWideScreen) 40.dp else 56.dp, onValueChangeOverride = {
-                val newBpm = 12f + (it * 228f)
-                latestOnStateChange(latestState.copy(tempo = newBpm))
-                nativeLib.setTempo(newBpm)
-            })
+            Knob("BPM", (latestState.tempo - 12f) / 228f, -1, latestState, latestOnStateChange, nativeLib, knobSize = if (isWideScreen) 40.dp else 56.dp, 
+                onValueChangeOverride = {
+                    val newBpm = 12f + (it * 228f)
+                    latestOnStateChange(latestState.copy(tempo = newBpm))
+                    nativeLib.setTempo(newBpm)
+                },
+                valueFormatter = {
+                    val bpm = 12f + (it * 228f)
+                    "BPM: ${bpm.toInt()}"
+                }
+            )
             
             var tapTimes by remember { mutableStateOf(listOf<Long>()) }
             Button(
@@ -1466,7 +1552,7 @@ fun TransportControls(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
         Divider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 8.dp))
 
         // Cluster 2: Play, Record, Stop
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // Record Button
             Box(
                 modifier = Modifier

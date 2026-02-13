@@ -1,6 +1,6 @@
 
 > Task :app:checkVersion
-Target Version: 2.0.1 (Build 113)
+Target Version: 2.1.02 (Build 116)
 Version verification passed.
 
 > Task :app:preBuild
@@ -22,10 +22,21 @@ Version verification passed.
 > Task :app:processDebugResources UP-TO-DATE
 
 > Task :app:compileDebugKotlin
-e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/views/SequencerView.kt:295:26 Cannot find a parameter with this name: value
-e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/views/SequencerView.kt:297:26 Cannot find a parameter with this name: grooveboxState
-e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/views/SequencerView.kt:301:26 No value passed for parameter 'initialValue'
-e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/views/SequencerView.kt:301:26 No value passed for parameter 'state'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:345:34 Unexpected tokens (use ';' to separate expressions on the same line)
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:369:30 Expecting 'while' followed by a post-condition
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:372:18 Unexpected tokens (use ';' to separate expressions on the same line)
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:374:9 Expecting an element
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:565:6 Expecting ')'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:566:2 Expecting '}'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:373:13 Unresolved reference: contentAlignment
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:376:41 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:474:17 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:476:32 Type mismatch: inferred type is Alignment but Alignment.Horizontal was expected
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:546:17 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:548:43 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:556:43 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:557:9 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/ui/components/Knob.kt:559:35 @Composable invocations can only happen from the context of a @Composable function
 
 > Task :app:compileDebugKotlin FAILED
 
@@ -50,5 +61,5 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD FAILED in 29s
+BUILD FAILED in 27s
 17 actionable tasks: 2 executed, 15 up-to-date

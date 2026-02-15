@@ -12,7 +12,7 @@ This file tracks outstanding features and long-term goals for the Loom Groovebox
 - [ ] **Transpose Sequences**: UI with "Note +/-" and "Octave +/-" to transpose the entire current sequence. Active settings highlighted.
 - [ ] **Slice Locks**: Per-slice parameter locking for chopped samples, allowing individual shaping of each slice in a kit.
 - [ ] **Song Mode / Pattern Chaining**: A queue system to assemble a sequence of saved sequences for each track, allowing independent chaining (e.g., long lead vs short drum loop).
-- [ ] **Sampler UI Refinements**: Enforce endpoint > startpoint, persistent trim lines, and real-time animations.
+- [x] **Sampler UI Refinements**: Enforce endpoint > startpoint, persistent trim lines, and real-time animations.
 - [ ] **Knob Interaction Refinement**: Fix release jump and implement fine-tuning sensitivity.
 
 ## Completed Features

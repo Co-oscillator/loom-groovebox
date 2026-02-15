@@ -1143,8 +1143,8 @@ fun RecordingStrip(
                     }
                 }
 
-                // Granular Playheads
-                if (granularPlayheads != null && granularPlayheads.isNotEmpty()) {
+                // Granular Playheads (Only if NOT in Scrub Mode)
+                if (!isScrubMode && granularPlayheads != null && granularPlayheads.isNotEmpty()) {
                     val gSizeVal = grainSize ?: 0.1f 
                     val widthPx = gSizeVal * size.width 
                     

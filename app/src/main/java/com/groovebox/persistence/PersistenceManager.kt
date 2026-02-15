@@ -8,6 +8,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import com.groovebox.StepState
+import com.groovebox.TrackState
+import com.groovebox.ArpConfig
+import com.groovebox.ArpMode
 
 import java.io.*
 
@@ -298,13 +301,74 @@ object PersistenceManager {
         }
     }
 
-    fun loadTrackPreset(context: Context, engineType: EngineType, name: String): com.groovebox.TrackState? {
+    fun loadTrackPreset(context: Context, engineType: EngineType, name: String): TrackState? {
         try {
             val engineDir = File(File(getLoomFolder(context), "Presets"), engineType.name)
             val file = File(engineDir, if (name.endsWith(".gbp")) name else "$name.gbp")
             
             if (!file.exists()) return null
-            ObjectInputStream(FileInputStream(file)).use { return it.readObject() as? com.groovebox.TrackState }
+
+            // Try Text Load first (New format)
+            val textLoad = loadTrackPresetFromText(file)
+            if (textLoad != null) return textLoad
+
+            // Fallback to Binary Load (Legacy format)
+            ObjectInputStream(FileInputStream(file)).use { return it.readObject() as? TrackState }
+        } catch (e: Exception) {
+            // e.printStackTrace() // Silent fail for probing
+        }
+        return null
+    }
+
+    fun loadTrackPresetFromText(file: File): TrackState? {
+        try {
+            val lines = file.readLines()
+            if (lines.isEmpty() || lines[0].trim() != "LOOM_PRESET_V1") return null
+            
+            val params = mutableMapOf<Int, Float>()
+            var lineIdx = 1
+            while (lineIdx < lines.size) {
+                val line = lines[lineIdx].trim()
+                if (line == "STEPS_V1" || line == "LOOM_PRESET_V1" || line.isEmpty()) break
+                
+                val value = line.toFloatOrNull() ?: 0f
+                params[lineIdx - 1] = value
+                lineIdx++
+            }
+            
+            // Create a base track state with these parameters
+            var state = TrackState(id = -1, parameters = params)
+            
+            // Check for steps
+            if (lineIdx < lines.size && lines[lineIdx].trim() == "STEPS_V1") {
+                lineIdx++
+                if (lineIdx < lines.size) {
+                    val numSteps = lines[lineIdx].trim().toIntOrNull() ?: 0
+                    lineIdx++
+                    val newSteps = MutableList(64) { StepState() }
+                    for (i in 0 until numSteps) {
+                        if (lineIdx >= lines.size) break
+                        val parts = lines[lineIdx].trim().split(" ")
+                        if (parts.size >= 4) {
+                            val active = parts[0] == "1"
+                            val velocity = parts[1].toFloatOrNull() ?: 0.8f
+                            val gate = parts[2].toFloatOrNull() ?: 1.0f
+                            val noteCount = parts[3].toIntOrNull() ?: 0
+                            val notes = mutableListOf<Int>()
+                            for (j in 0 until noteCount) {
+                                if (4 + j < parts.size) {
+                                    val note = parts[4 + j].toIntOrNull()
+                                    if (note != null) notes.add(note)
+                                }
+                            }
+                            newSteps[i % 64] = StepState(active = active, notes = notes, velocity = velocity, gate = gate)
+                        }
+                        lineIdx++
+                    }
+                    state = state.copy(steps = newSteps)
+                }
+            }
+            return state
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -344,7 +408,10 @@ object PersistenceManager {
             val file = File(seqDir, if (name.endsWith(".gbs")) name else "$name.gbs")
             if (!file.exists()) return null
             
-            val sourceTrack = ObjectInputStream(FileInputStream(file)).use { it.readObject() as? com.groovebox.TrackState } ?: return null
+            // Try Text Load first
+            val textLoad = loadTrackPresetFromText(file)
+            val sourceTrack = textLoad ?: ObjectInputStream(FileInputStream(file)).use { it.readObject() as? TrackState }
+            if (sourceTrack == null) return null
             
             // Compatibility Check
             // If engines match, we can keep everything (including P-Locks)

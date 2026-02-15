@@ -116,12 +116,28 @@ fun Knob(
                     color = if (isHeld) engineColor 
                             else if (state.isParameterLocking) Color.Magenta 
                             else if (state.midiLearnActive && state.midiLearnStep == 2) Color.Yellow
-                            else if (state.lfoLearnActive || state.macroLearnActive) Color.Green
+                            else if (state.lfoLearnActive || state.macroLearnActive || state.macroSourceLearnActive) Color.Green
                             else Color.Transparent,
                     shape = RoundedCornerShape(knobSize / 2)
                 )
-                .pointerInput(parameterId, state.isParameterLocking, state.midiLearnActive, state.midiLearnStep, state.lfoLearnActive, state.macroLearnActive) {
-                    if (state.midiLearnActive && state.midiLearnStep == 2) {
+                .pointerInput(parameterId, state.isParameterLocking, state.midiLearnActive, state.midiLearnStep, state.lfoLearnActive, state.macroLearnActive, state.macroSourceLearnActive) {
+                    if (state.macroSourceLearnActive) {
+                        detectTapGestures {
+                            val macroIdx = latestState.macroSourceLearnIndex
+                            if (macroIdx != -1) {
+                                // SourceType 4 = Envelope, sourceIndex = -1 (not used for env), sourceTrackIndex = current track
+                                nativeLib.setMacroSource(macroIdx, 4, -1, latestState.selectedTrackIndex)
+                                val newMacros = latestState.macros.toMutableList()
+                                newMacros[macroIdx] = newMacros[macroIdx].copy(
+                                    sourceType = 4,
+                                    sourceIndex = -1,
+                                    sourceTrackIndex = latestState.selectedTrackIndex,
+                                    sourceLabel = "TRACK ${latestState.selectedTrackIndex + 1} ENV"
+                                )
+                                latestOnStateChange(latestState.copy(macros = newMacros, macroSourceLearnActive = false))
+                            }
+                        }
+                    } else if (state.midiLearnActive && state.midiLearnStep == 2) {
                         detectTapGestures {
                             val stripIdx = latestState.midiLearnSelectedStrip ?: return@detectTapGestures
                             val newState = if (stripIdx < 4) {

@@ -359,6 +359,16 @@ public:
     return false;
   }
 
+  float getEnvelopeValue() const {
+    float maxEnv = 0.0f;
+    for (int i = 0; i < 8; ++i) {
+      if (mVoices[i].active) {
+        maxEnv = std::max(maxEnv, mVoices[i].env);
+      }
+    }
+    return maxEnv;
+  }
+
   float getVoiceOutput(int index) {
     if (index >= 0 && index < 8)
       return mLastRenders[index];

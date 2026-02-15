@@ -116,12 +116,12 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                 )
             }
             
-            // Center: Test Note, Default Patch, Randomize (as trio)
+             // Center: Test Note, Default Patch (as pair)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val buttonWidth = 100.dp
+                val buttonWidth = 70.dp
                 val buttonHeight = 42.dp
                 val buttonShape = RoundedCornerShape(4.dp)
                 
@@ -129,7 +129,7 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                 var isPressed by remember { mutableStateOf(false) }
                 Box(
                     modifier = Modifier
-                        .size(width = buttonWidth, height = buttonHeight)
+                        .size(width = 60.dp, height = buttonHeight)
                         .background(if (isPressed) Color.Cyan.copy(alpha = 0.3f) else Color.DarkGray, buttonShape)
                         .pointerInput(trackIndex) {
                             detectTapGestures(
@@ -147,16 +147,21 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("♪ ♫", fontSize = 18.sp, color = Color.Cyan, fontWeight = FontWeight.Bold)
+                    Text("♪ ♫", fontSize = 16.sp, color = Color.Cyan, fontWeight = FontWeight.Bold)
                 }
                 
-                // Default Patch Button
+                // Default Patch Button (LOAD)
                 Button(
                     onClick = { 
                          nativeLib.restoreTrackPreset(trackIndex)
-                         onStateChange(state.copy(tracks = state.tracks.mapIndexed { i, t -> 
-                            if (i == trackIndex) t.copy(parameters = emptyMap()) else t 
-                         }))
+                         // Refresh State from Engine
+                         val allParams = nativeLib.getAllTrackParameters(trackIndex)
+                         if (allParams.isNotEmpty()) {
+                             val paramMap = allParams.mapIndexed { idx, value -> idx to value }.toMap()
+                             onStateChange(state.copy(tracks = state.tracks.mapIndexed { i, t -> 
+                                if (i == trackIndex) t.copy(parameters = paramMap) else t 
+                             }))
+                         }
                     },
                     modifier = Modifier.size(width = buttonWidth, height = buttonHeight),
                     contentPadding = PaddingValues(0.dp),
@@ -164,21 +169,12 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                     shape = buttonShape
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("DEFAULT", fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
-                        Text("PATCH", fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
+                        Text("RESET", fontSize = 8.sp, fontWeight = FontWeight.Bold, lineHeight = 9.sp)
+                        Text("DEFAULT", fontSize = 8.sp, fontWeight = FontWeight.Bold, lineHeight = 9.sp)
                     }
                 }
-                
-                // Randomize Button (Double Dice - square dice)
-                Button(
-                    onClick = { randomizeTrackParameters(trackIndex, state, onStateChange, nativeLib) },
-                    modifier = Modifier.size(width = buttonWidth, height = buttonHeight),
-                    contentPadding = PaddingValues(4.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                    shape = buttonShape
-                ) {
-                    DoubleDiceIcon(modifier = Modifier.size(width = 70.dp, height = 34.dp), color = Color.White)
-                }
+                Spacer(modifier = Modifier.width(4.dp))
+                RandomizeButton(trackIndex, state, onStateChange, nativeLib)
             }
             
             // Right: MIDI Learn Toggle & Preset/Seq Management
@@ -244,16 +240,16 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
 
                 // Buttons
                 Column(horizontalAlignment = Alignment.End) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                          Button(onClick = { showPresetLoad = true }, 
-                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(60.dp, 30.dp), 
+                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(70.dp, 42.dp), 
                             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
-                            shape = RoundedCornerShape(4.dp)) { Text("LOAD", fontSize = 10.sp) }
+                            shape = RoundedCornerShape(4.dp)) { Text("LOAD", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
                             
                          Button(onClick = { showPresetSave = true }, 
-                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(60.dp, 30.dp), 
+                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(70.dp, 42.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
-                            shape = RoundedCornerShape(4.dp)) { Text("SAVE", fontSize = 10.sp) }
+                            shape = RoundedCornerShape(4.dp)) { Text("SAVE", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
                     }
                 }
 
@@ -368,7 +364,7 @@ fun TestTriggerButton(trackIndex: Int, nativeLib: NativeLib, modifier: Modifier 
             .size(width = 80.dp, height = 32.dp)
             .background(if (isPressed) Color.White.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
             .border(1.dp, if (isPressed) Color.White else Color.White.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-            .pointerInput(trackIndex) {
+            .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
                         try {
@@ -392,13 +388,12 @@ fun TestTriggerButton(trackIndex: Int, nativeLib: NativeLib, modifier: Modifier 
 fun RandomizeButton(trackIndex: Int, state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
     Button(
         onClick = { randomizeTrackParameters(trackIndex, state, onStateChange, nativeLib) },
-        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+        modifier = Modifier.size(width = 70.dp, height = 42.dp),
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
+        shape = RoundedCornerShape(4.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            DiceIcon(modifier = Modifier.size(16.dp), color = Color.White)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("RANDOMIZE")
-        }
+        DiceIcon(modifier = Modifier.size(24.dp), color = Color.White)
     }
 }
 
@@ -679,11 +674,12 @@ fun RecordingStrip(
     // Drag State
     var draggingSliceIndex by remember { mutableIntStateOf(-1) }
 
-    // Persistent and Animated Trim lines
+    // Persistent and Instant Trim lines (No Animation for instant feedback)
     val effectiveTrimStart = trimStart ?: 0f
     val effectiveTrimEnd = trimEnd ?: 1f
-    val animTrimStart by animateFloatAsState(targetValue = effectiveTrimStart, label = "trimStart")
-    val animTrimEnd by animateFloatAsState(targetValue = effectiveTrimEnd, label = "trimEnd")
+    // Using raw values directly for instant response
+    val animTrimStart = effectiveTrimStart
+    val animTrimEnd = effectiveTrimEnd
 
     // Scrub Mode Logic
     val isScrubMode = track.engineType == EngineType.SAMPLER && (track.parameters[320] ?: 0f) >= 0.95f
@@ -816,19 +812,92 @@ fun RecordingStrip(
                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
                     contentPadding = PaddingValues(0.dp)) { Text("TRIM", fontSize = 10.sp) }
                 
-                if (extraControls != null) {
-                    Spacer(modifier = Modifier.width(16.dp))
-                    extraControls()
-                }
-            }
-            
-            val infiniteTransition = rememberInfiniteTransition()
-            val animScale by infiniteTransition.animateFloat(
-                initialValue = 1f, targetValue = 1.15f,
-                animationSpec = infiniteRepeatable(tween(400), RepeatMode.Reverse)
-            )
+                // BPM CONTROLS (Moved here per user request)
+                // Layout: [Sugg BPM | SET] then [REPEATS Knob]
+                // Located right of TRIM and left of LOCK
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                val sampleLength = remember(trackIndex, waveform) { nativeLib?.getSampleLength(trackIndex) ?: 0L }
+                // BPM CONTROLS
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                // sampleLength already defined above
+                
+                // Observe all factors
+                val seqStepsParam = track.parameters[364] ?: 0.25f // Default 16 steps (4 beats)? No, 364 is usually mapped 0-1.
+                // Assuming 364 maps to steps/beats. If not standard, let's assume 16 steps (4 beats) is common.
+                // But user example: "64 step long sequence".
+                // If 364 is "Sequence Length in Bars", 0.0=1 bar, 1.0=8 bars?
+                // Let's use the UI loop length logic if available. 
+                // Since I can't check logic easily, I'll rely on what was there: (stepsParam * 63f + 1f).
+                val seqSteps = (seqStepsParam * 63f + 1f).toInt() // 1 to 64 steps
+                
+                val repeatsParam = track.parameters[365] ?: 0.0f
+                val repeats = (repeatsParam * 15f + 1f).toInt() // 1 to 16 repeats
+                
+                val tStart = track.parameters[330] ?: 0.0f
+                val tEnd = track.parameters[331] ?: 1.0f
+                
+                // SPEED (302): 0.5 = 1x. Range 0.0 -> 2.0? 
+                // In SamplerEngine: mSpeed = value * 2.0f;
+                // So 0.5 * 2.0 = 1.0x. 
+                val speedParam = track.parameters[302] ?: 0.5f 
+                val speedFactor = (speedParam * 2.0f).coerceAtLeast(0.01f)
+                
+                // STRETCH (301): mStretch = value * 4.0f;
+                // Default 0.25 = 1.0x? No, 1.0 is neutral stretch usually.
+                // SamplerEngine: mStretch = value * 4.0f.  
+                // If user hasn't touched it, what's default? 1.0 (value 0.25)?
+                // Let's assume neutral is 1.0. 
+                val stretchParam = track.parameters[301] ?: 0.25f
+                val stretchFactor = (stretchParam * 4.0f).coerceAtLeast(0.01f)
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                val suggestedBpm = remember(sampleLength, seqSteps, repeats, tStart, tEnd, speedParam, stretchParam) {
+                    if (sampleLength > 0L) {
+                         // Effective Fraction of Sample
+                         val fraction = (tEnd - tStart).coerceAtLeast(0.01f)
+                         val effectiveSamples = sampleLength * fraction
+                         
+                         // Native Duration (at 1x speed, 1x stretch)
+                         val nativeDur = effectiveSamples / 48000f 
+                         
+                         // Actual Duration = Native / Speed * Stretch
+                         // Higher Speed -> Shorter Time
+                         // Higher Stretch -> Longer Time
+                         val actualDur = (nativeDur / speedFactor) * stretchFactor
+                         
+                         if (actualDur > 0.001f) {
+                             // BPM = (SeqSteps * 15) / (ActualDuration * Repeats)
+                             ((seqSteps * 15f) / (actualDur * repeats)).toInt()
+                         } else null
+                    } else null
+                }
+
+                if (suggestedBpm != null) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Sugg.", style = MaterialTheme.typography.labelSmall, color = Color.LightGray, fontSize = 9.sp)
+                        Text("${suggestedBpm}bpm", color = engineColor, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                         Button(
+                            onClick = {
+                                nativeLib?.setTempo(suggestedBpm.toFloat())
+                                onStateChange(state.copy(tempo = suggestedBpm.toFloat()))
+                            },
+                            modifier = Modifier.height(20.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = engineColor.copy(alpha = 0.3f)),
+                            border = BorderStroke(1.dp, engineColor),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text("SET", fontSize = 9.sp, color = engineColor)
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                Knob("REPEATS", 0.0f, 365, state, onStateChange, nativeLib ?: return, knobSize = 32.dp, valueFormatter = { v -> "${(v * 15 + 1).toInt()}" })
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                // LOCK
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("LOCK", style = MaterialTheme.typography.labelSmall, color = Color.LightGray, fontSize = 8.sp)
                     androidx.compose.material3.Switch(
@@ -840,9 +909,18 @@ fun RecordingStrip(
                         modifier = Modifier.scale(0.6f).height(24.dp)
                     )
                 }
-
+            } // End of Central Control Loop
+            
+            // Record Button (Stable Position)
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(modifier = Modifier.width(12.dp))
                 
+                val infiniteTransition = rememberInfiniteTransition()
+                val animScale by infiniteTransition.animateFloat(
+                    initialValue = 1f, targetValue = 1.15f,
+                    animationSpec = infiniteRepeatable(tween(400), RepeatMode.Reverse)
+                )
+
                 val latestIsRecording by rememberUpdatedState(isRecording)
                 val latestOnStart by rememberUpdatedState(onStartRecording)
                 val latestOnStop by rememberUpdatedState(onStopRecording)
@@ -877,11 +955,11 @@ fun RecordingStrip(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isRecording) {
-                        Box(modifier = Modifier.size(16.dp).background(Color.White, RoundedCornerShape(2.dp)))
-                    } else {
-                        Box(modifier = Modifier.size(20.dp).background(Color.Red, CircleShape))
-                    }
+                   if (isRecording) {
+                       Box(Modifier.size(20.dp).background(Color.White, RoundedCornerShape(4.dp)))
+                   } else {
+                       Box(Modifier.size(20.dp).background(Color.Red, CircleShape))
+                   }
                 }
             }
         }
@@ -939,21 +1017,35 @@ fun RecordingStrip(
                             }))
                             
                         } else {
-                            // SLICE EDIT MODE
+                            // SLICE EDIT MODE OR TRIM DRAG
                             var draggingIdx = -1
-                            // Find closest slice point
-                            slicePoints?.let { points ->
-                                var minDist = 0.05f // Restored wider threshold (5% of width) for solid dragging
-                                points.forEachIndexed { i, p ->
-                                    val dist = kotlin.math.abs(p - clickPos)
-                                    if (dist < minDist) {
-                                        minDist = dist
-                                        draggingIdx = i
+                            var isDraggingTrimStart = false
+                            var isDraggingTrimEnd = false
+                            
+                            // Check Trim Lines first (Priority)
+                            val trimStartPx = effectiveTrimStart * width
+                            val trimEndPx = effectiveTrimEnd * width
+                            val touchThreshold = 30.dp.toPx() // Generous grab area
+                            
+                            if (kotlin.math.abs(down.position.x - trimStartPx) < touchThreshold) {
+                                isDraggingTrimStart = true
+                            } else if (kotlin.math.abs(down.position.x - trimEndPx) < touchThreshold) {
+                                isDraggingTrimEnd = true
+                            } else {
+                                // Find closest slice point if not dragging trim
+                                slicePoints?.let { points ->
+                                    var minDist = 0.05f 
+                                    points.forEachIndexed { i, p ->
+                                        val dist = kotlin.math.abs(p - clickPos)
+                                        if (dist < minDist) {
+                                            minDist = dist
+                                            draggingIdx = i
+                                        }
                                     }
                                 }
                             }
                             
-                            if (draggingIdx != -1) {
+                            if (isDraggingTrimStart || isDraggingTrimEnd || draggingIdx != -1) {
                                 draggingSliceIndex = draggingIdx
                                 down.consume()
                                 
@@ -964,12 +1056,34 @@ fun RecordingStrip(
                                     if (change != null && change.pressed) {
                                         if (change.position != dragChange.position) {
                                             val newPos = (change.position.x / width).coerceIn(0f, 1f)
-                                            // Update Local
-                                            slicePoints?.let { pts ->
-                                                if (draggingIdx < pts.size) pts[draggingIdx] = newPos
+                                            
+                                            if (isDraggingTrimStart) {
+                                                // Dragging Start: constrained by End
+                                                val maxVal = effectiveTrimEnd - 0.01f
+                                                val finalStart = newPos.coerceAtMost(maxVal)
+                                                nativeLib?.setParameter(trackIndex, 330, finalStart)
+                                                // Update local state for immediate feedback
+                                                onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                    if (idx == trackIndex) t.copy(parameters = t.parameters + (330 to finalStart)) else t 
+                                                }))
+                                            } else if (isDraggingTrimEnd) {
+                                                // Dragging End: constrained by Start
+                                                val minVal = effectiveTrimStart + 0.01f
+                                                val finalEnd = newPos.coerceAtLeast(minVal)
+                                                nativeLib?.setParameter(trackIndex, 331, finalEnd)
+                                                onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                    if (idx == trackIndex) t.copy(parameters = t.parameters + (331 to finalEnd)) else t 
+                                                }))
+                                            } else {
+                                                // Dragging Slice
+                                                // Update Local
+                                                slicePoints?.let { pts ->
+                                                    if (draggingIdx < pts.size) pts[draggingIdx] = newPos
+                                                }
+                                                // Call Native
+                                                nativeLib?.setSlicePosition(trackIndex, draggingIdx, newPos)
                                             }
-                                            // Call Native
-                                            nativeLib?.setSlicePosition(trackIndex, draggingIdx, newPos)
+                                            
                                             change.consume()
                                         }
                                         dragChange = change
@@ -995,19 +1109,19 @@ fun RecordingStrip(
                     drawLine(Color.Red.copy(alpha = 0.3f), Offset(0f, size.height/2), Offset(size.width, size.height/2), strokeWidth = 1.dp.toPx())
                 }
                 
+                val currentPoints = slicePoints
+
+                // Granular/Scrub Playheads
                 if (isScrubMode) {
-                    // Use Physics Position (granularPlayheads[0]) if available for smooth coasting animation
-                    // Fallback to scrubPosition (touch param) if not active
                     val physPos = if (granularPlayheads != null && granularPlayheads.size >= 2 && granularPlayheads[0] >= 0) granularPlayheads[0] else scrubPosition
                     val x = physPos * size.width
                     val fuschia = Color(0xFFFF00FF)
-                    // 4dp wide fuschia line
                     drawLine(fuschia, Offset(x, 0f), Offset(x, size.height), strokeWidth = 4.dp.toPx())
-                    // 30dp wide fuschia circle at bottom
                     drawCircle(fuschia, radius = 15.dp.toPx(), center = Offset(x, size.height - 15.dp.toPx()))
-                } else {
-                    val currentPoints = slicePoints
-                    if (track.engineType == EngineType.SAMPLER && currentPoints != null) {
+                } 
+                
+                // SLICE LINES (Restored)
+                if (track.engineType == EngineType.SAMPLER && currentPoints != null) {
                     val paint = Paint().apply {
                         color = android.graphics.Color.MAGENTA
                         textSize = 24f
@@ -1029,6 +1143,7 @@ fun RecordingStrip(
                     }
                 }
 
+                // Granular Playheads
                 if (granularPlayheads != null && granularPlayheads.isNotEmpty()) {
                     val gSizeVal = grainSize ?: 0.1f 
                     val widthPx = gSizeVal * size.width 
@@ -1053,7 +1168,7 @@ fun RecordingStrip(
                     }
                 }
 
-                // Always draw trim lines for Sampler
+                // Trim Lines (Always Visible)
                 if (track.engineType == EngineType.SAMPLER) {
                     // DRAW SELECTED SLICE HIGHLIGHT
                     selectedSlice?.let { selIdx ->
@@ -1061,11 +1176,9 @@ fun RecordingStrip(
                         val endPos: Float
                         val pts = currentPoints
                         if (pts != null && pts.isNotEmpty()) {
-                            // Custom Slices
                              startPos = if (selIdx == 0) animTrimStart else pts.getOrNull(selIdx - 1) ?: animTrimStart
                              endPos = pts.getOrNull(selIdx) ?: animTrimEnd
                         } else {
-                            // Unified/Auto Slices
                             val sCount = slices ?: 1
                             val sliceStep = (animTrimEnd - animTrimStart) / sCount
                             startPos = animTrimStart + selIdx * sliceStep
@@ -1084,7 +1197,6 @@ fun RecordingStrip(
                     
                     val xEnd = animTrimEnd * size.width
                     drawLine(Color.Red, Offset(xEnd, 0f), Offset(xEnd, size.height), strokeWidth = 1.5.dp.toPx())
-                }
                 }
             }
             
@@ -2122,10 +2234,7 @@ fun GranularParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (G
             grainSize = state.tracks[trackIndex].parameters[406],
             nativeLib = nativeLib,
             state = state,
-            onStateChange = onStateChange,
-            extraControls = {
-                Knob("GAIN", 0.4f, 429, state, onStateChange, nativeLib, knobSize = 32.dp)
-            }
+            onStateChange = onStateChange
         )
         
     // Single Row Layout: Cloud, Motion, Envelope, Advanced
@@ -2351,6 +2460,7 @@ fun GeneratorMappingRow(label: String, knobId: Int, currentGenId: Int, trackInde
 @Composable
 fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, onRecordingSourceChange: (Int) -> Unit = {}) {
     val track = state.tracks[trackIndex]
+    val themeColor = getEngineColor(track.engineType)
     val samplerMode = track.parameters[320] ?: 0f
     val isChops = samplerMode >= 0.49f
     val isSliceLock = (track.parameters[342] ?: 0.0f) > 0.5f
@@ -2403,6 +2513,11 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
             onStateChange = onStateChange,
             selectedSlice = if (isChops) selectedSlice else null
         )
+
+        // BPM MATCHING ROW
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(modifier = Modifier.weight(1f)) // Just push it to the left
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 

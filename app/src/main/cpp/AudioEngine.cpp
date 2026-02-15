@@ -2,7 +2,8 @@
 #include "AudioEngine.h"
 #include "WavFileUtils.h" // New
 #include "engines/BitcrusherFx.h"
-#include <fstream> // Should be in Utils but ensuring
+#include <fstream>
+#include <sstream>
 
 #include <algorithm>
 #include <android/log.h>
@@ -10,6 +11,7 @@
 #include <cmath>
 #include <jni.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 
 #if defined(__i386__) || defined(__x86_64__)
 #include <xmmintrin.h>
@@ -50,7 +52,7 @@ AudioEngine::AudioEngine() {
   mSampleRate = 48000.0; // Default to common Android rate
   mBpm = 120.0f;
   setupTracks();
-  for (int i = 0; i < 17; ++i)
+  for (int i = 0; i < 18; ++i)
     mFxChainDest[i] = -1;
 
   // FX Slot Filters (Slots 9/10)
@@ -70,7 +72,7 @@ AudioEngine::AudioEngine() {
   mSidechainSourceTrack = -1;
   mSidechainSourceDrumIdx = -1;
 
-  for (int i = 0; i < 17; ++i) {
+  for (int i = 0; i < 18; ++i) {
     mFxMixLevels[i] = 1.0f;
     mFxChainDest[i] = -1;
 
@@ -79,6 +81,9 @@ AudioEngine::AudioEngine() {
   }
 
   // Initialize Filter Pedals
+  mEq5BandFxL.reset();
+  mEq5BandFxR.reset();
+
   for (int i = 0; i < 3; ++i) {
     mFilterPedalL[i].clear();
     mFilterPedalR[i].clear();
@@ -134,6 +139,46 @@ void AudioEngine::initTrack(int i) {
   mTracks[i].panR = 0.7071f;
   mTracks[i].mSilenceFrames = 48002;
   mTracks[i].isActive = false; // Start inactive to save CPU
+
+  // Attempt to load from default file if it exists
+  if (!mAppDataDir.empty()) {
+    std::string path = mAppDataDir + "/defaults/default_" +
+                       std::to_string(mTracks[i].engineType) + ".gbs";
+    std::ifstream file(path);
+    if (file.is_open()) {
+      std::string line;
+      if (std::getline(file, line) && line == "LOOM_PRESET_V1") {
+        int idx = 0;
+        int pCount = sizeof(mTracks[i].parameters) / sizeof(float);
+        while (std::getline(file, line) && idx < pCount) {
+          try {
+            mTracks[i].parameters[idx] = std::stof(line);
+            mTracks[i].appliedParameters[idx] = mTracks[i].parameters[idx];
+          } catch (...) {
+          }
+          idx++;
+        }
+        file.close();
+        mTracks[i].mParametersDirty = true;
+        // If we loaded a preset, we still want to initialize non-parameter
+        // state but we skip the hardcoded param defaults
+        // Reset Engines to match params
+        mTracks[i].subtractiveEngine.resetToDefaults();
+        mTracks[i].fmEngine.resetToDefaults();
+        mTracks[i].fmDrumEngine.resetToDefaults();
+        mTracks[i].analogDrumEngine.resetToDefaults();
+        mTracks[i].wavetableEngine.resetToDefaults();
+        mTracks[i].soundFontEngine.allNotesOff();
+
+        // Apply loaded parameters to engines
+        for (int p = 0; p < idx; ++p) {
+          setParameter(i, p, mTracks[i].parameters[p], true);
+        }
+        return;
+      }
+      file.close();
+    }
+  }
 
   // Clear all parameters and FX sends to prevent ghost states (Phantom Panning)
   std::fill(std::begin(mTracks[i].parameters), std::end(mTracks[i].parameters),
@@ -340,6 +385,85 @@ void AudioEngine::setupTracks() {
 void AudioEngine::restoreTrackPreset(int trackIndex) {
   if (trackIndex >= 0 && trackIndex < 8) {
     initTrack(trackIndex);
+  }
+}
+
+void AudioEngine::saveTrackPreset(int trackIndex) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (trackIndex < 0 || trackIndex >= (int)mTracks.size() ||
+      mAppDataDir.empty())
+    return;
+
+  auto &track = mTracks[trackIndex];
+  // Ensure "defaults" directory exists
+  std::string dir = mAppDataDir + "/defaults";
+  mkdir(dir.c_str(), 0777);
+
+  std::string path =
+      dir + "/default_" + std::to_string(track.engineType) + ".gbs";
+  std::ofstream file(path);
+  if (file.is_open()) {
+    file << "LOOM_PRESET_V1\n";
+    for (int i = 0; i < 2500; i++) {
+      file << track.parameters[i] << "\n";
+    }
+    file.close();
+    LOGD("Saved default preset for engine %d to %s", track.engineType,
+         path.c_str());
+  }
+}
+
+void AudioEngine::saveTrackPresetToPath(int trackIndex, std::string path) {
+  std::string content;
+  {
+    std::lock_guard<std::recursive_mutex> lock(mLock);
+    if (trackIndex < 0 || trackIndex >= (int)mTracks.size())
+      return;
+
+    auto &track = mTracks[trackIndex];
+    std::stringstream ss;
+    ss << "LOOM_PRESET_V1\n";
+    // Save parameters
+    for (int i = 0; i < 2500; i++) {
+      float val = track.parameters[i];
+      if (!std::isfinite(val))
+        val = 0.0f;
+      ss << val << "\n";
+    }
+    // Save sequencer steps
+    auto steps = track.sequencer.getSteps();
+    ss << "STEPS_V1\n";
+    ss << steps.size() << "\n";
+    for (const auto &step : steps) {
+      float firstVel = step.notes.empty() ? 0.8f : step.notes[0].velocity;
+      if (!std::isfinite(firstVel))
+        firstVel = 0.8f;
+      float gate = step.gate;
+      if (!std::isfinite(gate))
+        gate = 1.0f;
+
+      ss << (step.active ? 1 : 0) << " " << firstVel << " " << gate << " "
+         << step.notes.size();
+      for (const auto &noteInfo : step.notes)
+        ss << " " << noteInfo.note;
+      ss << "\n";
+    }
+    content = ss.str();
+  }
+
+  // Disk I/O outside of the lock
+  std::string tempPath = path + ".tmp";
+  std::ofstream file(tempPath);
+  if (file.is_open()) {
+    file << content;
+    file.close();
+    // Atomic rename
+    if (std::rename(tempPath.c_str(), path.c_str()) == 0) {
+      LOGD("Auto-saved track %d sequence to %s", trackIndex, path.c_str());
+    } else {
+      std::remove(tempPath.c_str());
+      LOGD("Failed to rename temp file for track %d save", trackIndex);
+    }
   }
 }
 
@@ -1142,6 +1266,9 @@ void AudioEngine::processCommands() {
       break;
     case AudioCommand::SET_TEMPO:
       mBpm = cmd.value;
+      for (auto &track : mTracks) {
+        track.samplerEngine.setProjectBpm(mBpm);
+      }
       break;
     case AudioCommand::SET_TRACK_HUMANIZE:
       if (cmd.trackIndex >= 0 && cmd.trackIndex < 8) {
@@ -1267,6 +1394,7 @@ void AudioEngine::processCommands() {
         mTracks[cmd.trackIndex].samplerEngine.setSlicePoints(cmd.sliceStarts,
                                                              cmd.sliceEnds);
       }
+      break;
       break;
     }
   }
@@ -1564,6 +1692,16 @@ void AudioEngine::updateGlobalParameter(int parameterId, float value) {
         mOctaverFxR.setDetune(value);
       }
       break;
+    case 3: // 5-Band EQ (Slot 17)
+      if (subId >= 0 && subId < 5) {
+        mEq5BandFxL.setBandGain(subId, (value - 0.5f) * 48.0f); // +/- 24dB
+        mEq5BandFxR.setBandGain(subId, (value - 0.5f) * 48.0f);
+      } else if (subId == 9) { // MIX
+        mEq5BandFxL.setMix(value);
+        mEq5BandFxR.setMix(value);
+        mFxMixLevels[17] = 1.0f;
+      }
+      break;
     }
   }
 
@@ -1841,22 +1979,37 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
             bool looped = track.sequencer.advance();
             if (looped && track.isChainEnabled) {
-              // Find next valid slot
+              // 1. COMMIT EXECUTED STEPS BACK TO SLOT (Required for
+              // recording!)
+              if (track.currentChainSlot >= 0 && track.currentChainSlot < 100) {
+                track.chainSlots[track.currentChainSlot].steps =
+                    track.sequencer.getSteps();
+                for (int d = 0; d < 16; ++d) {
+                  track.chainSlots[track.currentChainSlot].drumLanes[d] =
+                      track.drumSequencers[d].getSteps();
+                }
+                track.chainSlots[track.currentChainSlot].hasSequence = true;
+
+                // 2. SIGNAL FOR BACKGROUND SAVE TO FILE (if recording)
+                if (mIsRecording) {
+                  enqueuePatternSaveEvent(t, track.currentChainSlot);
+                }
+              }
+
+              // 3. ADVANCE TO NEXT SLOT
               int nextSlot = track.currentChainSlot;
               int searchCount = 0;
               do {
-                nextSlot = (nextSlot + 1) % track.chainLength;
+                nextSlot = (nextSlot + 1) % 16;
                 searchCount++;
-              } while (!track.chainSlots[nextSlot].hasSequence &&
-                       searchCount < track.chainLength);
+              } while (
+                  searchCount < 16 && !track.chainSlots[nextSlot].hasSequence &&
+                  !mIsRecording); // If recording, even empty slots are fine!
 
-              if (track.chainSlots[nextSlot].hasSequence &&
-                  nextSlot != track.currentChainSlot) {
+              if (nextSlot != track.currentChainSlot) {
                 track.currentChainSlot = nextSlot;
                 const auto &slot = track.chainSlots[track.currentChainSlot];
-                // Swap main sequencer
                 track.sequencer.setSteps(slot.steps);
-                // Swap all drum sequencers to keep them in sync
                 for (int i = 0; i < 16; ++i) {
                   track.drumSequencers[i].setSteps(slot.drumLanes[i]);
                 }
@@ -2370,7 +2523,6 @@ void AudioEngine::setPlaying(bool playing) {
       }
       track.isActive = false;
       track.mPendingNotes.clear();
-      track.isActive = false;
 
       // Panic: Force silence
       track.subtractiveEngine.allNotesOff();
@@ -2383,18 +2535,21 @@ void AudioEngine::setPlaying(bool playing) {
       track.soundFontEngine.allNotesOff();
     }
   } else {
+    // FIX: reset startup frames so we don't skip the first step on play
+    mStartupFrames = 0;
+
     for (auto &track : mTracks) {
       track.mInternalStepIndex = 0;
       track.mStepCountdown = 0.0;
       track.mPendingNotes.clear();
 
       // FIX: Reset Sequencers to start from the beginning
-      track.sequencer.jumpToStep(0);
+      track.sequencer.reset();
       // Reset Drum Sequencers too
       if (track.engineType == 5 || track.engineType == 6 ||
           (track.engineType == 2 && track.samplerEngine.getPlayMode() >= 3)) {
         for (int d = 0; d < 16; ++d) {
-          track.drumSequencers[d].jumpToStep(0);
+          track.drumSequencers[d].reset();
         }
       }
     }
@@ -2756,23 +2911,36 @@ void AudioEngine::loadSample(int trackIndex, const std::string &path) {
   if (trackIndex < 0 || trackIndex >= mTracks.size())
     return;
   auto &track = mTracks[trackIndex];
-
+  // Load using WavFileUtils
   std::vector<float> data;
-  std::vector<float> slices;
-  int sampleRate, channels;
-
-  if (WavFileUtils::loadWav(path, data, sampleRate, channels, slices)) {
-    if (track.engineType == 2) {
-      track.samplerEngine.loadSample(data);
-      track.samplerEngine.setSlicePoints(slices);
-    } else if (track.engineType == 3) { // Granular (3)
-      track.granularEngine.setSource(data);
-    } else if (track.engineType == 4) { // Wavetable (4)
-      track.wavetableEngine.loadWavetable(data);
-    }
-    track.lastSamplePath = path;
-    saveAppState();
+  int sampleRate;
+  int channels;
+  std::vector<float> slicePoints;
+  if (!WavFileUtils::loadWav(path, data, sampleRate, channels, slicePoints)) {
+    return;
   }
+
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (track.engineType == 2) { // Sampler
+    track.samplerEngine.loadSample(data);
+    if (!slicePoints.empty()) {
+      track.samplerEngine.setSlicePoints(slicePoints);
+    }
+  } else if (track.engineType == 3) { // Granular
+    track.granularEngine.setSource(data);
+  }
+  track.lastSamplePath = path;
+}
+
+size_t AudioEngine::getSampleLength(int trackIndex) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
+    if (mTracks[trackIndex].engineType == 2) // Sampler
+      return mTracks[trackIndex].samplerEngine.getSampleLength();
+    else if (mTracks[trackIndex].engineType == 3) // Granular
+      return mTracks[trackIndex].granularEngine.getSampleLength();
+  }
+  return 0;
 }
 
 void AudioEngine::setAppDataDir(const std::string &dir) { mAppDataDir = dir; }
@@ -2923,10 +3091,13 @@ void AudioEngine::stopRecordingSample(int trackIndex) {
   if (!mIsRecordingLocked) {
     // Commit recorded samples to active buffer (lock-free swap)
     if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-      if (mTracks[trackIndex].engineType == 2)
+      if (mTracks[trackIndex].engineType == 2) { // Sampler
         mTracks[trackIndex].samplerEngine.commitRecording();
-      else if (mTracks[trackIndex].engineType == 3)
+        mTracks[trackIndex].samplerEngine.normalize();
+      } else if (mTracks[trackIndex].engineType == 3) { // Granular
         mTracks[trackIndex].granularEngine.commitRecording();
+        mTracks[trackIndex].granularEngine.normalize();
+      }
     }
     mIsRecordingSample = false;
     mRecordingTrackIndex = -1;
@@ -3074,18 +3245,19 @@ void AudioEngine::setGenericLfoParam(int lfoIndex, int paramId, float value) {
 }
 
 void AudioEngine::setMacroValue(int macroIndex, float value) {
-  if (macroIndex < 0 || macroIndex >= 6)
+  if (macroIndex < 0 || macroIndex >= 8)
     return;
   std::lock_guard<std::recursive_mutex> lock(mLock);
   mMacros[macroIndex].value = value;
 }
 
 void AudioEngine::setMacroSource(int macroIndex, int sourceType,
-                                 int sourceIndex) {
+                                 int sourceIndex, int sourceTrackIndex) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (macroIndex >= 0 && macroIndex < 6) {
+  if (macroIndex >= 0 && macroIndex < 8) {
     mMacros[macroIndex].sourceType = sourceType;
     mMacros[macroIndex].sourceIndex = sourceIndex;
+    mMacros[macroIndex].sourceTrackIndex = sourceTrackIndex;
   }
 }
 
@@ -3126,6 +3298,29 @@ void AudioEngine::setArpTriplet(int trackIndex, bool isTriplet) {
 }
 
 float AudioEngine::getCpuLoad() { return mCpuLoad.load(); }
+
+void AudioEngine::enqueuePatternSaveEvent(int trackIndex, int slotIndex) {
+  std::lock_guard<std::mutex> lock(mEventLock);
+  EngineEvent ev;
+  ev.type = EngineEvent::PATTERN_SAVE;
+  ev.trackIndex = trackIndex;
+  ev.data = slotIndex;
+  mEventQueue.push_back(ev);
+}
+
+int AudioEngine::fetchEngineEvents(int *outBuffer, int maxEvents) {
+  std::lock_guard<std::mutex> lock(mEventLock);
+  int count = 0;
+  while (!mEventQueue.empty() && count < maxEvents) {
+    auto ev = mEventQueue.front();
+    mEventQueue.erase(mEventQueue.begin());
+    outBuffer[count * 3 + 0] = (int)ev.type;
+    outBuffer[count * 3 + 1] = ev.trackIndex;
+    outBuffer[count * 3 + 2] = ev.data;
+    count++;
+  }
+  return count;
+}
 
 void AudioEngine::enqueueMidiEvent(int type, int channel, int data1,
                                    int data2) {
@@ -3282,12 +3477,42 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     mLfos[l].process(sampleRate,
                      1); // Only 1 "sample" of progression per buffer cycle
   }
-  for (int m = 0; m < 6; ++m) {
+  for (int m = 0; m < 8; ++m) {
     if (mMacros[m].sourceType == 3) { // LFO
       int lfoIdx = mMacros[m].sourceIndex;
       if (lfoIdx >= 0 && lfoIdx < 6) {
         float val = (mLfos[lfoIdx].getCurrentValue() + 1.0f) * 0.5f;
         mMacros[m].value = std::max(0.0f, std::min(1.0f, val));
+      }
+    } else if (mMacros[m].sourceType == 4) { // Envelope
+      int trackIdx = mMacros[m].sourceTrackIndex;
+      if (trackIdx >= 0 && trackIdx < mTracks.size()) {
+        float envVal = 0.0f;
+        auto &t = mTracks[trackIdx];
+        switch (t.engineType) {
+        case 0:
+          envVal = t.subtractiveEngine.getEnvelopeValue();
+          break;
+        case 1:
+          envVal = t.fmEngine.getEnvelopeValue();
+          break;
+        case 2:
+          envVal = t.wavetableEngine.getEnvelopeValue();
+          break;
+        case 3:
+          envVal = t.samplerEngine.getEnvelopeValue();
+          break;
+        case 4:
+          envVal = t.granularEngine.getEnvelopeValue();
+          break;
+        case 5:
+          envVal = t.fmDrumEngine.getEnvelopeValue();
+          break;
+        case 6:
+          envVal = t.analogDrumEngine.getEnvelopeValue();
+          break;
+        }
+        mMacros[m].value = std::max(0.0f, std::min(1.0f, envVal));
       }
     }
   }
@@ -3308,12 +3533,12 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     float mixedSampleL = 0.0f;
     float mixedSampleR = 0.0f;
     float sidechainSignal = 0.0f;
-    float fxBusesL[17];
-    float fxBusesR[17];
+    float fxBusesL[18];
+    float fxBusesR[18];
     // Denormal Bias (1e-15f) helps prevent CPU spikes on nearly-silent audio
     const float denormalBias = 1e-15f;
 
-    for (int b = 0; b < 17; ++b) {
+    for (int b = 0; b < 18; ++b) {
       // Load feedback from previous sample (Backward Chaining)
       fxBusesL[b] = mFxFeedbacksL[b] + denormalBias;
       fxBusesR[b] = mFxFeedbacksR[b] + denormalBias;
@@ -3336,7 +3561,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       if (std::abs(track.volume - track.smoothedVolume) > 0.0001f) {
         track.smoothedVolume += 0.01f * (track.volume - track.smoothedVolume);
       }
-      for (int f = 0; f < 17; ++f) {
+      for (int f = 0; f < 18; ++f) {
         if (std::abs(track.fxSends[f] - track.smoothedFxSends[f]) > 0.0001f) {
           track.smoothedFxSends[f] +=
               0.01f * (track.fxSends[f] - track.smoothedFxSends[f]);
@@ -3447,7 +3672,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       bool skipTrackSends =
           (track.engineType == 2 && track.samplerEngine.isSliceLockEnabled());
 
-      for (int f = 0; f < 17; ++f) {
+      for (int f = 0; f < 18; ++f) {
         if (track.smoothedFxSends[f] > 0.001f) {
           // Per-track mix balance
           float wetAmount = track.smoothedFxSends[f] * track.fxMix[f];
@@ -3485,6 +3710,12 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
 
     auto routeFx = [&](int index, float valL, float valR,
                        bool isDelta = false) {
+      // CRITICAL SAFETY CHECK: Block NaNs/Infs from FX
+      if (!std::isfinite(valL) || !std::isfinite(valR)) {
+        // potential TODO: Reset the FX that caused this?
+        return;
+      }
+
       int dest = mFxChainDest[index];
       float outL, outR;
 
@@ -3497,12 +3728,12 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         outR = valR * mFxMixLevels[index];
       }
 
-      if (dest >= 0 && dest < 17) {
+      if (dest >= 0 && dest < 18) {
         // Serial Chaining
         // Determine Direction based on Hardcoded Execution Order
-        // IDs: 0, 1, 9, 10, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14
-        const int order[17] = {0, 1, 4,  5,  6,  7,  8,  9, 10,
-                               2, 3, 11, 12, 15, 16, 13, 14};
+        // IDs: 0, 1, 9, 10, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 17
+        const int order[18] = {0, 1, 4,  5,  6,  7,  8,  9,  10,
+                               2, 3, 11, 12, 15, 16, 13, 14, 17};
         bool isForward = order[dest] > order[index];
 
         if (isForward) {
@@ -3648,6 +3879,12 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         std::abs(fxBusesR[14]) > 0.00001f) {
       routeFx(14, mOctaverFxL.process(fxBusesL[14], sampleRate),
               mOctaverFxR.process(fxBusesR[14], sampleRate));
+    }
+
+    if (std::abs(fxBusesL[17]) > 0.00001f ||
+        std::abs(fxBusesR[17]) > 0.00001f) {
+      routeFx(17, mEq5BandFxL.process(fxBusesL[17], sampleRate),
+              mEq5BandFxR.process(fxBusesR[17], sampleRate));
     }
 
     float finalL = (mixedSampleL + wetSampleL + spreadL);

@@ -46,6 +46,8 @@ class NativeLib {
     external fun saveSample(trackIndex: Int, path: String)
     external fun restorePresets()
     external fun restoreTrackPreset(trackIndex: Int)
+    external fun saveTrackPreset(trackIndex: Int)
+    external fun saveTrackPresetToPath(trackIndex: Int, path: String)
     external fun trimSample(trackIndex: Int)
     external fun getCurrentStep(trackIndex: Int, drumIndex: Int = -1): Int
     external fun getStepActive(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Boolean
@@ -72,9 +74,10 @@ class NativeLib {
     // Routing / Macro Controls
     external fun setGenericLfoParam(lfoIndex: Int, paramId: Int, value: Float)
     external fun setMacroValue(macroIndex: Int, value: Float)
-    external fun setMacroSource(macroIndex: Int, sourceType: Int, sourceIndex: Int)
+    external fun setMacroSource(macroIndex: Int, sourceType: Int, sourceIndex: Int, sourceTrackIndex: Int = -1)
     external fun setFxChain(sourceFx: Int, destFx: Int)
     external fun fetchMidiEvents(): IntArray
+    external fun fetchEngineEvents(): IntArray
     
     // Persistence
     external fun setAppDataDir(path: String)
@@ -103,6 +106,7 @@ class NativeLib {
     external fun setSidechainConfig(trackIndex: Int, drumIndex: Int)
     external fun pushSystemAudioSamples(data: FloatArray)
     
+    external fun getSampleLength(trackIndex: Int): Long
     // Sequence Chaining
     external fun setChainEnabled(trackIndex: Int, enabled: Boolean)
     external fun setChainLength(trackIndex: Int, length: Int)

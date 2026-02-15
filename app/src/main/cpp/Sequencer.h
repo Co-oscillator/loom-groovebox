@@ -49,7 +49,14 @@ class Sequencer {
 public:
   Sequencer() {
     mSteps.resize(64);
+    reset();
+  }
+
+  void reset() {
+    mCurrentStep = 0;
     mNextStep = 0;
+    mNeedsInitialTrigger = true;
+    mPingPongForward = true;
   }
 
   void setConfiguration(int numPages, int stepsPerPage) {
@@ -66,6 +73,20 @@ public:
     int totalSteps = mNumPages * mStepsPerPage;
     if (totalSteps <= 0)
       return false;
+
+    if (mNeedsInitialTrigger) {
+      mNeedsInitialTrigger = false;
+      mCurrentStep = 0;
+      // Calculate next step for the NEXT advance call
+      if (mDirection == 0) { // Forward
+        mNextStep = (mCurrentStep + 1) % totalSteps;
+      } else if (mDirection == 1) { // Backward
+        mNextStep = (mCurrentStep - 1 + totalSteps) % totalSteps;
+      } else {
+        mNextStep = mCurrentStep; // Simplification for other modes on first hit
+      }
+      return false; // Not a loop on start
+    }
 
     bool looped = false;
     mCurrentStep = mNextStep;
@@ -173,6 +194,7 @@ private:
   bool mIsRandom = false;
   bool mIsJumpMode = false;
   bool mPingPongForward = true;
+  bool mNeedsInitialTrigger = true;
 };
 
 #endif // SEQUENCER_H

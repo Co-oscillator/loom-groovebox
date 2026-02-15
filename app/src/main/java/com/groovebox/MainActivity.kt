@@ -887,11 +887,43 @@ fun MainScreen(
         // Wrap children in provider
     
     var cpuLoad by remember { mutableFloatStateOf(0f) }
+    val context = LocalContext.current
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             while (true) {
                 cpuLoad = nativeLib.getCpuLoad()
-                delay(500)
+                
+                // Poll Engine Events
+                val events = nativeLib.fetchEngineEvents()
+                if (events.isNotEmpty()) {
+                    val pendingSaves = mutableMapOf<Int, Int>() // trackIdx -> slotIdx
+
+                    for (i in 0 until events.size / 3) {
+                        val type = events[i * 3]
+                        val trackIdx = events[i * 3 + 1]
+                        val slotIdx = events[i * 3 + 2]
+
+                    }
+
+                    // Process unique saves
+                    pendingSaves.forEach { (trackIdx, slotIdx) ->
+                         val track = state.tracks.getOrNull(trackIdx)
+                         if (track != null) {
+                             val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                             val filename = "Rec_${track.engineType.name}_T${trackIdx + 1}_S${slotIdx + 1}_$timestamp.gbp"
+                             val file = File(File(PersistenceManager.getLoomFolder(context), "Sequences"), filename)
+                             if (!file.parentFile.exists()) file.parentFile.mkdirs()
+                             
+                             nativeLib.saveTrackPresetToPath(trackIdx, file.absolutePath)
+                             
+                             withContext(Dispatchers.Main) {
+                                 // Toast.makeText(context, "Auto-Saved: $filename", Toast.LENGTH_SHORT).show()
+                             }
+                        }
+                    }
+                }
+                
+                delay(200)
             }
         }
     }
@@ -1005,7 +1037,6 @@ fun MainScreen(
     val latestState by rememberUpdatedState(state)
     val latestOnStateChange by rememberUpdatedState(onStateChange)
     
-    val context = LocalContext.current
     // Persistent Strip/Knob Assignments Logic
     // 1. Save assignments when they change
     LaunchedEffect(state.stripRoutings, state.knobRoutings) {

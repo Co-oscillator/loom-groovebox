@@ -262,22 +262,27 @@ fun MacroUnit(
                     )
                     DropdownMenu(expanded = showSourceMenu, onDismissRequest = { showSourceMenu = false }) {
                         val options = listOf("None") + 
-                                      (1..4).map { "Strip \$it" } + 
-                                      (1..4).map { "Knob \$it" } + 
-                                      (1..6).map { "LFO \$it" }
+                                      (1..4).map { "STRIP $it" } + 
+                                      (1..4).map { "KNOB $it" } + 
+                                      (1..6).map { "LFO $it" } +
+                                      listOf("LEARN ENV...")
                         
                         options.forEachIndexed { i, label ->
                             DropdownMenuItem(
-                                text = { Text(label) },
+                                text = { Text(label, color = if (label == "LEARN ENV...") Color.Cyan else Color.Unspecified) },
                                 onClick = {
                                     showSourceMenu = false
-                                    val (type, srcIdx) = when {
-                                        i == 0 -> 0 to -1
-                                        i <= 4 -> 1 to (i - 1) // Strip
-                                        i <= 8 -> 2 to (i - 5) // Knob
-                                        else -> 3 to (i - 9) // LFO
+                                    if (label == "LEARN ENV...") {
+                                        onStateChange(grooveboxState.copy(macroSourceLearnActive = true, macroSourceLearnIndex = index))
+                                    } else {
+                                        val (type, srcIdx) = when {
+                                            i == 0 -> 0 to -1
+                                            i <= 4 -> 1 to (i - 1) // Strip
+                                            i <= 8 -> 2 to (i - 5) // Knob
+                                            else -> 3 to (i - 9) // LFO
+                                        }
+                                        onUpdate(macroState.copy(sourceLabel = label, sourceType = type, sourceIndex = srcIdx))
                                     }
-                                    onUpdate(macroState.copy(sourceLabel = label, sourceType = type, sourceIndex = srcIdx))
                                 }
                             )
                         }

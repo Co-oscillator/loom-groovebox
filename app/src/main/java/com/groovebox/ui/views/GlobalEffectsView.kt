@@ -30,6 +30,7 @@ import com.groovebox.EngineType
 import com.groovebox.GrooveboxState
 import com.groovebox.NativeLib
 import com.groovebox.ui.components.Knob
+import com.groovebox.ui.components.VerticalSlider
 
 @Composable
 fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
@@ -408,8 +409,37 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                             shape = RoundedCornerShape(4.dp)
                         ) {
-                            Text(modeLabels[currentMode], style = MaterialTheme.typography.labelSmall, color = Color.Cyan)
                         }
+                    }
+                }
+            }
+            item {
+                Pedal("5-BAND EQ", Color(0xFF44AAFF), state, 17, onStateChange, nativeLib) {
+                    val eqColor = Color(0xFF44AAFF)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(100.dp), 
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val bands = listOf("LOW" to 1530, "L-MID" to 1531, "MID" to 1532, "H-MID" to 1533, "HIGH" to 1534)
+                        bands.forEach { (label, id) ->
+                            val value = state.globalParameters[id] ?: 0.5f
+                            VerticalSlider(
+                                label = label,
+                                value = value,
+                                color = eqColor,
+                                height = 70.dp,
+                                width = 28.dp,
+                                onValueChange = { newVal ->
+                                    nativeLib.setParameter(-1, id, newVal)
+                                    onStateChange(state.copy(globalParameters = state.globalParameters + (id to newVal)))
+                                }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+                        GlobalKnob("MIX", 1.0f, 1539, state, onStateChange, nativeLib, knobSize = 36.dp)
                     }
                 }
             }

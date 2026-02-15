@@ -336,6 +336,16 @@ public:
     return false;
   }
 
+  float getEnvelopeValue() const {
+    float maxEnv = 0.0f;
+    for (const auto &v : mVoices) {
+      if (v.active) {
+        maxEnv = std::max(maxEnv, v.envelope.getValue());
+      }
+    }
+    return maxEnv;
+  }
+
 private:
   std::vector<Voice> mVoices;
   std::vector<float> mTable;

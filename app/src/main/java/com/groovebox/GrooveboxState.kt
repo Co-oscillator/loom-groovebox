@@ -158,8 +158,9 @@ data class MacroTarget(
 data class MacroState(
     val label: String = "Macro", 
     var sourceLabel: String = "None",
-    var sourceType: Int = 0, // 0=None, 1=Strip, 2=Knob, 3=LFO
+    var sourceType: Int = 0, // 0=None, 1=Strip, 2=Knob, 3=LFO, 4=Envelope
     var sourceIndex: Int = -1, 
+    var sourceTrackIndex: Int = -1,
     val targets: List<MacroTarget> = List(3) { MacroTarget() },
     val value: Float = 0.0f
 ) : java.io.Serializable {
@@ -275,10 +276,14 @@ data class GrooveboxState(
     val lfoLearnActive: Boolean = false,
     val lfoLearnLfoIndex: Int = -1,
     
-    // Macro Learn
+    // Macro Learn (Target)
     val macroLearnActive: Boolean = false,
     val macroLearnMacroIndex: Int = -1,
     val macroLearnTargetIndex: Int = -1,
+
+    // Macro Learn (Source/Env)
+    val macroSourceLearnActive: Boolean = false,
+    val macroSourceLearnIndex: Int = -1,
     
     // MIDI UI Feedback
     val lastMidiNote: Int = -1,

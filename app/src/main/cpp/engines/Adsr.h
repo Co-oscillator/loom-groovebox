@@ -82,6 +82,7 @@ public:
 
   bool isActive() const { return mStage != AdsrStage::Idle; }
   float getValue() const { return mValue; }
+  AdsrStage getStage() const { return mStage; }
 
 private:
   float mSampleRate = 48000.0f;

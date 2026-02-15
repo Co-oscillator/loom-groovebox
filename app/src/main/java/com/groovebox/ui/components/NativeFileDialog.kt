@@ -238,12 +238,30 @@ fun NativeFileDialog(
                 if (isSave) {
                     var showSaveInput by remember { mutableStateOf(false) }
                     
-                    Button(
-                        onClick = { showSaveInput = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00AAFF))
-                    ) {
-                        Text("SAVE FILE")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { showSaveInput = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00AAFF))
+                        ) {
+                            Text("SAVE NEW PRESET FILE")
+                        }
+
+                        // Save as Default option
+                        if (trackIndex != -1) {
+                            Button(
+                                onClick = { 
+                                    com.groovebox.NativeLib().saveTrackPreset(trackIndex)
+                                    android.widget.Toast.makeText(context, "Saved as Default for Engine", android.widget.Toast.LENGTH_SHORT).show()
+                                    onDismiss()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA500).copy(alpha = 0.8f)),
+                                border = BorderStroke(1.dp, Color(0xFFFFA500))
+                            ) {
+                                Text("SAVE AS ENGINE DEFAULT", color = Color.White)
+                            }
+                        }
                     }
 
                     if (showSaveInput) {

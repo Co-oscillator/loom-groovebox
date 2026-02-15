@@ -276,6 +276,14 @@ public:
     return false;
   }
 
+  float getEnvelopeValue() const {
+    float maxEnv = 0.0f;
+    for (int i = 0; i < 8; ++i) {
+      maxEnv = std::max(maxEnv, mEngines[i].getEnvelopeValue());
+    }
+    return maxEnv;
+  }
+
 private:
   FmEngine mEngines[8];
   float mLastRenders[8] = {0.0f};

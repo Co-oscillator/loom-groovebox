@@ -17,6 +17,7 @@
 #include "engines/ChorusFx.h"
 #include "engines/CompressorFx.h"
 #include "engines/DelayFx.h"
+#include "engines/Eq5BandFx.h"
 #include "engines/FilterLfoFx.h"
 #include "engines/FlangerFx.h"
 #include "engines/FmDrumEngine.h"
@@ -142,6 +143,7 @@ public:
   std::vector<float> getSamplerSlicePoints(int trackIndex);
   std::vector<float> getRecordedSampleData(int trackIndex,
                                            float targetSampleRate);
+  size_t getSampleLength(int trackIndex);
   int getActiveNoteMask(int trackIndex);
   void panic();
   void loadFmPreset(int trackIndex, int presetId);
@@ -174,6 +176,8 @@ public:
   // Track Management
   void initTrack(int i);
   void restoreTrackPreset(int trackIndex);
+  void saveTrackPreset(int trackIndex);
+  void saveTrackPresetToPath(int trackIndex, std::string path);
 
   // Routing / Macro Controls
   void setGenericLfoParam(int lfoIndex, int paramId, float value);
@@ -197,7 +201,6 @@ public:
   int fetchMidiEvents(int *outBuffer, int maxEvents);
 
 private:
-  void updateGlobalParameter(int parameterId, float value);
   void enqueueMidiEvent(int type, int channel, int data1, int data2);
   std::vector<MidiMessage> mMidiQueue;
   std::mutex mMidiLock;
@@ -254,6 +257,20 @@ private:
 
   void processCommands();
 
+  struct EngineEvent {
+    enum Type { PATTERN_SAVE = 1 };
+    Type type;
+    int trackIndex;
+    int data;
+  };
+  std::vector<EngineEvent> mEventQueue;
+  std::mutex mEventLock;
+  void enqueuePatternSaveEvent(int trackIndex, int slotIndex);
+
+public:
+  int fetchEngineEvents(int *outBuffer, int maxEvents);
+  void updateGlobalParameter(int parameterId, float value);
+
   std::atomic<bool> mFirstRun{true};
   std::atomic<float> mCpuLoad{0.0f};
   std::shared_ptr<oboe::AudioStream> mStream;
@@ -296,11 +313,10 @@ public:
     Sequencer drumSequencers[16];
     Arpeggiator arpeggiator;
     EnvelopeFollower follower;
-    float fxSends[17] = {0.0f}; // Increased to 17 for separate Filter pedals
-    float smoothedFxSends[17] = {0.0f};
-    float fxMix[17] = {
-        1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0f!
+    float fxSends[18] = {0.0f};
+    float smoothedFxSends[18] = {0.0f};
+    float fxMix[18] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                       1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
     bool isActive = false;
     float currentFrequency = 440.0f;
@@ -363,7 +379,7 @@ public:
       bool hasSequence = false;
     };
 
-    std::vector<ChainSlot> chainSlots = std::vector<ChainSlot>(16);
+    std::vector<ChainSlot> chainSlots = std::vector<ChainSlot>(100);
     int currentChainSlot = 0;
     int chainLength = 1;
     bool isChainEnabled = false;
@@ -416,6 +432,7 @@ public:
   SimpleFilterFx mFilterPedalR[3];
   TapeEchoFx mTapeEchoFxL, mTapeEchoFxR;
   OctaverFx mOctaverFxL, mOctaverFxR;
+  Eq5BandFx mEq5BandFxL, mEq5BandFxR;
 
   // Generic LFOs for Routing
   LfoEngine mLfos[6];
@@ -423,22 +440,24 @@ public:
   // Macros (Patch Points)
   struct MacroModule {
     float value = 0.0f;
-    int sourceType = 0; // 0=None, 1=Strip, 2=Knob, 3=LFO
+    int sourceType = 0; // 0=None, 1=Strip, 2=Knob, 3=LFO, 4=Envelope
     int sourceIndex = -1;
+    int sourceTrackIndex = -1; // For Env/Track sources
   };
-  MacroModule mMacros[6];
+  MacroModule mMacros[8]; // Increased to 8 to match UI
 
   // Public methods for modulation
 public:
-  void setMacroSource(int macroIndex, int sourceType, int sourceIndex);
+  void setMacroSource(int macroIndex, int sourceType, int sourceIndex,
+                      int sourceTrackIndex = -1);
   void applyModulations();
 
   // FX Chaining (Soft Routing)
   // Maps SourceFX Index -> DestinationFX Index. -1 means Master Mix.
-  int mFxChainDest[17];
+  int mFxChainDest[18];
   // Feedback buffers for backward-chaining effects (1-sample latency)
-  float mFxFeedbacksL[17] = {0.0f};
-  float mFxFeedbacksR[17] = {0.0f};
+  float mFxFeedbacksL[18] = {0.0f};
+  float mFxFeedbacksR[18] = {0.0f};
 
   // FX Split Filter LFO Effects (Slots 9/10)
   FilterLfoFx mHpLfoL{FilterLfoMode::HighPass};
@@ -450,9 +469,9 @@ public:
   int mSidechainSourceDrumIdx = -1;
   float mMasterVolume = 0.8f;
   bool mIsFloatFormat = true; // Assume Float, but verify at stream open
-  float mFxMixLevels[17] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                            1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                            1.0f, 1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0
+  float mFxMixLevels[18] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                            1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                            1.0f, 1.0f, 1.0f, 1.0f}; // Default to 1.0
   float mInputRingBuffer[8192] = {0.0f};
   std::atomic<uint32_t> mInputWritePtr{0};
   uint32_t mInputReadPtr = 0;

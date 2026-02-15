@@ -389,7 +389,6 @@ Java_com_groovebox_NativeLib_stopRecordingSample(JNIEnv *env, jobject thiz,
                                                  jint track_index) {
   if (engine) {
     engine->stopRecordingSample(track_index);
-    engine->normalizeSample(track_index);
   }
 }
 
@@ -398,6 +397,14 @@ Java_com_groovebox_NativeLib_setRecordingLocked(JNIEnv *env, jobject thiz,
                                                 jboolean locked) {
   if (engine)
     engine->setRecordingLocked(locked);
+}
+
+extern "C" JNIEXPORT jlong JNICALL Java_com_groovebox_NativeLib_getSampleLength(
+    JNIEnv *env, jobject thiz, jint track_index) {
+  if (engine) {
+    return (jlong)engine->getSampleLength(track_index);
+  }
+  return 0;
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
@@ -594,9 +601,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setMacroValue(
 
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setMacroSource(
     JNIEnv *env, jobject thiz, jint macro_index, jint source_type,
-    jint source_index) {
+    jint source_index, jint source_track_index) {
   if (engine)
-    engine->setMacroSource(macro_index, source_type, source_index);
+    engine->setMacroSource(macro_index, source_type, source_index,
+                           source_track_index);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setFxChain(
@@ -788,10 +796,33 @@ Java_com_groovebox_NativeLib_restoreTrackPreset(JNIEnv *env, jobject thiz,
   if (engine)
     engine->restoreTrackPreset(track_index);
 }
-extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setInputDevice(
-    JNIEnv *env, jobject thiz, jint device_id) {
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_saveTrackPreset(
+    JNIEnv *env, jobject thiz, jint track_index) {
   if (engine)
-    engine->setInputDevice(device_id);
+    engine->saveTrackPreset(track_index);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_saveTrackPresetToPath(JNIEnv *env, jobject thiz,
+                                                   jint track_index,
+                                                   jstring path) {
+  if (engine) {
+    const char *nativePath = env->GetStringUTFChars(path, nullptr);
+    engine->saveTrackPresetToPath(track_index, std::string(nativePath));
+    env->ReleaseStringUTFChars(path, nativePath);
+  }
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_groovebox_NativeLib_fetchEngineEvents(JNIEnv *env, jobject thiz) {
+  if (engine) {
+    int buffer[300]; // Max 100 events
+    int count = engine->fetchEngineEvents(buffer, 100);
+    jintArray result = env->NewIntArray(count * 3);
+    env->SetIntArrayRegion(result, 0, count * 3, buffer);
+    return result;
+  }
+  return env->NewIntArray(0);
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL

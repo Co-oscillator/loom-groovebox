@@ -242,6 +242,9 @@ public:
   const std::vector<float> &getSampleData() const {
     return mSourceBuffers[mActiveBuffer.load(std::memory_order_acquire)];
   }
+  size_t getSampleLength() const {
+    return mSourceBuffers[mActiveBuffer.load(std::memory_order_acquire)].size();
+  }
   void clearSource() {
     int inactive = 1 - mActiveBuffer.load(std::memory_order_acquire);
     mSourceBuffers[inactive].clear();
@@ -431,6 +434,16 @@ public:
       if (g.isActive)
         return true;
     return false;
+  }
+
+  float getEnvelopeValue() const {
+    float maxEnv = 0.0f;
+    for (const auto &v : mVoices) {
+      if (v.active) {
+        maxEnv = std::max(maxEnv, v.envelope.getValue());
+      }
+    }
+    return maxEnv;
   }
 
   void render(float *left, float *right) {

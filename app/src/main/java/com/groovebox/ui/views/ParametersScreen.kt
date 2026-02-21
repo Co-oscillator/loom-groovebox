@@ -2074,7 +2074,7 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = Color(0xFF222222),
-                modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
+                modifier = Modifier.fillMaxSize(0.95f)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Select FM Preset", style = MaterialTheme.typography.headlineSmall, color = Color.White)
@@ -2204,16 +2204,16 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                 border = BorderStroke(1.dp, themeColor),
                 modifier = Modifier.weight(1.0f).fillMaxHeight()
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
+                    Text("PRESET", color = themeColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 10.sp, fontSize = 10.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
                     val activePreset = fmPresets.find { it.id == track.selectedFmPreset }
                     if (activePreset != null) {
-                        Icon(getFmPresetIconVector(activePreset.category), contentDescription = null, tint = getFmPresetIconColor(activePreset.category), modifier = Modifier.size(28.dp))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(activePreset.name, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 10.sp, fontSize = 9.sp)
+                        Icon(getFmPresetIconVector(activePreset.category), contentDescription = null, tint = getFmPresetIconColor(activePreset.category), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(activePreset.name, color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 10.sp, fontSize = 8.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     } else {
-                        Icon(Icons.Default.Menu, contentDescription = null, tint = themeColor, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("BROWSE\nPRESETS", color = themeColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 10.sp, fontSize = 9.sp)
+                        Spacer(modifier = Modifier.height(30.dp)) // Leave empty space if none loaded yet
                     }
                 }
             }

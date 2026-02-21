@@ -547,7 +547,6 @@ class MainActivity : ComponentActivity() {
                 if (!sfDir.exists()) sfDir.mkdirs()
                 
                 val assetsToCopy = listOf(
-                    "soundfonts/Chorium.sf2" to "Chorium.sf2",
                     "soundfonts/GeneralUser_GS.sf2" to "GeneralUser_GS.sf2"
                 )
                 
@@ -849,12 +848,12 @@ fun SplashScreen() {
             verticalArrangement = Arrangement.Center
         ) {
             Image(
-                painter = painterResource(id = R.drawable.ic_icon),
+                painter = painterResource(id = R.drawable.ic_icon_round),
                 contentDescription = "Loom Icon",
                 modifier = Modifier
                     .size(280.dp)
                     .clip(CircleShape),
-                contentScale = ContentScale.Fit
+                contentScale = ContentScale.Crop
             )
             
             Spacer(modifier = Modifier.height(32.dp))

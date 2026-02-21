@@ -1457,12 +1457,12 @@ fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange:
             // FILTER
             CompactParameterBox(title = "FILTER", startColor = themeColor, modifier = Modifier.weight(1f)) {
                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("CUTOFF", 0.8f, 1, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("RES", 0.2f, 2, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("CUTOFF", 0.8f, 112, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("RES", 0.2f, 113, state, onStateChange, nativeLib, knobSize = 34.dp)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                     Knob("ENV", 0.5f, 118, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("DRIVE", 0.0f, 112, state, onStateChange, nativeLib, knobSize = 34.dp) // Added Filter Drive (112?) or generic param? Assuming 112 from prev
+                    Spacer(modifier = Modifier.width(34.dp))
                     
                     // Mode Button (Small)
                     Button(
@@ -2082,7 +2082,7 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(6),
+                        columns = GridCells.Adaptive(minSize = 56.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f)
@@ -2099,10 +2099,16 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                     )
                                     .clickable {
                                         nativeLib.loadFmPreset(trackIndex, preset.id)
-                                        val newState = state.copy(tracks = state.tracks.mapIndexed { idx, t -> if (idx == trackIndex) t.copy(selectedFmPreset = preset.id) else t })
-                                        onStateChange(newState)
+                                        // Perform unified update so selectedFmPreset persists instead of wiped by onRefresh
+                                        val allParams = nativeLib.getAllTrackParameters(trackIndex)
+                                        if (allParams.isNotEmpty()) {
+                                            val paramMap = allParams.mapIndexed { idx, value -> idx to value }.toMap()
+                                            val newState = state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                if (idx == trackIndex) t.copy(selectedFmPreset = preset.id, parameters = paramMap) else t 
+                                            })
+                                            onStateChange(newState)
+                                        }
                                         showPresetDrawer = false
-                                        onRefresh()
                                     }
                                     .padding(8.dp),
                                 contentAlignment = Alignment.Center
@@ -2157,7 +2163,7 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
         val filterContent: @Composable ColumnScope.() -> Unit = {
              val track = state.tracks[trackIndex]
              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Knob("FILT", 0.5f, 151, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("FILT", 1.0f, 151, state, onStateChange, nativeLib, knobSize = 34.dp)
                 Knob("RES", 0.0f, 152, state, onStateChange, nativeLib, knobSize = 34.dp)
              }
              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {

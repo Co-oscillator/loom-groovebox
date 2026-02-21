@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Close
@@ -1306,6 +1307,42 @@ val fmPresets = listOf(
     FmPreset(38, "Syn-Orchestra", "Ens")
 )
 
+fun getFmPresetIconColor(category: String): Color {
+    return when(category) {
+        "Brass" -> Color(0xFFFFD700)   // Gold
+        "Strings" -> Color(0xFF9370DB) // Medium Purple
+        "Keys" -> Color(0xFF00BFFF)    // Deep Sky Blue
+        "Pad" -> Color(0xFF20B2AA)     // Light Sea Green
+        "Bass" -> Color(0xFFFF4500)    // Orange Red
+        "Ens" -> Color(0xFFFF69B4)     // Hot Pink
+        "Pluck" -> Color(0xFF32CD32)   // Lime Green
+        "Wind" -> Color(0xFF00FA9A)    // Medium Spring Green
+        "Mallet" -> Color(0xFFFF6347)  // Tomato
+        "Bell" -> Color(0xFFE0FFFF)    // Light Cyan (Bright)
+        "Vox" -> Color(0xFFF08080)     // Light Coral
+        "Lead" -> Color(0xFFFF00FF)    // Magenta
+        "FX" -> Color(0xFFFFA500)      // Orange
+        else -> Color(0xFF7FFFD4)      // Aquamarine
+    }
+}
+
+fun getFmPresetIconVector(category: String): androidx.compose.ui.graphics.vector.ImageVector {
+    return when(category) {
+        "Keys" -> Icons.Outlined.Piano
+        "Vox" -> Icons.Outlined.Mic
+        "Bass" -> Icons.Outlined.Speaker
+        "Wind" -> Icons.Outlined.Air
+        "Bell" -> Icons.Outlined.Notifications
+        "Lead" -> Icons.Outlined.Star
+        "Pad" -> Icons.Outlined.Cloud
+        "FX" -> Icons.Outlined.Bolt
+        "Mallet" -> Icons.Outlined.Apps
+        "Pluck" -> Icons.Outlined.LibraryMusic
+        "Ens" -> Icons.Outlined.Album
+        else -> Icons.Outlined.MusicNote
+    }
+}
+
 @Composable
 fun AutoPannerParameters(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
     Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
@@ -2030,11 +2067,14 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
     var showPresetDrawer by remember { mutableStateOf(false) }
 
     if (showPresetDrawer) {
-        Dialog(onDismissRequest = { showPresetDrawer = false }) {
+        Dialog(
+            onDismissRequest = { showPresetDrawer = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = Color(0xFF222222),
-                modifier = Modifier.fillMaxSize().padding(16.dp)
+                modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Select FM Preset", style = MaterialTheme.typography.headlineSmall, color = Color.White)
@@ -2050,9 +2090,16 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.DarkGray)
+                                    .background(if (track.selectedFmPreset == preset.id) Color.DarkGray else Color(0xFF333333))
+                                    .border(
+                                        width = if (track.selectedFmPreset == preset.id) 2.dp else 0.dp,
+                                        color = if (track.selectedFmPreset == preset.id) Color.White else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
                                     .clickable {
                                         nativeLib.loadFmPreset(trackIndex, preset.id)
+                                        val newState = state.copy(tracks = state.tracks.mapIndexed { idx, t -> if (idx == trackIndex) t.copy(selectedFmPreset = preset.id) else t })
+                                        onStateChange(newState)
                                         showPresetDrawer = false
                                         onRefresh()
                                     }
@@ -2060,43 +2107,13 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    // Simple generic icon based on category with vibrant colors
-                                    val iconColor = when(preset.category) {
-                                        "Brass" -> Color(0xFFFFD700)   // Gold
-                                        "Strings" -> Color(0xFF9370DB) // Medium Purple
-                                        "Keys" -> Color(0xFF00BFFF)    // Deep Sky Blue
-                                        "Pad" -> Color(0xFF20B2AA)     // Light Sea Green
-                                        "Bass" -> Color(0xFFFF4500)    // Orange Red
-                                        "Ens" -> Color(0xFFFF69B4)     // Hot Pink
-                                        "Pluck" -> Color(0xFF32CD32)   // Lime Green
-                                        "Wind" -> Color(0xFF00FA9A)    // Medium Spring Green
-                                        "Mallet" -> Color(0xFFFF6347)  // Tomato
-                                        "Bell" -> Color(0xFFE0FFFF)    // Light Cyan (Bright)
-                                        "Vox" -> Color(0xFFF08080)     // Light Coral
-                                        "Lead" -> Color(0xFFFF00FF)    // Magenta
-                                        "FX" -> Color(0xFFFFA500)      // Orange
-                                        else -> Color(0xFF7FFFD4)      // Aquamarine
-                                    }
-                                    
-                                    val iconVector = when(preset.category) {
-                                        "Keys" -> Icons.Outlined.Piano
-                                        "Vox" -> Icons.Outlined.Mic
-                                        "Bass" -> Icons.Outlined.Speaker
-                                        "Wind" -> Icons.Outlined.Air
-                                        "Bell" -> Icons.Outlined.Notifications
-                                        "Lead" -> Icons.Outlined.Star
-                                        "Pad" -> Icons.Outlined.Cloud
-                                        "FX" -> Icons.Outlined.Bolt
-                                        "Mallet" -> Icons.Outlined.Apps
-                                        "Pluck" -> Icons.Outlined.LibraryMusic
-                                        "Ens" -> Icons.Outlined.Album
-                                        else -> Icons.Outlined.MusicNote
-                                    }
+                                    val iconColor = getFmPresetIconColor(preset.category)
+                                    val iconVector = getFmPresetIconVector(preset.category)
                                     
                                     Icon(
                                         imageVector = iconVector,
                                         contentDescription = preset.category,
-                                        modifier = Modifier.size(28.dp),
+                                        modifier = Modifier.size(32.dp),
                                         tint = iconColor
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
@@ -2188,8 +2205,16 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                 modifier = Modifier.weight(1.0f).fillMaxHeight()
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Menu, contentDescription = null, tint = themeColor, modifier = Modifier.size(24.dp))
-                    Text("BROWSE\nPRESETS", color = themeColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 10.sp)
+                    val activePreset = fmPresets.find { it.id == track.selectedFmPreset }
+                    if (activePreset != null) {
+                        Icon(getFmPresetIconVector(activePreset.category), contentDescription = null, tint = getFmPresetIconColor(activePreset.category), modifier = Modifier.size(28.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(activePreset.name, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 10.sp, fontSize = 9.sp)
+                    } else {
+                        Icon(Icons.Default.Menu, contentDescription = null, tint = themeColor, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("BROWSE\nPRESETS", color = themeColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 10.sp, fontSize = 9.sp)
+                    }
                 }
             }
         }

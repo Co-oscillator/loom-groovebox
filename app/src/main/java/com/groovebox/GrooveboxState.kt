@@ -46,6 +46,7 @@ data class TrackState(
     val numPages: Int = 1,
     val stepsPerPage: Int = 16,
     val selectedFmDrumInstrument: Int = 0,
+    val selectedFmPreset: Int = -1,
     val arpConfig: ArpConfig = ArpConfig(),
     val mutatedNotes: Map<Int, Int> = emptyMap(),
     val fmCarrierMask: Int = 1,

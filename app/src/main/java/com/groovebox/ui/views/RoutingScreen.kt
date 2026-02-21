@@ -191,15 +191,23 @@ fun LfoModule(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Box(modifier = Modifier.weight(1f)) {
                     Knob("RATE", lfoState.rate, 2300 + index*10 + 0, appState, onStateChange, nativeLib, 
-                        onValueChangeOverride = { v -> onUpdate(lfoState.copy(rate = v)) }, knobSize = 32.dp)
+                        onValueChangeOverride = { v -> onUpdate(lfoState.copy(rate = v)) }, 
+                        valueFormatter = { v ->
+                            if (lfoState.sync) {
+                                listOf("8/1", "4/1", "2/1", "1/1", "1/2", "1/4", "1/8", "1/16")[(v * 7.99f).toInt().coerceIn(0, 7)]
+                            } else {
+                                String.format(java.util.Locale.US, "%.2f", v)
+                            }
+                        },
+                        knobSize = 32.dp)
                 }
                 Box(modifier = Modifier.weight(1f)) {
                     Knob("DPTH", lfoState.depth, 2301 + index*10 + 1, appState, onStateChange, nativeLib, 
                         onValueChangeOverride = { v -> onUpdate(lfoState.copy(depth = v)) }, knobSize = 32.dp)
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                Box {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.weight(1f)) {
                     Knob("SHAPE", lfoState.shape / 4.0f, 2302 + index*10 + 2, appState, onStateChange, nativeLib, 
                         onValueChangeOverride = { v ->
                             val shapeIdx = (v * 4).toInt().coerceIn(0, 4)
@@ -209,6 +217,45 @@ fun LfoModule(
                             listOf("SIN", "TRI", "SQR", "SAW", "RND")[(v * 4.4).toInt().coerceIn(0, 4)]
                         }, knobSize = 32.dp
                     )
+                }
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .clickable {
+                                onUpdate(lfoState.copy(sync = !lfoState.sync))
+                            }
+                            .padding(4.dp)
+                    ) {
+                        val isChecked = lfoState.sync
+                        val checkedColor = Color.Cyan
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .background(
+                                    if (isChecked) checkedColor.copy(alpha = 0.8f) else Color.DarkGray,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isChecked) checkedColor else Color.Gray,
+                                    RoundedCornerShape(4.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isChecked) {
+                                Box(modifier = Modifier.size(12.dp).background(Color.Black, RoundedCornerShape(2.dp)))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "SYNC",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isChecked) checkedColor else Color.Gray,
+                            fontSize = 8.sp
+                        )
+                    }
                 }
             }
         }

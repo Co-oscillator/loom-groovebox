@@ -2071,13 +2071,14 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
             onDismissRequest = { showPresetDrawer = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color(0xFF222222),
-                modifier = Modifier.fillMaxSize(0.95f)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Select FM Preset", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF222222),
+                    modifier = Modifier.fillMaxSize(0.95f)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Select FM Preset", style = MaterialTheme.typography.headlineSmall, color = Color.White)
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     LazyVerticalGrid(
@@ -2122,12 +2123,12 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                             }
                         }
                     }
-                    
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = { showPresetDrawer = false }, modifier = Modifier.align(Alignment.End)) {
                         Text("Close")
                     }
                 }
+            }
             }
         }
     }

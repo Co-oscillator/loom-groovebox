@@ -19,6 +19,7 @@ public:
   }
 
   void setFrequency(float f) { mFrequency = f; }
+  void setUiRate(float r) { mUiRate = r; }
   void setDepth(float d) { mDepth = d; }
   void setShape(int s) { mShape = static_cast<LfoShape>(s); }
   void setSync(bool s) { mSync = s; }
@@ -29,6 +30,38 @@ public:
 
   void advance(float sampleRate) {
     float effectiveFreq = mFrequency;
+    if (mSync) {
+      float beatFreq = mBpm / 60.0f;
+      int syncIdx = (int)(mUiRate * 7.99f);
+      switch (syncIdx) {
+      case 0:
+        effectiveFreq = beatFreq / 32.0f;
+        break; // 8/1
+      case 1:
+        effectiveFreq = beatFreq / 16.0f;
+        break; // 4/1
+      case 2:
+        effectiveFreq = beatFreq / 8.0f;
+        break; // 2/1
+      case 3:
+        effectiveFreq = beatFreq / 4.0f;
+        break; // 1/1
+      case 4:
+        effectiveFreq = beatFreq / 2.0f;
+        break; // 1/2
+      case 5:
+        effectiveFreq = beatFreq;
+        break; // 1/4
+      case 6:
+        effectiveFreq = beatFreq * 2.0f;
+        break; // 1/8
+      case 7:
+        effectiveFreq = beatFreq * 4.0f;
+        break; // 1/16
+      default:
+        effectiveFreq = beatFreq;
+      }
+    }
     float phaseInc = effectiveFreq / sampleRate;
     mPhase += phaseInc;
     if (mPhase >= 1.0f) {
@@ -60,6 +93,38 @@ public:
 
   float process(float sampleRate, int numFrames = 1) {
     float effectiveFreq = mFrequency;
+    if (mSync) {
+      float beatFreq = mBpm / 60.0f;
+      int syncIdx = (int)(mUiRate * 7.99f);
+      switch (syncIdx) {
+      case 0:
+        effectiveFreq = beatFreq / 32.0f;
+        break; // 8/1
+      case 1:
+        effectiveFreq = beatFreq / 16.0f;
+        break; // 4/1
+      case 2:
+        effectiveFreq = beatFreq / 8.0f;
+        break; // 2/1
+      case 3:
+        effectiveFreq = beatFreq / 4.0f;
+        break; // 1/1
+      case 4:
+        effectiveFreq = beatFreq / 2.0f;
+        break; // 1/2
+      case 5:
+        effectiveFreq = beatFreq;
+        break; // 1/4
+      case 6:
+        effectiveFreq = beatFreq * 2.0f;
+        break; // 1/8
+      case 7:
+        effectiveFreq = beatFreq * 4.0f;
+        break; // 1/16
+      default:
+        effectiveFreq = beatFreq;
+      }
+    }
 
     float phaseInc = (effectiveFreq / sampleRate) * numFrames;
     mPhase += phaseInc;
@@ -101,6 +166,7 @@ private:
   float mPhase = 0.0f;
   float mLastOutput = 0.0f;
   float mFrequency = 1.0f; // Hz
+  float mUiRate = 0.5f;    // Raw 0..1 Parameter
   float mDepth = 1.0f;
   LfoShape mShape = LfoShape::Sine;
   bool mSync = false;

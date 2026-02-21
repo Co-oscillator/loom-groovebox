@@ -2498,6 +2498,9 @@ void AudioEngine::setTempo(float bpm) {
   cmd.value = bpm;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
+  for (int i = 0; i < 6; ++i) {
+    mLfos[i].setBpm(bpm);
+  }
 }
 
 void AudioEngine::setPlaying(bool playing) {
@@ -3228,6 +3231,7 @@ void AudioEngine::setGenericLfoParam(int lfoIndex, int paramId, float value) {
     // Range = 50 - 0.01 = 49.99
     // Val = 0.01 + (v^3 * 49.99)
     mLfos[lfoIndex].setFrequency(0.01f + (value * value * value) * 49.99f);
+    mLfos[lfoIndex].setUiRate(value);
     break;
   case 1:
     mLfos[lfoIndex].setDepth(value);

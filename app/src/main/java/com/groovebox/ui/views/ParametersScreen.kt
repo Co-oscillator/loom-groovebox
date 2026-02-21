@@ -2075,15 +2075,15 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = Color(0xFF222222),
-                    modifier = Modifier.fillMaxSize(0.95f)
+                    modifier = Modifier.fillMaxWidth(0.8f).fillMaxHeight(0.9f)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Select FM Preset", style = MaterialTheme.typography.headlineSmall, color = Color.White)
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 56.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        columns = GridCells.Fixed(6),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
@@ -2110,7 +2110,7 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                         }
                                         showPresetDrawer = false
                                     }
-                                    .padding(8.dp),
+                                    .padding(4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2123,8 +2123,8 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                         modifier = Modifier.size(32.dp),
                                         tint = iconColor
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(preset.name, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = Color.White, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(preset.name, style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.White, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }

@@ -913,6 +913,9 @@ public:
             v.position = mReverse ? (double)v.end - 1.0 : (double)v.start;
           } else {
             v.envelope.release();
+            if (mPlayMode == Scrub) {
+              mMotorRunning = false;
+            }
           }
         }
         int idx = static_cast<int>(v.position);
@@ -978,6 +981,9 @@ public:
             v.position = mReverse ? (double)v.end - 1.0 : (double)v.start;
           } else {
             v.envelope.release();
+            if (mPlayMode == Scrub) {
+              mMotorRunning = false;
+            }
           }
         }
       }

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -966,22 +967,76 @@ fun RecordingStrip(
         
         Spacer(modifier = Modifier.height(12.dp))
         
+        val scrubMidiLearnable = isScrubMode && (state.midiLearnActive && state.midiLearnStep == 2)
+        val scrubLearnActive = isScrubMode && (state.lfoLearnActive || state.macroLearnActive)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(80.dp)
                 .background(Color.Black, RoundedCornerShape(8.dp))
-                .border(1.dp, Color.LightGray.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                .border(
+                    if (scrubMidiLearnable || scrubLearnActive) 2.dp else 1.dp,
+                    if (scrubMidiLearnable) Color.Yellow
+                    else if (scrubLearnActive) Color.Cyan
+                    else Color.LightGray.copy(alpha = 0.2f),
+                    RoundedCornerShape(8.dp)
+                )
                 .padding(4.dp)
-                .pointerInput(trackIndex, isScrubMode, slicePoints, slices, trimStart, trimEnd) {
+                .pointerInput(trackIndex, isScrubMode, slicePoints, slices, trimStart, trimEnd, scrubMidiLearnable, scrubLearnActive) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         val width = size.width.toFloat()
                         val clickPos = down.position.x / width
-                        
+
                         // Recalculate trim bounds inside for accuracy
                         val effectiveTrimStart = trimStart ?: 0f
                         val effectiveTrimEnd = trimEnd ?: 1f
+
+                        if (isScrubMode && state.midiLearnActive && state.midiLearnStep == 2) {
+                            // MIDI LEARN: Assign scrub position (param 360) to selected strip/knob
+                            val stripIdx = state.midiLearnSelectedStrip ?: return@awaitEachGesture
+                            val newState = if (stripIdx < 4) {
+                                val newRoutings = state.stripRoutings.map {
+                                    if (it.stripIndex == stripIdx) it.copy(targetType = 1, targetId = 360, parameterName = "Scrub Pos")
+                                    else it
+                                }
+                                state.copy(stripRoutings = newRoutings, midiLearnActive = false, midiLearnStep = 0, midiLearnSelectedStrip = null, selectedTab = 0)
+                            } else {
+                                val knobIdx = stripIdx - 4
+                                val newRoutings = state.knobRoutings.mapIndexed { idx, item ->
+                                    if (idx == knobIdx) item.copy(targetType = 1, targetId = 360, parameterName = "Scrub Pos")
+                                    else item
+                                }
+                                state.copy(knobRoutings = newRoutings, midiLearnActive = false, midiLearnStep = 0, midiLearnSelectedStrip = null, selectedTab = 0)
+                            }
+                            onStateChange(newState)
+                            return@awaitEachGesture
+                        } else if (isScrubMode && state.lfoLearnActive) {
+                            // LFO LEARN: Assign scrub position as LFO target
+                            val lfoIdx = state.lfoLearnLfoIndex
+                            if (lfoIdx != -1) {
+                                nativeLib?.let { nl -> nl.setRouting(trackIndex, -1, 2 + lfoIdx, 5, 1.0f, 360) }
+                                val newLfos = state.lfos.toMutableList()
+                                newLfos[lfoIdx] = newLfos[lfoIdx].copy(targetType = 1, targetId = 360, targetLabel = "Scrub Pos")
+                                onStateChange(state.copy(lfos = newLfos, lfoLearnActive = false))
+                            }
+                            return@awaitEachGesture
+                        } else if (isScrubMode && state.macroLearnActive) {
+                            // MACRO LEARN: Assign scrub position as macro target
+                            val macroIdx = state.macroLearnMacroIndex
+                            val tIdx = state.macroLearnTargetIndex
+                            if (macroIdx != -1 && tIdx != -1) {
+                                nativeLib?.let { nl -> nl.setRouting(trackIndex, -1, 10 + macroIdx, 5, 1.0f, 360) }
+                                val newMacros = state.macros.toMutableList()
+                                val currentTargets = newMacros[macroIdx].targets.toMutableList()
+                                if (tIdx < currentTargets.size) {
+                                    currentTargets[tIdx] = currentTargets[tIdx].copy(targetId = 360, targetLabel = "Scrub Pos", enabled = true)
+                                    newMacros[macroIdx] = newMacros[macroIdx].copy(targets = currentTargets)
+                                    onStateChange(state.copy(macros = newMacros, macroLearnActive = false))
+                                }
+                            }
+                            return@awaitEachGesture
+                        }
 
                         if (isScrubMode) {
                             // SCRUB: Touch Down = Gate ON + Position
@@ -1233,7 +1288,22 @@ val fmPresets = listOf(
     FmPreset(20, "Bassoon", "Wind"),
     FmPreset(21, "Xylophone", "Mallet"),
     FmPreset(22, "Church Bells", "Bell"),
-    FmPreset(23, "Synth Lead", "Lead")
+    FmPreset(23, "Synth Lead", "Lead"),
+    FmPreset(24, "Recorders", "Wind"),
+    FmPreset(25, "Shimmer", "Pad"),
+    FmPreset(26, "Filter Sweep", "FX"),
+    FmPreset(27, "Funky Rise", "FX"),
+    FmPreset(28, "Ref's Whistle", "FX"),
+    FmPreset(29, "Steel Drum", "Mallet"),
+    FmPreset(30, "Harmonica", "Wind"),
+    FmPreset(31, "Accordion", "Keys"),
+    FmPreset(32, "Sitar", "Pluck"),
+    FmPreset(33, "Lute", "Pluck"),
+    FmPreset(34, "Banjo", "Pluck"),
+    FmPreset(35, "Harp 1", "Pluck"),
+    FmPreset(36, "Harp 2", "Pluck"),
+    FmPreset(37, "Syn-Vox", "Vox"),
+    FmPreset(38, "Syn-Orchestra", "Ens")
 )
 
 @Composable
@@ -1971,7 +2041,7 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(4),
+                        columns = GridCells.Fixed(6),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f)
@@ -2004,17 +2074,33 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                         "Bell" -> Color(0xFFE0FFFF)    // Light Cyan (Bright)
                                         "Vox" -> Color(0xFFF08080)     // Light Coral
                                         "Lead" -> Color(0xFFFF00FF)    // Magenta
+                                        "FX" -> Color(0xFFFFA500)      // Orange
                                         else -> Color(0xFF7FFFD4)      // Aquamarine
                                     }
                                     
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .background(iconColor, CircleShape)
-                                            .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                                    val iconVector = when(preset.category) {
+                                        "Keys" -> Icons.Outlined.Piano
+                                        "Vox" -> Icons.Outlined.Mic
+                                        "Bass" -> Icons.Outlined.Speaker
+                                        "Wind" -> Icons.Outlined.Air
+                                        "Bell" -> Icons.Outlined.Notifications
+                                        "Lead" -> Icons.Outlined.Star
+                                        "Pad" -> Icons.Outlined.Cloud
+                                        "FX" -> Icons.Outlined.Bolt
+                                        "Mallet" -> Icons.Outlined.Apps
+                                        "Pluck" -> Icons.Outlined.LibraryMusic
+                                        "Ens" -> Icons.Outlined.Album
+                                        else -> Icons.Outlined.MusicNote
+                                    }
+                                    
+                                    Icon(
+                                        imageVector = iconVector,
+                                        contentDescription = preset.category,
+                                        modifier = Modifier.size(28.dp),
+                                        tint = iconColor
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Text(preset.name, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = Color.White, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    Text(preset.name, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = Color.White, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }

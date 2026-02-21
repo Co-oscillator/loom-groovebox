@@ -471,6 +471,651 @@ public:
       mBrightness = 0.7f;
       break;
 
+    case 24: // RECORDERS
+      setAlgorithm(2);
+      mCarrierMask = 63;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.81f;
+      mOpAttack[0] = 0.040f;
+      mOpDecay[0] = 0.520f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 0.380f;
+      mOpRatios[1] = 4.04f;
+      mOpLevels[1] = 0.17f;
+      mOpAttack[1] = 0.580f;
+      mOpDecay[1] = 0.500f;
+      mOpSustain[1] = 0.87f;
+      mOpRelease[1] = 0.860f;
+      mOpRatios[2] = 1.00f;
+      mOpLevels[2] = 0.57f;
+      mOpAttack[2] = 0.560f;
+      mOpDecay[2] = 1.620f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 1.060f;
+      mOpRatios[3] = 4.04f;
+      mOpLevels[3] = 0.34f;
+      mOpAttack[3] = 0.540f;
+      mOpDecay[3] = 1.580f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 1.480f;
+      mOpRatios[4] = 1.01f;
+      mOpLevels[4] = 0.84f;
+      mOpAttack[4] = 0.080f;
+      mOpDecay[4] = 0.520f;
+      mOpSustain[4] = 1.00f;
+      mOpRelease[4] = 0.380f;
+      mOpRatios[5] = 4.04f;
+      mOpLevels[5] = 0.22f;
+      mOpAttack[5] = 0.540f;
+      mOpDecay[5] = 1.580f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 1.480f;
+      mBrightness = 0.7f;
+      mFeedback = 0.0f;
+      break;
+
+    case 25: // SHIMMER
+      setAlgorithm(1);
+      mCarrierMask = 9;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.81f;
+      mOpAttack[0] = 0.040f;
+      mOpDecay[0] = 0.300f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 0.860f;
+      mOpRatios[1] = 5.04f;
+      mOpLevels[1] = 0.57f;
+      mOpAttack[1] = 0.840f;
+      mOpDecay[1] = 0.840f;
+      mOpSustain[1] = 1.00f;
+      mOpRelease[1] = 0.940f;
+      mOpRatios[2] = 1.03f;
+      mOpLevels[2] = 0.31f;
+      mOpAttack[2] = 0.200f;
+      mOpDecay[2] = 1.100f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 0.700f;
+      mOpRatios[3] = 1.00f;
+      mOpLevels[3] = 0.69f;
+      mOpAttack[3] = 0.540f;
+      mOpDecay[3] = 0.440f;
+      mOpSustain[3] = 1.00f;
+      mOpRelease[3] = 0.540f;
+      mOpRatios[4] = 6.05f;
+      mOpLevels[4] = 0.38f;
+      mOpAttack[4] = 0.960f;
+      mOpDecay[4] = 0.960f;
+      mOpSustain[4] = 0.90f;
+      mOpRelease[4] = 0.980f;
+      mOpRatios[5] = 0.50f;
+      mOpLevels[5] = 0.41f;
+      mOpAttack[5] = 0.320f;
+      mOpDecay[5] = 1.440f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.800f;
+      mBrightness = 0.8f;
+      mFeedback = 0.4f;
+      break;
+
+    case 26: // FILTER SWP
+      setAlgorithm(0);
+      mCarrierMask = 1;
+      mOpRatios[0] = 0.50f;
+      mOpLevels[0] = 0.96f;
+      mOpAttack[0] = 0.220f;
+      mOpDecay[0] = 0.300f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 1.340f;
+      mOpRatios[1] = 1.00f;
+      mOpLevels[1] = 0.44f;
+      mOpAttack[1] = 0.320f;
+      mOpDecay[1] = 0.600f;
+      mOpSustain[1] = 1.00f;
+      mOpRelease[1] = 1.020f;
+      mOpRatios[2] = 0.50f;
+      mOpLevels[2] = 0.52f;
+      mOpAttack[2] = 0.460f;
+      mOpDecay[2] = 0.600f;
+      mOpSustain[2] = 0.96f;
+      mOpRelease[2] = 1.000f;
+      mOpRatios[3] = 1.00f;
+      mOpLevels[3] = 0.79f;
+      mOpAttack[3] = 0.560f;
+      mOpDecay[3] = 0.600f;
+      mOpSustain[3] = 0.98f;
+      mOpRelease[3] = 1.000f;
+      mOpRatios[4] = 1.00f;
+      mOpLevels[4] = 0.47f;
+      mOpAttack[4] = 0.540f;
+      mOpDecay[4] = 1.000f;
+      mOpSustain[4] = 0.74f;
+      mOpRelease[4] = 1.020f;
+      mOpRatios[5] = 0.50f;
+      mOpLevels[5] = 0.93f;
+      mOpAttack[5] = 0.440f;
+      mOpDecay[5] = 1.000f;
+      mOpSustain[5] = 0.61f;
+      mOpRelease[5] = 1.020f;
+      mBrightness = 0.6f;
+      mFeedback = 0.5f;
+      break;
+
+    case 27: // FUNKY RISE
+      setAlgorithm(0);
+      mCarrierMask = 1;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.94f;
+      mOpAttack[0] = 0.080f;
+      mOpDecay[0] = 0.280f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 1.120f;
+      mOpRatios[1] = 1.00f;
+      mOpLevels[1] = 0.52f;
+      mOpAttack[1] = 0.660f;
+      mOpDecay[1] = 1.300f;
+      mOpSustain[1] = 0.56f;
+      mOpRelease[1] = 1.340f;
+      mOpRatios[2] = 1.00f;
+      mOpLevels[2] = 0.79f;
+      mOpAttack[2] = 0.660f;
+      mOpDecay[2] = 0.720f;
+      mOpSustain[2] = 0.46f;
+      mOpRelease[2] = 1.220f;
+      mOpRatios[3] = 2.01f;
+      mOpLevels[3] = 0.87f;
+      mOpAttack[3] = 0.660f;
+      mOpDecay[3] = 1.300f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 1.480f;
+      mOpRatios[4] = 1.00f;
+      mOpLevels[4] = 0.69f;
+      mOpAttack[4] = 0.660f;
+      mOpDecay[4] = 1.300f;
+      mOpSustain[4] = 0.00f;
+      mOpRelease[4] = 1.580f;
+      mOpRatios[5] = 0.50f;
+      mOpLevels[5] = 0.69f;
+      mOpAttack[5] = 0.660f;
+      mOpDecay[5] = 0.480f;
+      mOpSustain[5] = 0.92f;
+      mOpRelease[5] = 1.460f;
+      mBrightness = 0.8f;
+      mFeedback = 0.7f;
+      break;
+
+    case 28: // REFS WHISL
+      setAlgorithm(1);
+      mCarrierMask = 9;
+      mOpRatios[0] = 13.07f;
+      mOpLevels[0] = 0.32f;
+      mOpAttack[0] = 0.390f;
+      mOpDecay[0] = 1.200f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 1.000f;
+      mOpRatios[1] = 119.00f;
+      mOpLevels[1] = 0.54f;
+      mOpAttack[1] = 0.390f;
+      mOpDecay[1] = 1.200f;
+      mOpSustain[1] = 1.00f;
+      mOpRelease[1] = 1.080f;
+      mOpRatios[2] = 1.03f;
+      mOpLevels[2] = 0.68f;
+      mOpAttack[2] = 0.390f;
+      mOpDecay[2] = 1.200f;
+      mOpSustain[2] = 1.00f;
+      mOpRelease[2] = 1.980f;
+      mOpRatios[3] = 11.50f;
+      mOpLevels[3] = 0.83f;
+      mOpAttack[3] = 0.050f;
+      mOpDecay[3] = 0.620f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 0.880f;
+      mOpRatios[4] = 0.50f;
+      mOpLevels[4] = 0.00f;
+      mOpAttack[4] = 0.001f;
+      mOpDecay[4] = 0.000f;
+      mOpSustain[4] = 0.00f;
+      mOpRelease[4] = 0.000f;
+      mOpRatios[5] = 0.50f;
+      mOpLevels[5] = 0.00f;
+      mOpAttack[5] = 0.001f;
+      mOpDecay[5] = 0.000f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.000f;
+      mBrightness = 0.7f;
+      mFeedback = 0.0f;
+      break;
+
+    case 29: // STEEL DRUM
+      setAlgorithm(1);
+      mCarrierMask = 9;
+      mOpRatios[0] = 10.20f;
+      mOpLevels[0] = 0.00f;
+      mOpAttack[0] = 0.001f;
+      mOpDecay[0] = 1.180f;
+      mOpSustain[0] = 0.00f;
+      mOpRelease[0] = 1.220f;
+      mOpRatios[1] = 0.50f;
+      mOpLevels[1] = 0.71f;
+      mOpAttack[1] = 0.001f;
+      mOpDecay[1] = 1.600f;
+      mOpSustain[1] = 0.00f;
+      mOpRelease[1] = 1.800f;
+      mOpRatios[2] = 10.20f;
+      mOpLevels[2] = 0.00f;
+      mOpAttack[2] = 0.001f;
+      mOpDecay[2] = 1.380f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 1.140f;
+      mOpRatios[3] = 12.04f;
+      mOpLevels[3] = 0.00f;
+      mOpAttack[3] = 0.001f;
+      mOpDecay[3] = 1.100f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 1.560f;
+      mOpRatios[4] = 0.50f;
+      mOpLevels[4] = 0.33f;
+      mOpAttack[4] = 0.001f;
+      mOpDecay[4] = 1.180f;
+      mOpSustain[4] = 0.00f;
+      mOpRelease[4] = 1.980f;
+      mOpRatios[5] = 1.05f;
+      mOpLevels[5] = 0.61f;
+      mOpAttack[5] = 0.001f;
+      mOpDecay[5] = 1.000f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 1.740f;
+      mBrightness = 0.9f;
+      mFeedback = 0.0f;
+      break;
+
+    case 30: // HARMONICA1
+      setAlgorithm(0);
+      mCarrierMask = 1;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.98f;
+      mOpAttack[0] = 0.380f;
+      mOpDecay[0] = 0.300f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 0.440f;
+      mOpRatios[1] = 2.01f;
+      mOpLevels[1] = 0.59f;
+      mOpAttack[1] = 0.420f;
+      mOpDecay[1] = 0.300f;
+      mOpSustain[1] = 1.00f;
+      mOpRelease[1] = 0.460f;
+      mOpRatios[2] = 3.00f;
+      mOpLevels[2] = 0.65f;
+      mOpAttack[2] = 0.160f;
+      mOpDecay[2] = 1.800f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 0.460f;
+      mOpRatios[3] = 2.01f;
+      mOpLevels[3] = 0.81f;
+      mOpAttack[3] = 0.160f;
+      mOpDecay[3] = 0.700f;
+      mOpSustain[3] = 0.53f;
+      mOpRelease[3] = 0.460f;
+      mOpRatios[4] = 3.00f;
+      mOpLevels[4] = 0.46f;
+      mOpAttack[4] = 0.060f;
+      mOpDecay[4] = 0.640f;
+      mOpSustain[4] = 0.61f;
+      mOpRelease[4] = 0.640f;
+      mOpRatios[5] = 2.00f;
+      mOpLevels[5] = 0.74f;
+      mOpAttack[5] = 0.001f;
+      mOpDecay[5] = 0.820f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.500f;
+      mBrightness = 0.8f;
+      mFeedback = 0.5f;
+      break;
+
+    case 31: // ACCORDION
+      setAlgorithm(2);
+      mCarrierMask = 63;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.79f;
+      mOpAttack[0] = 0.440f;
+      mOpDecay[0] = 0.320f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 0.660f;
+      mOpRatios[1] = 1.02f;
+      mOpLevels[1] = 0.79f;
+      mOpAttack[1] = 0.340f;
+      mOpDecay[1] = 0.320f;
+      mOpSustain[1] = 1.00f;
+      mOpRelease[1] = 0.580f;
+      mOpRatios[2] = 1.00f;
+      mOpLevels[2] = 0.79f;
+      mOpAttack[2] = 0.400f;
+      mOpDecay[2] = 0.360f;
+      mOpSustain[2] = 1.00f;
+      mOpRelease[2] = 0.740f;
+      mOpRatios[3] = 2.01f;
+      mOpLevels[3] = 0.78f;
+      mOpAttack[3] = 0.440f;
+      mOpDecay[3] = 0.400f;
+      mOpSustain[3] = 1.00f;
+      mOpRelease[3] = 0.500f;
+      mOpRatios[4] = 1.00f;
+      mOpLevels[4] = 0.83f;
+      mOpAttack[4] = 0.300f;
+      mOpDecay[4] = 0.500f;
+      mOpSustain[4] = 1.00f;
+      mOpRelease[4] = 0.560f;
+      mOpRatios[5] = 1.00f;
+      mOpLevels[5] = 0.71f;
+      mOpAttack[5] = 0.320f;
+      mOpDecay[5] = 0.840f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.600f;
+      mBrightness = 0.8f;
+      mFeedback = 0.7f;
+      break;
+
+    case 32: // SITAR
+      setAlgorithm(1);
+      mCarrierMask = 9;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.99f;
+      mOpAttack[0] = 0.020f;
+      mOpDecay[0] = 1.980f;
+      mOpSustain[0] = 0.00f;
+      mOpRelease[0] = 0.520f;
+      mOpRatios[1] = 2.00f;
+      mOpLevels[1] = 0.86f;
+      mOpAttack[1] = 0.080f;
+      mOpDecay[1] = 1.580f;
+      mOpSustain[1] = 0.00f;
+      mOpRelease[1] = 1.620f;
+      mOpRatios[2] = 0.50f;
+      mOpLevels[2] = 0.73f;
+      mOpAttack[2] = 0.040f;
+      mOpDecay[2] = 0.520f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 1.580f;
+      mOpRatios[3] = 0.50f;
+      mOpLevels[3] = 0.86f;
+      mOpAttack[3] = 0.040f;
+      mOpDecay[3] = 1.600f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 0.540f;
+      mOpRatios[4] = 2.00f;
+      mOpLevels[4] = 0.69f;
+      mOpAttack[4] = 0.080f;
+      mOpDecay[4] = 1.480f;
+      mOpSustain[4] = 0.00f;
+      mOpRelease[4] = 1.480f;
+      mOpRatios[5] = 0.50f;
+      mOpLevels[5] = 0.84f;
+      mOpAttack[5] = 0.001f;
+      mOpDecay[5] = 0.520f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.700f;
+      mBrightness = 0.9f;
+      mFeedback = 0.6f;
+      break;
+
+    case 33: // LUTE
+      setAlgorithm(0);
+      mCarrierMask = 1;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.99f;
+      mOpAttack[0] = 0.020f;
+      mOpDecay[0] = 1.040f;
+      mOpSustain[0] = 0.00f;
+      mOpRelease[0] = 1.100f;
+      mOpRatios[1] = 1.00f;
+      mOpLevels[1] = 0.77f;
+      mOpAttack[1] = 0.200f;
+      mOpDecay[1] = 1.500f;
+      mOpSustain[1] = 0.00f;
+      mOpRelease[1] = 0.760f;
+      mOpRatios[2] = 1.00f;
+      mOpLevels[2] = 0.58f;
+      mOpAttack[2] = 0.360f;
+      mOpDecay[2] = 0.740f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 0.760f;
+      mOpRatios[3] = 0.50f;
+      mOpLevels[3] = 0.61f;
+      mOpAttack[3] = 0.440f;
+      mOpDecay[3] = 0.880f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 0.760f;
+      mOpRatios[4] = 14.14f;
+      mOpLevels[4] = 0.00f;
+      mOpAttack[4] = 0.001f;
+      mOpDecay[4] = 0.000f;
+      mOpSustain[4] = 0.00f;
+      mOpRelease[4] = 0.000f;
+      mOpRatios[5] = 14.14f;
+      mOpLevels[5] = 0.00f;
+      mOpAttack[5] = 0.001f;
+      mOpDecay[5] = 0.000f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.000f;
+      mBrightness = 0.8f;
+      mFeedback = 0.8f;
+      break;
+
+    case 34: // BANJO
+      setAlgorithm(0);
+      mCarrierMask = 1;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.99f;
+      mOpAttack[0] = 0.020f;
+      mOpDecay[0] = 0.980f;
+      mOpSustain[0] = 0.00f;
+      mOpRelease[0] = 1.100f;
+      mOpRatios[1] = 1.00f;
+      mOpLevels[1] = 0.76f;
+      mOpAttack[1] = 0.001f;
+      mOpDecay[1] = 1.340f;
+      mOpSustain[1] = 0.00f;
+      mOpRelease[1] = 0.800f;
+      mOpRatios[2] = 2.01f;
+      mOpLevels[2] = 0.76f;
+      mOpAttack[2] = 0.001f;
+      mOpDecay[2] = 0.660f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 1.200f;
+      mOpRatios[3] = 0.50f;
+      mOpLevels[3] = 0.80f;
+      mOpAttack[3] = 0.120f;
+      mOpDecay[3] = 1.160f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 1.000f;
+      mOpRatios[4] = 14.14f;
+      mOpLevels[4] = 0.10f;
+      mOpAttack[4] = 0.040f;
+      mOpDecay[4] = 0.460f;
+      mOpSustain[4] = 0.00f;
+      mOpRelease[4] = 0.360f;
+      mOpRatios[5] = 1.00f;
+      mOpLevels[5] = 0.83f;
+      mOpAttack[5] = 0.040f;
+      mOpDecay[5] = 0.920f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.420f;
+      mBrightness = 0.9f;
+      mFeedback = 0.7f;
+      break;
+
+    case 35: // HARP 1
+      setAlgorithm(1);
+      mCarrierMask = 9;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.99f;
+      mOpAttack[0] = 0.020f;
+      mOpDecay[0] = 1.980f;
+      mOpSustain[0] = 0.00f;
+      mOpRelease[0] = 0.900f;
+      mOpRatios[1] = 1.00f;
+      mOpLevels[1] = 0.76f;
+      mOpAttack[1] = 0.001f;
+      mOpDecay[1] = 1.480f;
+      mOpSustain[1] = 0.00f;
+      mOpRelease[1] = 1.200f;
+      mOpRatios[2] = 2.01f;
+      mOpLevels[2] = 0.68f;
+      mOpAttack[2] = 0.080f;
+      mOpDecay[2] = 0.680f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 1.220f;
+      mOpRatios[3] = 0.50f;
+      mOpLevels[3] = 0.86f;
+      mOpAttack[3] = 0.040f;
+      mOpDecay[3] = 1.600f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 0.600f;
+      mOpRatios[4] = 6.09f;
+      mOpLevels[4] = 0.00f;
+      mOpAttack[4] = 0.001f;
+      mOpDecay[4] = 0.000f;
+      mOpSustain[4] = 0.00f;
+      mOpRelease[4] = 0.000f;
+      mOpRatios[5] = 3.01f;
+      mOpLevels[5] = 0.00f;
+      mOpAttack[5] = 0.001f;
+      mOpDecay[5] = 0.000f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.000f;
+      mBrightness = 0.8f;
+      mFeedback = 0.7f;
+      break;
+
+    case 36: // HARP 2
+      setAlgorithm(1);
+      mCarrierMask = 9;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.99f;
+      mOpAttack[0] = 0.001f;
+      mOpDecay[0] = 1.980f;
+      mOpSustain[0] = 0.00f;
+      mOpRelease[0] = 0.900f;
+      mOpRatios[1] = 0.50f;
+      mOpLevels[1] = 0.84f;
+      mOpAttack[1] = 0.020f;
+      mOpDecay[1] = 1.320f;
+      mOpSustain[1] = 0.00f;
+      mOpRelease[1] = 0.860f;
+      mOpRatios[2] = 1.00f;
+      mOpLevels[2] = 0.75f;
+      mOpAttack[2] = 0.001f;
+      mOpDecay[2] = 1.080f;
+      mOpSustain[2] = 0.00f;
+      mOpRelease[2] = 0.380f;
+      mOpRatios[3] = 0.50f;
+      mOpLevels[3] = 0.92f;
+      mOpAttack[3] = 0.001f;
+      mOpDecay[3] = 1.980f;
+      mOpSustain[3] = 0.00f;
+      mOpRelease[3] = 0.900f;
+      mOpRatios[4] = 2.01f;
+      mOpLevels[4] = 0.59f;
+      mOpAttack[4] = 0.040f;
+      mOpDecay[4] = 0.840f;
+      mOpSustain[4] = 0.00f;
+      mOpRelease[4] = 0.840f;
+      mOpRatios[5] = 0.50f;
+      mOpLevels[5] = 0.90f;
+      mOpAttack[5] = 0.020f;
+      mOpDecay[5] = 0.900f;
+      mOpSustain[5] = 0.00f;
+      mOpRelease[5] = 0.700f;
+      mBrightness = 0.8f;
+      mFeedback = 0.5f;
+      break;
+
+    case 37: // SYN-VOX
+      setAlgorithm(0);
+      mCarrierMask = 1;
+      mOpRatios[0] = 1.00f;
+      mOpLevels[0] = 0.89f;
+      mOpAttack[0] = 0.400f;
+      mOpDecay[0] = 1.100f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 0.940f;
+      mOpRatios[1] = 1.01f;
+      mOpLevels[1] = 0.61f;
+      mOpAttack[1] = 0.320f;
+      mOpDecay[1] = 1.980f;
+      mOpSustain[1] = 1.00f;
+      mOpRelease[1] = 0.860f;
+      mOpRatios[2] = 2.00f;
+      mOpLevels[2] = 0.57f;
+      mOpAttack[2] = 0.320f;
+      mOpDecay[2] = 1.980f;
+      mOpSustain[2] = 1.00f;
+      mOpRelease[2] = 0.800f;
+      mOpRatios[3] = 3.01f;
+      mOpLevels[3] = 0.52f;
+      mOpAttack[3] = 0.280f;
+      mOpDecay[3] = 1.980f;
+      mOpSustain[3] = 1.00f;
+      mOpRelease[3] = 0.740f;
+      mOpRatios[4] = 4.00f;
+      mOpLevels[4] = 0.46f;
+      mOpAttack[4] = 0.260f;
+      mOpDecay[4] = 1.980f;
+      mOpSustain[4] = 1.00f;
+      mOpRelease[4] = 0.700f;
+      mOpRatios[5] = 5.01f;
+      mOpLevels[5] = 0.46f;
+      mOpAttack[5] = 0.260f;
+      mOpDecay[5] = 1.140f;
+      mOpSustain[5] = 1.00f;
+      mOpRelease[5] = 0.600f;
+      mBrightness = 0.7f;
+      mFeedback = 0.5f;
+      break;
+
+    case 38: // SYN-ORCH
+      setAlgorithm(1);
+      mCarrierMask = 9;
+      mOpRatios[0] = 0.50f;
+      mOpLevels[0] = 0.99f;
+      mOpAttack[0] = 0.160f;
+      mOpDecay[0] = 0.540f;
+      mOpSustain[0] = 1.00f;
+      mOpRelease[0] = 0.980f;
+      mOpRatios[1] = 0.50f;
+      mOpLevels[1] = 0.60f;
+      mOpAttack[1] = 0.520f;
+      mOpDecay[1] = 0.520f;
+      mOpSustain[1] = 1.00f;
+      mOpRelease[1] = 1.080f;
+      mOpRatios[2] = 0.50f;
+      mOpLevels[2] = 0.64f;
+      mOpAttack[2] = 0.160f;
+      mOpDecay[2] = 0.600f;
+      mOpSustain[2] = 1.00f;
+      mOpRelease[2] = 1.100f;
+      mOpRatios[3] = 1.00f;
+      mOpLevels[3] = 0.65f;
+      mOpAttack[3] = 0.460f;
+      mOpDecay[3] = 0.440f;
+      mOpSustain[3] = 1.00f;
+      mOpRelease[3] = 0.880f;
+      mOpRatios[4] = 1.01f;
+      mOpLevels[4] = 0.70f;
+      mOpAttack[4] = 0.820f;
+      mOpDecay[4] = 0.800f;
+      mOpSustain[4] = 1.00f;
+      mOpRelease[4] = 1.000f;
+      mOpRatios[5] = 1.00f;
+      mOpLevels[5] = 0.81f;
+      mOpAttack[5] = 0.040f;
+      mOpDecay[5] = 0.420f;
+      mOpSustain[5] = 1.00f;
+      mOpRelease[5] = 0.740f;
+      mBrightness = 0.8f;
+      mFeedback = 0.6f;
+      break;
+
     default:
       // Generic Sine / FM Start
       setAlgorithm(1);
@@ -529,46 +1174,54 @@ public:
 
       float o[6];
       if (mAlgorithm == 0) { // Serial
-        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale;
-        o[4] =
-            v.operators[4].nextSample(o[5] * modScale, pitchMod) * velModScale;
-        o[3] =
-            v.operators[3].nextSample(o[4] * modScale, pitchMod) * velModScale;
-        o[2] =
-            v.operators[2].nextSample(o[3] * modScale, pitchMod) * velModScale;
-        o[1] =
-            v.operators[1].nextSample(o[2] * modScale, pitchMod) * velModScale;
-        o[0] = v.operators[0].nextSample(o[1] * modScale, pitchMod);
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
       } else if (mAlgorithm == 1) { // 2 Branches
-        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale;
-        o[4] =
-            v.operators[4].nextSample(o[5] * modScale, pitchMod) * velModScale;
-        o[3] =
-            v.operators[3].nextSample(o[4] * modScale, pitchMod) * velModScale;
-        o[2] = v.operators[2].nextSample(fbIn, pitchMod) * velModScale;
-        o[1] =
-            v.operators[1].nextSample(o[2] * modScale, pitchMod) * velModScale;
-        o[0] = v.operators[0].nextSample(o[1] * modScale, pitchMod);
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
       } else if (mAlgorithm == 2) { // Parallel
         for (int i = 0; i < 6; ++i)
-          o[i] = v.operators[i].nextSample(fbIn, pitchMod) * velModScale;
+          o[i] = v.operators[i].nextSample(fbIn, pitchMod) * velModScale *
+                 mOpLevels[i];
       } else { // Branching
-        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale;
-        o[4] =
-            v.operators[4].nextSample(o[5] * modScale, pitchMod) * velModScale;
-        o[3] =
-            v.operators[3].nextSample(o[4] * modScale, pitchMod) * velModScale;
-        o[2] =
-            v.operators[2].nextSample(o[5] * modScale, pitchMod) * velModScale;
-        o[1] =
-            v.operators[1].nextSample(o[2] * modScale, pitchMod) * velModScale;
-        o[0] = v.operators[0].nextSample(o[1] * modScale, pitchMod);
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
       }
 
       float out = 0.0f;
       for (int i = 0; i < 6; ++i)
         if (mCarrierMask & (1 << i))
-          out += o[i] * mOpLevels[i];
+          out += o[i];
 
       v.op5FeedbackHistory = v.lastOp5Out;
       v.lastOp5Out = o[5];

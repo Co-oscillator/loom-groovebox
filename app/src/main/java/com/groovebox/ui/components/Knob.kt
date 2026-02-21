@@ -105,18 +105,18 @@ fun Knob(
                 .background(
                     color = if (isHeld) engineColor.copy(alpha = 0.4f) 
                             else if (state.isParameterLocking) Color.Magenta.copy(alpha = 0.3f) 
-                            else if (state.midiLearnActive && state.midiLearnStep == 2) Color.Yellow.copy(alpha = 0.2f)
-                            else if (state.lfoLearnActive || state.macroLearnActive) Color.Green.copy(alpha = 0.1f)
+                            else if (state.midiLearnActive && state.midiLearnStep == 2 && parameterId >= 0) Color.Yellow.copy(alpha = 0.2f)
+                            else if ((state.lfoLearnActive || state.macroLearnActive) && parameterId >= 0) Color.Green.copy(alpha = 0.1f)
                             else if (isBold) Color.Transparent
                             else Color.DarkGray, 
                     shape = RoundedCornerShape(knobSize / 2)
                 )
                 .border(
-                    width = if ((isHeld || state.isParameterLocking || (state.midiLearnActive && state.midiLearnStep == 2)) && !isBold) 2.dp else 0.dp,
+                    width = if ((isHeld || state.isParameterLocking || (state.midiLearnActive && state.midiLearnStep == 2 && parameterId >= 0)) && !isBold) 2.dp else 0.dp,
                     color = if (isHeld) engineColor 
                             else if (state.isParameterLocking) Color.Magenta 
-                            else if (state.midiLearnActive && state.midiLearnStep == 2) Color.Yellow
-                            else if (state.lfoLearnActive || state.macroLearnActive || state.macroSourceLearnActive) Color.Green
+                            else if (state.midiLearnActive && state.midiLearnStep == 2 && parameterId >= 0) Color.Yellow
+                            else if ((state.lfoLearnActive || state.macroLearnActive || state.macroSourceLearnActive) && parameterId >= 0) Color.Green
                             else Color.Transparent,
                     shape = RoundedCornerShape(knobSize / 2)
                 )
@@ -139,27 +139,29 @@ fun Knob(
                         }
                     } else if (state.midiLearnActive && state.midiLearnStep == 2) {
                         detectTapGestures {
-                            val stripIdx = latestState.midiLearnSelectedStrip ?: return@detectTapGestures
-                            val newState = if (stripIdx < 4) {
-                                val newRoutings = latestState.stripRoutings.map {
-                                    if (it.stripIndex == stripIdx) it.copy(targetType = 1, targetId = parameterId, parameterName = label)
-                                    else it
+                            if (parameterId >= 0) {
+                                val stripIdx = latestState.midiLearnSelectedStrip ?: return@detectTapGestures
+                                val newState = if (stripIdx < 4) {
+                                    val newRoutings = latestState.stripRoutings.map {
+                                        if (it.stripIndex == stripIdx) it.copy(targetType = 1, targetId = parameterId, parameterName = label)
+                                        else it
+                                    }
+                                    latestState.copy(stripRoutings = newRoutings, midiLearnActive = false, midiLearnStep = 0, midiLearnSelectedStrip = null, selectedTab = 0)
+                                } else {
+                                    val knobIdx = stripIdx - 4
+                                    val newRoutings = latestState.knobRoutings.mapIndexed { idx, item ->
+                                        if (idx == knobIdx) item.copy(targetType = 1, targetId = parameterId, parameterName = label)
+                                        else item
+                                    }
+                                    latestState.copy(knobRoutings = newRoutings, midiLearnActive = false, midiLearnStep = 0, midiLearnSelectedStrip = null, selectedTab = 0)
                                 }
-                                latestState.copy(stripRoutings = newRoutings, midiLearnActive = false, midiLearnStep = 0, midiLearnSelectedStrip = null, selectedTab = 0)
-                            } else {
-                                val knobIdx = stripIdx - 4
-                                val newRoutings = latestState.knobRoutings.mapIndexed { idx, item ->
-                                    if (idx == knobIdx) item.copy(targetType = 1, targetId = parameterId, parameterName = label)
-                                    else item
-                                }
-                                latestState.copy(knobRoutings = newRoutings, midiLearnActive = false, midiLearnStep = 0, midiLearnSelectedStrip = null, selectedTab = 0)
+                                android.widget.Toast.makeText(context, "Bound $label to MIDI Strip ${stripIdx + 1}", android.widget.Toast.LENGTH_SHORT).show()
+                                latestOnStateChange(newState)
                             }
-                            android.widget.Toast.makeText(context, "Bound $label to MIDI Strip ${stripIdx + 1}", android.widget.Toast.LENGTH_SHORT).show()
-                            latestOnStateChange(newState)
                         }
                     } else if (state.lfoLearnActive || state.macroLearnActive) {
                         detectTapGestures {
-                            if (parameterId != -1) {
+                            if (parameterId >= 0) {
                                 if (state.lfoLearnActive) {
                                     val lfoIdx = state.lfoLearnLfoIndex
                                     if (lfoIdx != -1) {
@@ -217,7 +219,7 @@ fun Knob(
                                         val upperLabel = label.uppercase()
                                         val displayLabel = (fullLabel ?: label).uppercase()
                                         when {
-                                            parameterId == -1 -> String.format("%.2f", v)
+                                            parameterId == -1 || (parameterId == 0 && upperLabel == "VOL") -> String.format("%.2f", v)
                                             upperLabel == "MODE" -> {
                                                 val modeIdx = (v * 11.9f).toInt()
                                                 when(modeIdx) {

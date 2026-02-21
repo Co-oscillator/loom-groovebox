@@ -117,7 +117,7 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                     Knob(
                         label = "VOL", 
                         initialValue = 0.8f,
-                        parameterId = -1,
+                        parameterId = 0,
                         state = state,
                         onStateChange = onStateChange,
                         nativeLib = nativeLib,

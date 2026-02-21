@@ -888,14 +888,11 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
 
   // Specific Logic for Global / Sends
   if (parameterId >= 2000 &&
-      parameterId < 2170) { // Extended to cover all 17 FX (0-16)
-    // If it's 2103 but targeted at a track, we treat it as global for now
-    // or ignore if it should only be truly global.
-    // Given the UI sends -1 for 2103, the top block handles it.
-
+      parameterId <
+          2180) { // Covers all 18 FX slots (0-17, including 5-Band EQ)
     int fxIndex = (parameterId - 2000) / 10;
     int subId = (parameterId - 2000) % 10;
-    if (fxIndex >= 0 && fxIndex < 17) {
+    if (fxIndex >= 0 && fxIndex < 18) {
       if (subId == 0) {
         track.fxSends[fxIndex] = value;
       } else if (subId == 1) {

@@ -32,6 +32,18 @@ fun VerticalSlider(
     height: Dp = 80.dp,
     width: Dp = 24.dp
 ) {
+    // Use remembered local state for smooth dragging.
+    // Syncs from external value when not dragging.
+    var localValue by remember { mutableStateOf(value) }
+    var isDragging by remember { mutableStateOf(false) }
+
+    // Sync from external value when not actively dragging
+    LaunchedEffect(value) {
+        if (!isDragging) {
+            localValue = value
+        }
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(width)
@@ -53,12 +65,18 @@ fun VerticalSlider(
                 .clip(RoundedCornerShape(4.dp))
                 .background(Color.Black.copy(alpha = 0.3f))
                 .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        val delta = -dragAmount.y / size.height.toFloat()
-                        val newValue = (value + delta).coerceIn(0.0f, 1.0f)
-                        onValueChange(newValue)
-                    }
+                    detectDragGestures(
+                        onDragStart = { isDragging = true },
+                        onDragEnd = { isDragging = false },
+                        onDragCancel = { isDragging = false },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            // Strong friction: scale drag by 0.4x for precision in small space
+                            val delta = -dragAmount.y / size.height.toFloat() * 0.4f
+                            localValue = (localValue + delta).coerceIn(0.0f, 1.0f)
+                            onValueChange(localValue)
+                        }
+                    )
                 },
             contentAlignment = Alignment.BottomCenter
         ) {
@@ -74,10 +92,19 @@ fun VerticalSlider(
                     strokeWidth = trackWidth
                 )
                 
+                // Center detent marker
+                val centerY = size.height / 2
+                drawLine(
+                    color = Color.Gray.copy(alpha = 0.5f),
+                    start = Offset(4.dp.toPx(), centerY),
+                    end = Offset(size.width - 4.dp.toPx(), centerY),
+                    strokeWidth = 1.dp.toPx()
+                )
+                
                 // Handle
                 val handleHeight = 12.dp.toPx()
                 val handleWidth = size.width - 4.dp.toPx()
-                val y = (1.0f - value) * (size.height - handleHeight)
+                val y = (1.0f - localValue) * (size.height - handleHeight)
                 
                 drawRoundRect(
                     color = color,

@@ -39,7 +39,7 @@ public:
     float cutoff = 1.0f;
     float resonance = 0.0f;
     float reverse = 0.0f;       // 0 or 1
-    float fxSends[17] = {0.0f}; // Per-slice FX sends
+    float fxSends[18] = {0.0f}; // Per-slice FX sends
     bool active = false;        // Whether this slice has overridden params
   };
 
@@ -61,7 +61,7 @@ public:
     float sliceReverse = 0.0f;
     float sliceCutoff = 1.0f;
     float sliceResonance = 0.0f;
-    float fxSends[17] = {0.0f};
+    float fxSends[18] = {0.0f};
 
     Adsr envelope;
     TSvf filter;
@@ -363,20 +363,28 @@ public:
     if (mVoices.empty())
       return;
 
-    // SCRUB MODE TRIGGER: Start Motor
-    // REMOVED: Don't touch Voice 0 (Scrub Head) when triggering a note.
-    // This fixes the "Snap to Start" bug when pressing Test Trigger.
-    // if (mPlayMode == Scrub) { ... }
+    // SCRUB MODE: Test Trigger starts the "motor" on Voice 0 (the scrub head).
+    // This gives DJ-style behavior: trigger to play, grab playhead to scrub,
+    // release to resume normal-speed playback.
+    if (mPlayMode == Scrub) {
+      Voice &v = mVoices[0];
+      if (!v.active) {
+        v.active = true;
+        v.position = 0.0;
+        v.envelope.forceSustain();
+      }
+      mMotorRunning = true;
+      mSmoothSpeed = 1.0; // Normal forward playback speed
+      return;             // Don't allocate a second voice
+    }
 
+    // In non-Scrub modes, Voice 0 is available for allocation.
     int active = mActiveBuffer.load(std::memory_order_acquire);
     const auto &buf = mBuffers[active];
-
     if (buf.empty())
       return;
 
-    // In Scrub mode, Voice 0 is reserved for the scrub head / physics engine.
-    // Triggered notes (keys/pads) must use voices 1..N.
-    size_t startIndex = (mPlayMode == Scrub) ? 1 : 0;
+    size_t startIndex = 0;
 
     // 1. Try to find an inactive voice
     int voiceIdx = -1;
@@ -735,15 +743,22 @@ public:
         double accel = springForce + dampingForce;
         mSmoothSpeed += accel;
       } else {
-        // STATE 2: COASTING
-        // Viscous Friction (Exponential Decay).
-        // 0.999925: "Reverse half the change".
-        // Drag was 0.0001 -> 0.00005. Now 0.000075.
-        mSmoothSpeed *= 0.999925;
-
-        if (std::abs(mSmoothSpeed) < 0.00005)
-          mSmoothSpeed = 0.0;
-      }
+        // STATE 2: COASTING / MOTOR
+        if (mMotorRunning) {
+          // Motor is running: gradually return to normal playback speed (1.0)
+          // Like a DJ releasing a record — it spins back up to speed.
+          double targetSpeed = 1.0;
+          mSmoothSpeed += (targetSpeed - mSmoothSpeed) * 0.0005;
+          // Once close enough to target, snap to it
+          if (std::abs(mSmoothSpeed - targetSpeed) < 0.001)
+            mSmoothSpeed = targetSpeed;
+        } else {
+          // No motor: Viscous Friction (Exponential Decay to stop).
+          mSmoothSpeed *= 0.999925;
+          if (std::abs(mSmoothSpeed) < 0.00005)
+            mSmoothSpeed = 0.0;
+        }
+      } // End if/else mScrubGate
     } // End if (mPlayMode == Scrub)
 
     // Hard Speed Limit

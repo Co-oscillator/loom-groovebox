@@ -188,7 +188,7 @@ fun LfoModule(
             
             // Row 1
             
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Box(modifier = Modifier.weight(1f)) {
                     Knob("RATE", lfoState.rate, 2300 + index*10 + 0, appState, onStateChange, nativeLib, 
                         onValueChangeOverride = { v -> onUpdate(lfoState.copy(rate = v)) }, knobSize = 32.dp)
@@ -198,9 +198,8 @@ fun LfoModule(
                         onValueChangeOverride = { v -> onUpdate(lfoState.copy(depth = v)) }, knobSize = 32.dp)
                 }
             }
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                Box(modifier = Modifier.weight(1f)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                Box {
                     Knob("SHAPE", lfoState.shape / 4.0f, 2302 + index*10 + 2, appState, onStateChange, nativeLib, 
                         onValueChangeOverride = { v ->
                             val shapeIdx = (v * 4).toInt().coerceIn(0, 4)
@@ -210,10 +209,6 @@ fun LfoModule(
                             listOf("SIN", "TRI", "SQR", "SAW", "RND")[(v * 4.4).toInt().coerceIn(0, 4)]
                         }, knobSize = 32.dp
                     )
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    Knob("AMT", lfoState.intensity, 2303 + index*10 + 3, appState, onStateChange, nativeLib, 
-                        onValueChangeOverride = { v -> onUpdate(lfoState.copy(intensity = v)) }, knobSize = 32.dp)
                 }
             }
         }

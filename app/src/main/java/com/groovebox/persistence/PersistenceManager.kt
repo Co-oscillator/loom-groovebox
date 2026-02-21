@@ -56,7 +56,15 @@ object PersistenceManager {
         try {
             val file = File(getProjectsDir(context), fileName)
             if (!file.exists()) return null
-            ObjectInputStream(FileInputStream(file)).use { return it.readObject() as? GrooveboxState }
+            ObjectInputStream(FileInputStream(file)).use {
+                val loaded = it.readObject() as? GrooveboxState ?: return null
+                // Migration: pad fxSends/fxMix to 18 if loading older saves (was 17)
+                return loaded.copy(tracks = loaded.tracks.map { t ->
+                    val sends = if (t.fxSends.size < 18) t.fxSends + List(18 - t.fxSends.size) { 0.0f } else t.fxSends
+                    val mix = if (t.fxMix.size < 18) t.fxMix + List(18 - t.fxMix.size) { 0.0f } else t.fxMix
+                    t.copy(fxSends = sends, fxMix = mix)
+                })
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }

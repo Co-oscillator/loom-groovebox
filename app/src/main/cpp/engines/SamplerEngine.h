@@ -737,8 +737,9 @@ public:
 
       if (isInteracting) {
         double dist = targetPos - scrubVoice.position;
-        // Stiffness (k): Increased for better tracking, reduced drag
-        springForce = dist * (mScrubGate ? 0.0000005 : 0.00008);
+        // Stiffness (k): Increased for tighter touch tracking, kept LFO
+        // tracking high
+        springForce = dist * (mScrubGate ? 0.000008 : 0.00008);
 
         // Snap on initial touch
         if (mScrubGate && !mLastScrubGate) {
@@ -750,8 +751,9 @@ public:
       // STATE MACHINE: Interacting vs Free-Spin
       if (isInteracting) {
         // STATE 1: INTERACTING (P-D Controller)
+        // Drag (d): Reduced manual drag to feel "lighter"
         double drag =
-            mScrubGate ? 0.002 : 0.05; // More drag when modulated follow
+            mScrubGate ? 0.0006 : 0.05; // More drag when modulated follow
         double dampingForce = -mSmoothSpeed * drag;
         double accel = springForce + dampingForce;
         mSmoothSpeed += accel;

@@ -988,7 +988,7 @@ fun RecordingStrip(
                     RoundedCornerShape(8.dp)
                 )
                 .padding(4.dp)
-                .pointerInput(trackIndex) {
+                .pointerInput(trackIndex, isScrubMode, trimStart, trimEnd, slices, slicePoints) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         val width = size.width.toFloat()
@@ -1143,6 +1143,7 @@ fun RecordingStrip(
                         } else if (isScrubMode) {
                             // 2. SCRUB: If not on a marker, handle scrubbing
                             // SCRUB: Touch Down = Gate ON + Position
+                            down.consume()
                             nativeLib?.setParameter(trackIndex, 360, clickPos.coerceIn(0f, 1f))
                             nativeLib?.setParameter(trackIndex, 361, 1.0f)
                             onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 

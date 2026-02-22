@@ -179,7 +179,28 @@ public:
     }
   }
 
-  // Linear Interpolation Helper
+  // 4-point, 3rd-order Hermite (Cubic) Interpolation for "Analogue" quality
+  inline float getCubicInterpolatedSample(const std::vector<float> &buf,
+                                          double pos) {
+    int size = (int)buf.size();
+    if (size == 0)
+      return 0.0f;
+
+    int idx1 = static_cast<int>(pos);
+    float frac = static_cast<float>(pos - idx1);
+
+    if (idx1 < 0 || idx1 >= size)
+      return 0.0f;
+
+    // We need 4 points: idx0, idx1, idx2, idx3
+    int idx0 = (idx1 > 0) ? idx1 - 1 : idx1;
+    int idx2 = (idx1 + 1 < size) ? idx1 + 1 : idx1;
+    int idx3 = (idx1 + 2 < size) ? idx1 + 2 : idx2;
+
+    return cubicInterpolation(buf[idx0], buf[idx1], buf[idx2], buf[idx3], frac);
+  }
+
+  // Linear Interpolation Helper (Fallback/Granular)
   inline float getInterpolatedSample(const std::vector<float> &buf,
                                      double pos) {
     int idx = static_cast<int>(pos);
@@ -365,9 +386,9 @@ public:
     if (mVoices.empty())
       return;
 
-    // SCRUB MODE: Test Trigger starts the "motor" on Voice 0 (the scrub head).
-    // This gives DJ-style behavior: trigger to play, grab playhead to scrub,
-    // release to resume normal-speed playback.
+    // SCRUB MODE: Test Trigger starts the "motor" on Voice 0 (the scrub
+    // head). This gives DJ-style behavior: trigger to play, grab playhead to
+    // scrub, release to resume normal-speed playback.
     if (mPlayMode == Scrub) {
       Voice &v = mVoices[0];
       if (!v.active) {
@@ -415,8 +436,8 @@ public:
       double minTime = 1e15; // Large number
 
       for (size_t i = startIndex; i < mVoices.size(); i++) {
-        // Don't steal the voice if it's the one we just triggered (unlikely but
-        // safe)
+        // Don't steal the voice if it's the one we just triggered (unlikely
+        // but safe)
         if (mVoices[i].noteOnTime < minTime) {
           minTime = mVoices[i].noteOnTime;
           oldest = static_cast<int>(i);
@@ -445,8 +466,8 @@ public:
          mPlayMode == LoopChops) &&
         !mSlices.empty()) {
       // In CHOP modes, slice index is determined by the MIDI note (Note 60 =
-      // Slice 0) mSliceIndex is now used ONLY for UI parameter focus in "Slice
-      // Lock" mode.
+      // Slice 0) mSliceIndex is now used ONLY for UI parameter focus in
+      // "Slice Lock" mode.
       int sliceIdx = 0;
       if (note >= 60) {
         sliceIdx = (note - 60);
@@ -711,7 +732,8 @@ public:
     // 1. Calculate Scrub Physics (Voice 0 only)
     Voice &scrubVoice = mVoices[0];
 
-    // FIX: Only run this in Scrub Mode (prevents Auto-Play loop in other modes)
+    // FIX: Only run this in Scrub Mode (prevents Auto-Play loop in other
+    // modes)
     if (mPlayMode == Scrub) {
       if (!scrubVoice.active) {
         scrubVoice.active = true;
@@ -724,8 +746,8 @@ public:
       double trimEndSamples = mTrimEnd * buffer.size();
       double rawTargetPos = mScrubPosition * buffer.size();
 
-      // Clamp target to trim boundaries so spring doesn't pull into restricted
-      // zones
+      // Clamp target to trim boundaries so spring doesn't pull into
+      // restricted zones
       double targetPos =
           std::max(trimStartSamples, std::min(trimEndSamples, rawTargetPos));
       double springForce = 0.0;
@@ -751,9 +773,10 @@ public:
       // STATE MACHINE: Interacting vs Free-Spin
       if (isInteracting) {
         // STATE 1: INTERACTING (P-D Controller)
-        // Drag (d): Reduced manual drag to feel "lighter"
-        double drag =
-            mScrubGate ? 0.0006 : 0.05; // More drag when modulated follow
+        // Damping (drag): Tuned closer to Critical Damping (2*sqrt(k))
+        // manual k=0.000008, crit drag=0.0056. LFO k=0.00008, crit
+        // drag=0.018.
+        double drag = mScrubGate ? 0.004 : 0.018;
         double dampingForce = -mSmoothSpeed * drag;
         double accel = springForce + dampingForce;
         mSmoothSpeed += accel;
@@ -889,8 +912,10 @@ public:
           } else {
             v.position = (double)v.end - 0.001;
             v.envelope.release();
-            if (mPlayMode == Scrub)
+            if (mPlayMode == Scrub) {
               mMotorRunning = false;
+              mSmoothSpeed = 0.0; // Stop velocity on wall
+            }
           }
         } else if (v.position < (double)v.start) {
           if (mPlayMode == Sustain || mPlayMode == Loop ||
@@ -899,14 +924,23 @@ public:
           } else {
             v.position = (double)v.start;
             v.envelope.release();
-            if (mPlayMode == Scrub)
+            if (mPlayMode == Scrub) {
               mMotorRunning = false;
+              mSmoothSpeed = 0.0; // Stop velocity on wall
+            }
           }
         }
 
         int idx = static_cast<int>(v.position);
         if (idx >= 0 && idx < (int)buffer.size()) {
-          voiceOutput = getInterpolatedSample(buffer, v.position);
+          // Use High-Quality Cubic (Hermite) Interpolation specifically for
+          // Scrubbing to provide a smooth, analogue quality and minimize
+          // aliasing noise.
+          if (mPlayMode == Scrub && i == 0) {
+            voiceOutput = getCubicInterpolatedSample(buffer, v.position);
+          } else {
+            voiceOutput = getInterpolatedSample(buffer, v.position);
+          }
         }
       } else {
         // Granular mode

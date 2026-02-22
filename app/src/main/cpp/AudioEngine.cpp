@@ -1345,6 +1345,14 @@ void AudioEngine::processCommands() {
         }
       }
       break;
+    case AudioCommand::SET_TRACK_MUTE:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size())
+        mTracks[cmd.trackIndex].isMuted = cmd.bValue;
+      break;
+    case AudioCommand::SET_TRACK_SOLO:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size())
+        mTracks[cmd.trackIndex].isSoloed = cmd.bValue;
+      break;
     case AudioCommand::SET_ARP_RATE:
       if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
         mTracks[cmd.trackIndex].mArpRate = cmd.value;
@@ -2681,21 +2689,13 @@ void AudioEngine::setRouting(int destTrack, int sourceTrack, int source,
 }
 
 void AudioEngine::applyModulations() {
-  // Logic: Iterate all active routes, calculate source value, update dest
-  // Logic: Iterate all active routes, calculate source value, update dest
-  // param (NON-destructively to state)
+  for (int t = 0; t < (int)mTracks.size(); ++t) {
+    auto &track = mTracks[t];
+    std::bitset<2500> currentModulated;
 
-  // 1. Snapshot Mod Sources (LFOs, Macros)
-  // LFOs are updated in renderStereo loop. Using last known value is fine for
-  // control rate. Or we can snapshot them here if they are running. Macros
-  // are stored in mMacros[].
-
-  for (int t = 0; t < mTracks.size(); ++t) {
     const RoutingEntry *mods;
     int count;
     mRoutingMatrix.getFastConnections(t, &mods, &count);
-    if (count == 0)
-      continue;
 
     for (int i = 0; i < count; ++i) {
       const auto &mod = mods[i];
@@ -2739,38 +2739,52 @@ void AudioEngine::applyModulations() {
       case ModSource::Macro6:
         srcValue = mMacros[5].value;
         break;
+      case ModSource::Macro7:
+        srcValue = mMacros[6].value;
+        break;
+      case ModSource::Macro8:
+        srcValue = mMacros[7].value;
+        break;
       default:
         break;
       }
 
-      // Safety: Prevent NaN/Inf from spreading through modulation
-      if (!std::isfinite(srcValue)) {
+      if (!std::isfinite(srcValue))
         srcValue = 0.0f;
-      }
 
       // Apply to Destination
       if (mod.destination == ModDestination::Parameter &&
           mod.destParamId >= 0 && mod.destParamId < 2500) {
-        float baseVal =
-            mTracks[t].parameters[mod.destParamId]; // Use BASE value
+        float baseVal = track.parameters[mod.destParamId];
         float effectiveVal = baseVal + (srcValue * mod.amount);
-
-        // Store in appliedParameters for consistency
-        mTracks[t].appliedParameters[mod.destParamId] = effectiveVal;
+        track.appliedParameters[mod.destParamId] = effectiveVal;
+        currentModulated.set(mod.destParamId);
 
         if (std::isfinite(effectiveVal)) {
           updateEngineParameter(t, mod.destParamId, effectiveVal);
         }
-      }
-      // Handle legacy destinations if needed (Volume, Cutoff...)
-      else if (mod.destination == ModDestination::FilterCutoff) {
-        float baseVal = mTracks[t].parameters[112]; // Assuming 112 is Cutoff
+      } else if (mod.destination == ModDestination::FilterCutoff) {
+        float baseVal = track.parameters[112];
         float effectiveVal = baseVal + (srcValue * mod.amount);
+        track.appliedParameters[112] = effectiveVal;
+        currentModulated.set(112);
         if (std::isfinite(effectiveVal)) {
           updateEngineParameter(t, 112, effectiveVal);
         }
       }
     }
+
+    // Reset parameters that are no longer modulated
+    if (track.mModulatedParams.any()) {
+      for (int id = 0; id < 2500; ++id) {
+        if (track.mModulatedParams.test(id) && !currentModulated.test(id)) {
+          float baseVal = track.parameters[id];
+          track.appliedParameters[id] = baseVal;
+          updateEngineParameter(t, id, baseVal);
+        }
+      }
+    }
+    track.mModulatedParams = currentModulated;
   }
 }
 
@@ -3520,6 +3534,14 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
   applyModulations();
   // ----------------------------------
 
+  bool anySolo = false;
+  for (const auto &t : mTracks) {
+    if (t.isSoloed) {
+      anySolo = true;
+      break;
+    }
+  }
+
   for (int i = 0; i < numFrames; ++i) {
 
     // Safe ring-buffer read with 2048 samples of latency for stability
@@ -3555,6 +3577,11 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       if (!track.isActive && track.mSilenceFrames > 2400) { // 50ms at 48k
         track.follower.process(0.0f);
         continue;
+      }
+
+      bool shouldMute = track.isMuted;
+      if (anySolo && !track.isSoloed) {
+        shouldMute = true;
       }
 
       // Update smoothed parameters only when active (saves CPU on inactive
@@ -3696,6 +3723,11 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       // (Punch already applied to rawSampleL/R above)
       float trackOutputL = rawSampleL * finalVol * dryScale;
       float trackOutputR = rawSampleR * finalVol * dryScale;
+
+      if (shouldMute) {
+        trackOutputL = 0.0f;
+        trackOutputR = 0.0f;
+      }
 
       mixedSampleL += trackOutputL;
       mixedSampleR += trackOutputR;
@@ -4070,6 +4102,24 @@ void AudioEngine::setTrackPan(int trackIndex, float pan) {
   cmd.type = AudioCommand::SET_TRACK_PAN;
   cmd.trackIndex = trackIndex;
   cmd.value = pan;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::setTrackMute(int trackIndex, bool muted) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TRACK_MUTE;
+  cmd.trackIndex = trackIndex;
+  cmd.bValue = muted;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::setTrackSolo(int trackIndex, bool soloed) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TRACK_SOLO;
+  cmd.trackIndex = trackIndex;
+  cmd.bValue = soloed;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
 }

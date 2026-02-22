@@ -2,6 +2,20 @@
 
 A powerful, native Android groovebox featuring a hybrid C++/Kotlin audio engine, advanced sequencing, and deep sound design capabilities.
 
+[Read the User Manual](UserManual.md)
+
+## Feature Demos
+Check out the latest features in action on the [Loom Audio YouTube Channel](https://www.youtube.com/@LoomGroovebox).
+
+- [Arpeggiator modes and chord progression generator](https://www.youtube.com/watch?v=YlBpx7S0_Po)
+- [FM synthesis engine and randomized parameter button](https://www.youtube.com/watch?v=uVyzNNPYyPY)
+- [Sample slicing and chop loops feature](https://www.youtube.com/watch?v=y2wgiXaNp20)
+- [Granular Engine](https://www.youtube.com/watch?v=1apCxMzsy-Q)
+- [Sample scrub](https://www.youtube.com/watch?v=hznzb8Tw_sY)
+- [FM drum engine, multitrack sequencer, bit crusher effect](https://www.youtube.com/watch?v=zTfICTmZr60)
+- [Arpeggiator and LFO Modulation](https://www.youtube.com/watch?v=mSK8OcSM5A0)
+
+
 ![Loom UI](docs/images/loom_hero.jpg)
 
 ## Key Features

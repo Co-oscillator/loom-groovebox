@@ -893,6 +893,18 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setTrackPan(
     engine->setTrackPan(track_index, pan);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setTrackMute(
+    JNIEnv *env, jobject thiz, jint track_index, jboolean muted) {
+  if (engine)
+    engine->setTrackMute(track_index, muted);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setTrackSolo(
+    JNIEnv *env, jobject thiz, jint track_index, jboolean soloed) {
+  if (engine)
+    engine->setTrackSolo(track_index, soloed);
+}
+
 extern "C" JNIEXPORT jintArray JNICALL
 Java_com_groovebox_NativeLib_getFxChain(JNIEnv *env, jobject thiz) {
   if (engine) {

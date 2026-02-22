@@ -1,12 +1,13 @@
 package com.groovebox.ui.views
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import com.groovebox.ui.components.Knob
 import com.groovebox.ui.components.EngineIcon
 import com.groovebox.ui.theme.getEngineColor
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
     val latestState by rememberUpdatedState(state)
@@ -107,11 +109,55 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                     )
 
                     // Engine Icon (Center) - Expanded Size
-                    EngineIcon(
-                        type = track.engineType,
-                        modifier = Modifier.size(42.dp), // Increased from 32dp
-                        color = if (isSelected) engineColor else Color.White.copy(alpha = 0.8f)
-                    )
+                    var showMuteSoloMenu by remember { mutableStateOf(false) }
+                    
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .padding(2.dp)
+                            .border(
+                                width = if (track.isSoloed || track.isMuted) 2.dp else 0.dp,
+                                color = if (track.isSoloed) Color.Blue else if (track.isMuted) Color.Red else Color.Transparent,
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .combinedClickable(
+                                onClick = { latestOnStateChange(latestState.copy(selectedTrackIndex = i)) },
+                                onLongClick = { showMuteSoloMenu = true }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EngineIcon(
+                            type = track.engineType,
+                            modifier = Modifier.size(42.dp),
+                            color = if (isSelected) engineColor else Color.White.copy(alpha = 0.8f)
+                        )
+                        
+                        DropdownMenu(
+                            expanded = showMuteSoloMenu,
+                            onDismissRequest = { showMuteSoloMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(if (track.isMuted) "Unmute" else "Mute") },
+                                onClick = {
+                                    val newTracks = latestState.tracks.toMutableList()
+                                    newTracks[i] = newTracks[i].copy(isMuted = !track.isMuted)
+                                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                                    nativeLib.setTrackMute(i, !track.isMuted)
+                                    showMuteSoloMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (track.isSoloed) "Unsolo" else "Solo") },
+                                onClick = {
+                                    val newTracks = latestState.tracks.toMutableList()
+                                    newTracks[i] = newTracks[i].copy(isSoloed = !track.isSoloed)
+                                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                                    nativeLib.setTrackSolo(i, !track.isSoloed)
+                                    showMuteSoloMenu = false
+                                }
+                            )
+                        }
+                    }
 
                     // Volume Knob
                     Knob(

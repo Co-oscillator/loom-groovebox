@@ -40,6 +40,7 @@ data class TrackState(
     val engineType: EngineType = EngineType.SUBTRACTIVE,
     val isActive: Boolean = true,
     val isMuted: Boolean = false,
+    val isSoloed: Boolean = false,
     val transpose: Int = 0,
     val steps: List<StepState> = List(64) { StepState() },
     val drumSteps: List<List<StepState>> = List(16) { List(64) { StepState() } },

@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 import com.groovebox.ui.components.NativeFileDialog
 import com.groovebox.utils.AudioExporter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import android.widget.Toast
 import androidx.compose.animation.core.*
@@ -660,6 +661,7 @@ fun RecordingStrip(
 ) {
     val engineColor = getEngineColor(track.engineType)
     val scope = rememberCoroutineScope()
+    var previewJob by remember { mutableStateOf<Job?>(null) }
     
     // For Sampler, fetch real slice points with local state for smooth dragging
     var slicePoints by remember { mutableStateOf<FloatArray?>(null) }
@@ -983,15 +985,17 @@ fun RecordingStrip(
                     RoundedCornerShape(8.dp)
                 )
                 .padding(4.dp)
-                .pointerInput(trackIndex, isScrubMode, slicePoints, slices, trimStart, trimEnd, scrubMidiLearnable, scrubLearnActive) {
+                .pointerInput(trackIndex) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         val width = size.width.toFloat()
                         val clickPos = down.position.x / width
-
-                        // Recalculate trim bounds inside for accuracy
-                        val effectiveTrimStart = trimStart ?: 0f
-                        val effectiveTrimEnd = trimEnd ?: 1f
+                        
+                        // Use updated values from outside the block to avoid restarts
+                        val animTrimStart = trimStart ?: 0f
+                        val animTrimEnd = trimEnd ?: 1f
+                        val currentSlicePoints = slicePoints
+                        val currentSlices = slices ?: 0
 
                         if (isScrubMode && state.midiLearnActive && state.midiLearnStep == 2) {
                             // MIDI LEARN: Assign scrub position (param 360) to selected strip/knob
@@ -1089,7 +1093,7 @@ fun RecordingStrip(
                                 isDraggingTrimEnd = true
                             } else {
                                 // Find closest slice point if not dragging trim
-                                slicePoints?.let { points ->
+                                currentSlicePoints?.let { points ->
                                     var minDist = 0.05f 
                                     points.forEachIndexed { i, p ->
                                         val dist = kotlin.math.abs(p - clickPos)
@@ -1113,31 +1117,50 @@ fun RecordingStrip(
                                         if (change.position != dragChange.position) {
                                             val newPos = (change.position.x / width).coerceIn(0f, 1f)
                                             
+                                            var previewNote = -1
                                             if (isDraggingTrimStart) {
                                                 // Dragging Start: constrained by End
-                                                val maxVal = effectiveTrimEnd - 0.01f
+                                                val maxVal = animTrimEnd - 0.01f
                                                 val finalStart = newPos.coerceAtMost(maxVal)
                                                 nativeLib?.setParameter(trackIndex, 330, finalStart)
                                                 // Update local state for immediate feedback
                                                 onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
                                                     if (idx == trackIndex) t.copy(parameters = t.parameters + (330 to finalStart)) else t 
                                                 }))
+                                                previewNote = 60
                                             } else if (isDraggingTrimEnd) {
                                                 // Dragging End: constrained by Start
-                                                val minVal = effectiveTrimStart + 0.01f
+                                                val minVal = animTrimStart + 0.01f
                                                 val finalEnd = newPos.coerceAtLeast(minVal)
                                                 nativeLib?.setParameter(trackIndex, 331, finalEnd)
                                                 onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
                                                     if (idx == trackIndex) t.copy(parameters = t.parameters + (331 to finalEnd)) else t 
                                                 }))
+                                                val sCount = if (currentSlicePoints != null && currentSlicePoints.isNotEmpty()) currentSlicePoints.size + 1 else currentSlices
+                                                previewNote = 60 + sCount - 1
                                             } else {
                                                 // Dragging Slice
-                                                // Update Local
-                                                slicePoints?.let { pts ->
-                                                    if (draggingIdx < pts.size) pts[draggingIdx] = newPos
+                                                // Update Local with copy to trigger state
+                                                currentSlicePoints?.let { pts ->
+                                                    val newPts = pts.copyOf()
+                                                    if (draggingIdx < newPts.size) {
+                                                        newPts[draggingIdx] = newPos
+                                                        slicePoints = newPts
+                                                    }
                                                 }
                                                 // Call Native
                                                 nativeLib?.setSlicePosition(trackIndex, draggingIdx, newPos)
+                                                previewNote = 60 + draggingIdx + 1
+                                            }
+
+                                            if (previewNote != -1) {
+                                                previewJob?.cancel()
+                                                previewJob = scope.launch {
+                                                    delay(500)
+                                                    nativeLib?.triggerNote(trackIndex, previewNote, 90)
+                                                    delay(500)
+                                                    nativeLib?.releaseNote(trackIndex, previewNote)
+                                                }
                                             }
                                             
                                             change.consume()

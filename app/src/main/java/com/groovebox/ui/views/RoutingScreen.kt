@@ -464,7 +464,7 @@ fun FxChainEditor(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
         0 to "Overdrive", 1 to "Bitcrush", 2 to "Chorus", 3 to "Phaser", 4 to "Wobble",
         5 to "Delay", 6 to "Reverb", 7 to "Slicer", 8 to "Compressor",
         9 to "HP LFO", 10 to "LP LFO", 11 to "Flanger", 12 to "Filter 1", 13 to "TapeEcho", 14 to "Octaver",
-        15 to "Filter 2", 16 to "Filter 3"
+        15 to "Filter 2", 16 to "Filter 3", 17 to "5-Band EQ"
     )
 
     // Serial Chain: Slot 0 -> Slot 1 -> Slot 2 -> Slot 3 -> Slot 4
@@ -502,6 +502,7 @@ fun FxChainEditor(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 14 -> Color(0xFF3F51B5) // Octaver (Indigo)
                 15 -> Color(0xFFE91E63) // Filter 2
                 16 -> Color(0xFFE91E63) // Filter 3
+                17 -> Color(0xFF44AAFF) // 5-Band EQ
                 else -> Color.White
             }
             

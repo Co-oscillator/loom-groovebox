@@ -103,7 +103,8 @@ public:
     // Smooth Parameters
     mSmoothedFeedback += 0.001f * (mFeedback - mSmoothedFeedback);
     mSmoothedSaturation += 0.001f * (mSaturation - mSmoothedSaturation);
-    mSmoothedMix += 0.001f * (mMix - mSmoothedMix);
+    mSmoothedMix +=
+        0.01f * (mMix - mSmoothedMix); // Faster smoothing for better response
 
     // Tape Saturation
     if (mSmoothedSaturation > 0.0f) {
@@ -147,7 +148,10 @@ public:
     float wet = output;
     if (!std::isfinite(wet))
       wet = 0.0f;
-    return input * (1.0f - mSmoothedMix) + wet;
+    float dry = input * (1.0f - mSmoothedMix);
+    if (mSmoothedMix > 0.999f)
+      dry = 0.0f; // Force dry kill at max mix
+    return dry + wet;
   }
 
   bool isSilent() const { return mSilentCounter >= 48000; }

@@ -1,6 +1,7 @@
 #ifndef AUDIO_ENGINE_H
 #define AUDIO_ENGINE_H
 
+#include <bitset>
 #include <memory>
 #include <mutex>
 #include <oboe/Oboe.h>
@@ -158,6 +159,8 @@ public:
   void setSlicePosition(int trackIndex, int sliceIndex, float position);
   void setTrackActive(int trackIndex, bool active);
   void setTrackPan(int trackIndex, float pan);
+  void setTrackMute(int trackIndex, bool muted);
+  void setTrackSolo(int trackIndex, bool soloed);
   void setSlices(int trackIndex, const std::vector<int> &starts,
                  const std::vector<int> &ends);
 
@@ -219,6 +222,8 @@ private:
       SET_TEMPO,
       SET_PATTERN_LENGTH,
       SET_STEP,
+      SET_TRACK_MUTE,
+      SET_TRACK_SOLO,
       SET_ARP_RATE,
       SET_ARP_STRUM,
       SET_SWING,
@@ -285,6 +290,8 @@ public:
 
     float smoothedPan = 0.5f;
     float humanize = 0.0f;
+    bool isMuted = false;
+    bool isSoloed = false;
     int engineType = 0; // 0=Subtractive, 1=FM, 2=Sampler, etc.
     int selectedFmDrumInstrument = 0;
     SubtractiveEngine subtractiveEngine;
@@ -299,6 +306,7 @@ public:
 
     float parameters[2500] = {0.0f};
     float appliedParameters[2500] = {0.0f}; // Values after P-locks and Mods
+    std::bitset<2500> mModulatedParams;     // Tracking for reset logic
 
     struct RecordingNote {
       int note;

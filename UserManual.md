@@ -1,13 +1,17 @@
 # Loom Groovebox User Manual
 
-Welcome to Loom Groovebox, a powerful mobile synthesizer and sequencer designed for tactile performance and deep sound design.
+```markdown
+Welcome to Loom Groovebox, a powerful mobile synthesizer and sequencer designed for tactile performance, sample manipulation, audio processing, and deep sound design.
+```
 
 ---
 
 ## 2. Interface Overview
 
 ### Play Screen
-The hub for live performance. Toggle between Melodic and Drum Kit layouts depending on your track type.
+The hub for live performance. Toggle between Melodic and Drum Kit layouts depending on your track type.  
+**Grid**:The play screen supports a large 4x4 playing grid, a 6x6 grid for a wider musical range, or a Tonnetz layout for a 76 key range.  All three layouts can transpose the root note and home octave. The 4x4 and 6x6 grids can be set to a scale, while the Tonnetz layout is always showing a full chromatic range.  
+**Assignable Midi Controls**: The Play screen has 4 touch strips and 4 knobs, which can each be assigned to any knob in the app for easy access.  You can also connect up to three parameters to each midi control using the Macro feature in the Patch screen.  Launch the midi learning from the "MIDI LRN" button in the upper right corner of the Param screen, which launches a mode to select the parameter you will link to the Play screen.
 
 ````carousel
 ![Melodic Play Screen](assets/Play_Screen_Melodic.png)
@@ -16,9 +20,13 @@ The hub for live performance. Toggle between Melodic and Drum Kit layouts depend
 ````
 
 - **Arpeggiator Menu**: Long-press the **ARP** button to open the advanced Arpeggiator configuration.
-    - **Rhythms**: 3 independent lanes (Root, Poly 1, Poly 2) for complex rhythmic patterns.
+    - **Rhythms**: 4 independent lanes (Root, and the next several steps in the scale) for complex rhythmic patterns, and a Random Rhythm button to generate a new random pattern of (of root note only for you to add to)
+    - **Patterns**: 10 different arpeggiator patterns, including a random that generates a fresh pattern each time it is selected.
     - **Octaves & Inversion**: Expand the range or flip the chord voicing.
-    - **Mutation**: Randomly swap notes in your arpeggio for evolving patterns.
+    - **Rate and Division**: Set the speed of the arpeggio relative to the track BPM, with options for dotted and triplet timing
+    - **Chord Progression Generator**: Uses the selected root note, currently played notes, and arpeggiator settings.  Choose a mood and a level of complexity for the pattern (both melodic and rythmic complexity)  When switched on, it will alter the arpeggiator notes around your playing (or a latched arpeggiator) to create a 32 bar chord progression.
+- **MIDI Learn**: Launches a mode highlighting the MIDI controls on the play screen to select one, and then highlighting every knob in the app, while the user navigates to the screen with the knob they want to control.  Tapping the knob will assign it to the Play screen controler.  Tap again to cancel.
+- **Active FX**: At the bottom of every Param screen are strips to show any FX pedals that this track is sending audio to.  Each active effect will have a Send knob displayed in this section allowing the effect to be cut quickly and allowing the user to see where their sound is routed.  
 
 ---
 
@@ -35,21 +43,35 @@ Create and edit patterns with the 16-pad grid.
 
 - **64-Step Sequencing**: Loom supports sequences up to 64 steps long.
     - **Bank Buttons (A-D)**: Toggle between 16-step pages to edit longer sequences.
-    - **64 Grid View**: Tap the **'64'** button to view and edit the entire 8x8 step grid at once.
-- **Step Options**: Long-press any active step to access the Step Editor.
+    - **64 Grid View**: Tap the **'64'** button to view and edit the entire 8x8 step grid at once, automatically switching the sequence length from 16 to 64 steps.
+- **Step Options**: Long-press any active step to access the Step Editor, or to inspect the note and settings in a step.
     - **Visual Reference**: ![Step Options](assets/Step_Options.png)
     - **Velocity**: Adjust the loudness of the step.
     - **Gate Length**: Control note duration. Gates > 100% create "Legato" slides. The range extends to **8.0 steps**, with a **cubic response curve** on the slider for surgical precision at short values.
     - **Probability**: Set the chance (0-100%) that the step will play.
+    - **P-Lock**: adjust up to 4 parameters to have different settings for this one step, returning to default when the step is finished.  This option will launch a mode for mapping the parameter to change.
     - **Ratchet**: Repeat the note multiple times within a single step.
     - **Remove Step (Polymetry)**: Tapping **Remove Step** completely excises the step from the sequence for that specific voice. This shortens the loop length, creating **polymetric drift** where voices move out of phase with the main clock.
+    - **Microtiming**: Nudge the start point of a step, accurate to .01 steps.
 - **Skipped Step Restoration**: Long-press a pad on the sequencer grid to restore a previously "removed" step.
-- **Octave +/-**: Quickly shift the entire sequence pitch.
+- **Transpose +/-**: Quickly shift the entire sequence pitch by the number of selected steps+octaves
+- **Sequence Chain +/-**: Chain together up to 16 saved sequences in any order and combination to create a longer song.
+- **Copy/Paste**: Copy the entire sequence to paste into another track.  If you select a shorter pattern (eg 16 steps) and paste into a longer sequence (eg 64 steps) the pattern will be pasted into the first available steps.
+- **Save/Load**: Save your sequence to a local file, or load a saved sequence.  
+- **Humanize**: Adds variation in the microtiming and velocity for each step in the current sequence
+- **Order**: In the bottom of the Transport bar, you can change the order of the steps played in the sequence.  Plays forward, backward, ping-pong, or random.
+
 
 ---
 
 ### Parameters Screen (Sound Design)
-Shape your sound using the dedicated controls for each engine.
+Shape your sound using the dedicated controls for each engine.  Every engine supports some common features.
+**Randomize (dice icon)**: randomize parameters to try your luck with a new sound.  
+**Restore Default**: Every engine has a default patch that can be restored, where the user can also set a new default patch to open with new projects.  
+**Test Trigger (music note icon)**:Every engine features a test trigger to play the sound with current settings.  
+**Save/Load patch**: Create a preset that can be loaded later including in new future projects.
+**MIDI Learn**: Launches a mode highlighting the MIDI controls on the play screen to select one, and then highlighting every knob in the app, while the user navigates to the screen with the knob they want to control.  Tapping the knob will assign it to the Play screen controler.  Tap again to cancel.
+**Active FX**: At the bottom of every Param screen are strips to show any FX pedals that this track is sending audio to.  Each active effect will have a Send knob displayed in this section allowing the effect to be cut quickly and allowing the user to see where their sound is routed.  
 
 ````carousel
 ![Subtractive Engine](assets/Param_Screen_Subtractive.png)
@@ -94,6 +116,8 @@ Shape your sound using the dedicated controls for each engine.
 - **Warp**: Non-linear phase distortion for unique harmonic shifting.
 - **Crush / Bits / Srate**: Digital artifacts and lo-fi reduction for "crunchy" textures.
 - **Detune**: Adds subtle pitch variation for a "chorused" feel.
+- **Source**: Select one of the included wavetables or load your own.  Supports using audio files from the Sampler and Granular engines.
+- **Source**: Select one of the included wavetables or load your own.  Supports using audio files from the Sampler and Granular engines.
 
 #### Sampler Engine
 **Sounds Like**: Traditional sample playback. Used for acoustic instruments, vocal chops, and found sounds.
@@ -102,11 +126,16 @@ Shape your sound using the dedicated controls for each engine.
 - **Speed**: Classic tape-style control where time and pitch are linked.
 - **Reverse**: Plays the loaded sample backwards.
 - **Trim Start / End**: Defines the specific region of the sample to be played.
+- **Recording Source**: Choose from the microphone, line in, or share the system audio with Loom to record from any app on the device.
+- **Suggested BPM**: Say how many times you want the samp[le to repeat in one loop of the sequencer pattern, and a suggested BPM will be calculated to fit the sample at current settings.  Tap SET to change the project BPM to the suggested value.  ]
 - **Sampler Modes**:
   - **One Shot**: Plays once to the end.
-  - **Chopped**: Splits audio into 16 slices; each slice gets its own independent track.
+  - **Chopped**: Splits audio into up to 16 slices; each slice gets its own independent pad on the play screen and it's own track in the sequencer.
   - **One Shot Chops**: Like Chopped, but slices play to the end when triggered.
+  - **Loop Chops**: Uses the track's envelope settings to determine the note length, and then loops the slice within that note.  Creates dub-like fading echoes out of samples.
   - **Loop**: Perpetually loops the selected region.
+  - **Scrub**: Creates a large pink handle on the sample playhead.  Dragging this handle allows you to manually scrub through the sample with realistic physics go simulate the feel of analogue media.  Fast motions will give a record scratch, slower motion creates dramatic tape stops, and manually dragging the playhead through the sample creates a uniquely warped playback effect.
+  **Slice Lock**: When the lock is triggered, each slice of the sample can have its parameters edited independently of the others, allowing you to tailor each slice to create a wide range of sounds for a drum kit, which can be saved as a preset for future tracks.  The select knob (SEL) is used to select which slice to edit.
 
 #### Granular Engine
 **Sounds Like**: Ambient "clouds" and textures. Turns any sample into a wash of microscopic sound particles.
@@ -117,7 +146,7 @@ Shape your sound using the dedicated controls for each engine.
 - **Reverse Prob**: The chance that any individual grain will play backwards.
 
 #### Drum Engines (FM & Analog)
-**Sounds Like**: High-impact percussion. FM is digital/metallic, Analog is warm/explosive.
+**Sounds Like**: High-impact percussion. FM is digital/metallic, Analog is warm/explosive. Use the icons for each drum voice to trigger that sound with the current parameter settings.
 - **Pitch (Tune)**: Root frequency of the drum hit.
 - **Click (FM)**: Pitch envelope "snap" for kicks or noise burst for snares/hats.
 - **Param A (Analog)**: Mode-specific control (*Punch* for Kicks, *Snappy* for Snares, *Spread* for Claps).
@@ -130,6 +159,10 @@ Shape your sound using the dedicated controls for each engine.
 - **Gate ON/OFF**: When ON, audio only passes when a note is triggered.
 - **Filter**: Dedicated Low-pass, High-pass, and Band-pass options with ADSR modulation.
 
+#### Soundfont Engine
+**Sounds Like**: A 90s ROMpler keyboard
+- **various controls**: Loom does not directly control what parameters are available for each soundfont, but it does allow you to map the 4 knobs on the play screen to any of the available parameters or test the knobs in the Param screen to see which will work.  Custom soundfont files can be imported.  Select a soundfont file with the "SELECT" button, and then choose a preset.  Includes the GeneralUser GS v1.47 soundfont.
+
 #### MIDI Output
 **Sounds Like**: Whatever external gear you connect!
 - **Channel**: Selects the target MIDI channel (1-16).
@@ -138,7 +171,7 @@ Shape your sound using the dedicated controls for each engine.
 ---
 
 ### Effects & Signal Flow
-Loom v1.8+ uses a **Serial Pedalboard** structure. Audio flows from your tracks through a chain of up to 5 programmable slots.
+Loom v1.8+ uses a **Parallel Mixer** setup by default, where each track and each effect go out to the final mix separately.  However, you can switch to a **Serial Pedalboard** structure. Audio flows from your tracks through a chain of up to 5 programmable slots, allowing each effect to print its own signal to the previous pedal's output.
 
 #### Serial Chaining Logic
 Unlike traditional mixer "sends," the effects in Loom are connected head-to-tail:
@@ -149,10 +182,11 @@ Unlike traditional mixer "sends," the effects in Loom are connected head-to-tail
    - **Cumulative Gain**: Be careful with **Overdrive** or **Bitcrusher** early in the chain, as they can significantly boost the signal level hitting subsequent effects, potentially leading to clipped or "smashed" sounding tails in the Reverb or Delay.
    - **Temporal Feedback**: Effects with internal feedback (Delay, Reverb) keep "playing" even after you stop sending audio to them. This feedback will continue to be processed by any pedals that follow them in the chain.
 
-#### Routing Matrix
-- **LFOs & Macros**: Connect any modulation source (Left) to any destination (Top).
+### Patch Screen - Routing and Macros
+- **LFOs**: Loom has a bank of 6 LFOs that can be assigned to any knob in the app (a sound engine parameter, volume or panning in the mixer, a parameter for an effect pedal, etc.)
+- **Macros**: Loom has a bank of 8 macros (phone screens need to scroll to see all 8)Connect any modulation source (Left) to up to 3 destinations (Right).  Long-press a modulation target to switch the polarity of the modulation, which is indicated with a red highlight
 - **Interactive Nodes**: Tap a node to set the modulation depth. Green nodes represent active connections.
-- **Sidechaining**: Select a "Source Track" in the Routing menu to drive the Compressor or Auto-Wah on other tracks.
+- **Pedal Chains**: The signal flow goes form left to right, select and remove pedals in any order.  
 
 ---
 
@@ -175,7 +209,7 @@ Project management and system controls.
 ### Arpeggiator Polyphony
 The new Arpeggiator supports 3 rhythm lanes:
 1. **ROOT (Bottom)**: Triggers the base note of the arpeggio cycle.
-2. **UP 1 / UP 2 (Middle/Top)**: Cycle through the remaining held notes in a "staggered walk" pattern, allowing for complex polyphonic interplay even with monophonic engines.
+2. **UP 1 / UP 2/ UP 3**: Cycle through the remaining held notes, allowing for complex polyphonic interplay even with monophonic engines.
 
 ### Gain Staging
 To provide maximum headroom and prevent clipping:
@@ -184,7 +218,7 @@ To provide maximum headroom and prevent clipping:
 - **Global Limiter**: A master soft-limiter prevents digital overs at the final output.
 
 ### Performance & UI Updates
-- **High-Precision Export**: The export system now provides real-time progress feedback and notifications when files are ready.
+- **High-Precision Export**: The export system provides real-time progress feedback and notifications when files are ready.
 - **Contextual Interface**: Buttons like **ARP** automatically hide for engines that don't support them (like FM Drum or Sampler Chops), keeping the workspace clean.
 - **CPU Smart-Decimation**: The engine now optimizes filter and envelope calculations dynamically to ensure stable performance even on older devices.
 

@@ -22,7 +22,9 @@ enum class ModSource {
   Macro3,
   Macro4,
   Macro5,
-  Macro6
+  Macro6,
+  Macro7,
+  Macro8
 };
 
 enum class ModDestination {

@@ -1468,6 +1468,7 @@ fun SoundFontCreditsDialog(onDismiss: () -> Unit) {
                 
                 CreditItem("GeneralUser GS", "S. Christian Collins", "GNU GPL v2", "A versatile GM/GS soundset.")
                 CreditItem("Chorium Rev A", "open-samples.com", "GPL", "High-quality transparent GM soundset.")
+                CreditItem("Musical Artifacts", "musical-artifacts.com", "Open Community", "A fantastic resource for soundfonts and presets.")
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("PRIVACY POLICY", style = MaterialTheme.typography.labelLarge, color = Color.Magenta)

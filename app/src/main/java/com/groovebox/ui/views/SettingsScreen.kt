@@ -1,5 +1,7 @@
 package com.groovebox.ui.views
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -53,38 +55,83 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
     var mappingStripIndex by remember { mutableStateOf(-1) }
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         
-        // MIDI STATUS OVERLAY
+        // MIDI STATUS & LINKS OVERLAY
         if (midiManager != null) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.6f)),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                border = BorderStroke(1.dp, Color.DarkGray)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).height(intrinsicSize = IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("MIDI CONNECTION STATUS", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Device: ${midiManager.deviceName.value}",
-                        color = Color.Yellow,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Recent Activity:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
-                    )
-                    Text(
-                        text = midiManager.midiLog.value.takeLast(500), // Show more history in settings
-                        color = Color.Red,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.Black)
-                            .padding(8.dp)
-                            .height(100.dp) // Fixed height scrollable area effectively
-                    )
+                // Left Half: MIDI Monitor
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.6f)),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    border = BorderStroke(1.dp, Color.DarkGray)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("MIDI MONITOR", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Device: ${midiManager.deviceName.value}",
+                            color = Color.Yellow,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = midiManager.midiLog.value.takeLast(500),
+                            color = Color.Red,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            softWrap = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black)
+                                .padding(4.dp)
+                                .height(80.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+                }
+
+                // Right Half: Social Links
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.2f)),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp).fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("RESOURCES", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/@LoomGroovebox"))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                            border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f))
+                        ) {
+                            Text("YouTube", fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Co-oscillator/loom-groovebox"))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+                        ) {
+                            Text("GitHub", fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

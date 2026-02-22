@@ -1,5 +1,8 @@
 package com.groovebox.ui.views
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -2469,8 +2472,18 @@ fun SoundFontParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
         // Source Selection Row
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("SOUNDFONT SOURCE", style = MaterialTheme.typography.labelSmall, color = Color.LightGray, fontWeight = FontWeight.Bold)
-                Text(File(track.soundFontPath ?: "").name.ifBlank { "NONE LOADED" }, color = Color.Cyan, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("GET SOUNDFONTS", style = MaterialTheme.typography.labelSmall, color = Color.LightGray, fontWeight = FontWeight.Bold)
+                val context = LocalContext.current
+                Text(
+                    text = "Musical Artifacts",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Cyan,
+                    modifier = Modifier.clickable {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://musical-artifacts.com"))
+                        context.startActivity(intent)
+                    },
+                    textDecoration = TextDecoration.Underline 
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Button(onClick = { showLoadDialog = true }, modifier = Modifier.height(28.dp), contentPadding = PaddingValues(horizontal = 8.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha=0.1f)), border = BorderStroke(1.dp, Color.Cyan.copy(alpha=0.5f))) {

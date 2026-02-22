@@ -720,20 +720,25 @@ public:
         scrubVoice.envelope.forceSustain();
       }
 
-      double targetPos = mScrubPosition * buffer.size();
+      double trimStartSamples = mTrimStart * buffer.size();
+      double trimEndSamples = mTrimEnd * buffer.size();
+      double rawTargetPos = mScrubPosition * buffer.size();
+
+      // Clamp target to trim boundaries so spring doesn't pull into restricted
+      // zones
+      double targetPos =
+          std::max(trimStartSamples, std::min(trimEndSamples, rawTargetPos));
       double springForce = 0.0;
 
       // Allow LFOs/Modulation to drive position even if gate is off
-      // We detect "Interaction" if gate is on OR if targetPos significantly
-      // moved from last frame
       double posDelta = std::abs(targetPos - mLastTargetPos);
       bool isInteracting = mScrubGate || (posDelta > 0.0001);
       mLastTargetPos = targetPos;
 
       if (isInteracting) {
         double dist = targetPos - scrubVoice.position;
-        // Stiffness (k): High enough to track LFOs, but with momentum
-        springForce = dist * (mScrubGate ? 0.0000003 : 0.00005);
+        // Stiffness (k): Increased for better tracking, reduced drag
+        springForce = dist * (mScrubGate ? 0.0000005 : 0.00008);
 
         // Snap on initial touch
         if (mScrubGate && !mLastScrubGate) {
@@ -771,19 +776,12 @@ public:
     if (mSmoothSpeed < -12.0)
       mSmoothSpeed = -12.0;
 
-    // Apply
+    // Apply to Voice 0 state
     if (mPlayMode == Scrub) {
-      scrubVoice.position += mSmoothSpeed;
-
-      // WALL CLAMP (Fixes "Circles 5 Times" / Loop Glitch)
-      if (scrubVoice.position < 0) {
-        scrubVoice.position = 0;
-        mSmoothSpeed = 0; // Stop on wall
-      }
-      if (scrubVoice.position >= buffer.size()) {
-        scrubVoice.position = buffer.size() - 0.001; // Clamp to end
-        mSmoothSpeed = 0;                            // Stop on wall
-      }
+      // NOTE: We no longer manually advance scrubVoice.position here.
+      // Instead, we set pitchRatio and let the per-sample render loop advance
+      // it. This eliminates the "stepping" / "glitchy" sound caused by
+      // per-buffer updates.
       scrubVoice.pitchRatio = (float)mSmoothSpeed;
       mLastScrubGate = mScrubGate;
     }
@@ -849,7 +847,9 @@ public:
 
       if (mPlayMode == Scrub) {
         if (i == 0) {
-          baseResampleRate = 0.0f;
+          // SCRUB MODE: Use mSmoothSpeed as the per-sample advance rate.
+          // This ensures smooth, sample-accurate playback without stepping.
+          baseResampleRate = (float)mSmoothSpeed;
           useGranular = false; // FORCE CLASSIC MODE (Fixes Grainy Sound)
           traverseRate = 0;
         }

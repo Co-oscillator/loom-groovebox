@@ -1010,7 +1010,7 @@ fun RecordingStrip(
                                 val knobIdx = stripIdx - 4
                                 val newRoutings = state.knobRoutings.mapIndexed { idx, item ->
                                     if (idx == knobIdx) item.copy(targetType = 1, targetId = 360, parameterName = "Scrub Pos")
-                                    else item
+                                else item
                                 }
                                 state.copy(knobRoutings = newRoutings, midiLearnActive = false, midiLearnStep = 0, midiLearnSelectedStrip = null, selectedTab = 0)
                             }
@@ -1043,7 +1043,102 @@ fun RecordingStrip(
                             return@awaitEachGesture
                         }
 
-                        if (isScrubMode) {
+                        // 1. Check Trim Lines or Slices first (Priority)
+                        var draggingIdx = -1
+                        var isDraggingTrimStart = false
+                        var isDraggingTrimEnd = false
+                        
+                        val trimStartPx = effectiveTrimStart * width
+                        val trimEndPx = effectiveTrimEnd * width
+                        val touchThreshold = 30.dp.toPx() 
+                        
+                        if (kotlin.math.abs(down.position.x - trimStartPx) < touchThreshold) {
+                            isDraggingTrimStart = true
+                        } else if (kotlin.math.abs(down.position.x - trimEndPx) < touchThreshold) {
+                            isDraggingTrimEnd = true
+                        } else if (!isScrubMode) {
+                            // Find closest slice point if not scrubbing and not dragging trim
+                            currentSlicePoints?.let { points ->
+                                var minDist = 0.05f 
+                                points.forEachIndexed { i, p ->
+                                    val dist = kotlin.math.abs(p - clickPos)
+                                    if (dist < minDist) {
+                                        minDist = dist
+                                        draggingIdx = i
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isDraggingTrimStart || isDraggingTrimEnd || draggingIdx != -1) {
+                            // Marker/Slice Dragging Logic
+                            draggingSliceIndex = draggingIdx
+                            down.consume()
+                            
+                            var dragChange = down
+                            do {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == dragChange.id }
+                                if (change != null && change.pressed) {
+                                    if (change.position != dragChange.position) {
+                                        val newPos = (change.position.x / width).coerceIn(0f, 1f)
+                                        
+                                        var previewNote = -1
+                                        if (isDraggingTrimStart) {
+                                            val maxVal = animTrimEnd - 0.01f
+                                            val finalStart = newPos.coerceAtMost(maxVal)
+                                            nativeLib?.setParameter(trackIndex, 330, finalStart)
+                                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                if (idx == trackIndex) t.copy(parameters = t.parameters + (330 to finalStart)) else t 
+                                            }))
+                                            previewNote = 60
+                                        } else if (isDraggingTrimEnd) {
+                                            val minVal = animTrimStart + 0.01f
+                                            val finalEnd = newPos.coerceAtLeast(minVal)
+                                            nativeLib?.setParameter(trackIndex, 331, finalEnd)
+                                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                if (idx == trackIndex) t.copy(parameters = t.parameters + (331 to finalEnd)) else t 
+                                            }))
+                                            val sCount = if (currentSlicePoints != null && currentSlicePoints.isNotEmpty()) currentSlicePoints.size + 1 else currentSlices
+                                            previewNote = 60 + sCount - 1
+                                        } else {
+                                            currentSlicePoints?.let { pts ->
+                                                val newPts = pts.copyOf()
+                                                if (draggingIdx < newPts.size) {
+                                                    newPts[draggingIdx] = newPos
+                                                    slicePoints = newPts
+                                                    // Update engine in real-time
+                                                    nativeLib?.setSlicePosition(trackIndex, draggingIdx, newPos)
+                                                }
+                                            }
+                                            previewNote = 60 + draggingIdx
+                                        }
+                                        
+                                        if (previewNote != -1) {
+                                            previewJob?.cancel()
+                                            previewJob = scope.launch(Dispatchers.IO) {
+                                                nativeLib?.triggerNote(trackIndex, previewNote, 100)
+                                                delay(500)
+                                                nativeLib?.releaseNote(trackIndex, previewNote)
+                                            }
+                                        }
+                                        change.consume()
+                                    }
+                                    dragChange = change
+                                } else {
+                                    break
+                                }
+                            } while (dragChange.pressed)
+                            
+                            // Send final slice updates when done
+                            // Send final refresh when done
+                            if (draggingIdx != -1) {
+                                onWaveformRefresh()
+                            }
+                            draggingSliceIndex = -1
+
+                        } else if (isScrubMode) {
+                            // 2. SCRUB: If not on a marker, handle scrubbing
                             // SCRUB: Touch Down = Gate ON + Position
                             nativeLib?.setParameter(trackIndex, 360, clickPos.coerceIn(0f, 1f))
                             nativeLib?.setParameter(trackIndex, 361, 1.0f)
@@ -1066,7 +1161,7 @@ fun RecordingStrip(
                                     }
                                     dragChange = change
                                 } else {
-                                    break // Released
+                                    break 
                                 }
                             } while (dragChange.pressed)
                             
@@ -1077,100 +1172,8 @@ fun RecordingStrip(
                             }))
                             
                         } else {
-                            // SLICE EDIT MODE OR TRIM DRAG
-                            var draggingIdx = -1
-                            var isDraggingTrimStart = false
-                            var isDraggingTrimEnd = false
-                            
-                            // Check Trim Lines first (Priority)
-                            val trimStartPx = effectiveTrimStart * width
-                            val trimEndPx = effectiveTrimEnd * width
-                            val touchThreshold = 30.dp.toPx() // Generous grab area
-                            
-                            if (kotlin.math.abs(down.position.x - trimStartPx) < touchThreshold) {
-                                isDraggingTrimStart = true
-                            } else if (kotlin.math.abs(down.position.x - trimEndPx) < touchThreshold) {
-                                isDraggingTrimEnd = true
-                            } else {
-                                // Find closest slice point if not dragging trim
-                                currentSlicePoints?.let { points ->
-                                    var minDist = 0.05f 
-                                    points.forEachIndexed { i, p ->
-                                        val dist = kotlin.math.abs(p - clickPos)
-                                        if (dist < minDist) {
-                                            minDist = dist
-                                            draggingIdx = i
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            if (isDraggingTrimStart || isDraggingTrimEnd || draggingIdx != -1) {
-                                draggingSliceIndex = draggingIdx
-                                down.consume()
-                                
-                                var dragChange = down
-                                do {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull { it.id == dragChange.id }
-                                    if (change != null && change.pressed) {
-                                        if (change.position != dragChange.position) {
-                                            val newPos = (change.position.x / width).coerceIn(0f, 1f)
-                                            
-                                            var previewNote = -1
-                                            if (isDraggingTrimStart) {
-                                                // Dragging Start: constrained by End
-                                                val maxVal = animTrimEnd - 0.01f
-                                                val finalStart = newPos.coerceAtMost(maxVal)
-                                                nativeLib?.setParameter(trackIndex, 330, finalStart)
-                                                // Update local state for immediate feedback
-                                                onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                                    if (idx == trackIndex) t.copy(parameters = t.parameters + (330 to finalStart)) else t 
-                                                }))
-                                                previewNote = 60
-                                            } else if (isDraggingTrimEnd) {
-                                                // Dragging End: constrained by Start
-                                                val minVal = animTrimStart + 0.01f
-                                                val finalEnd = newPos.coerceAtLeast(minVal)
-                                                nativeLib?.setParameter(trackIndex, 331, finalEnd)
-                                                onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                                    if (idx == trackIndex) t.copy(parameters = t.parameters + (331 to finalEnd)) else t 
-                                                }))
-                                                val sCount = if (currentSlicePoints != null && currentSlicePoints.isNotEmpty()) currentSlicePoints.size + 1 else currentSlices
-                                                previewNote = 60 + sCount - 1
-                                            } else {
-                                                // Dragging Slice
-                                                // Update Local with copy to trigger state
-                                                currentSlicePoints?.let { pts ->
-                                                    val newPts = pts.copyOf()
-                                                    if (draggingIdx < newPts.size) {
-                                                        newPts[draggingIdx] = newPos
-                                                        slicePoints = newPts
-                                                    }
-                                                }
-                                                // Call Native
-                                                nativeLib?.setSlicePosition(trackIndex, draggingIdx, newPos)
-                                                previewNote = 60 + draggingIdx + 1
-                                            }
-
-                                            if (previewNote != -1) {
-                                                previewJob?.cancel()
-                                                previewJob = scope.launch {
-                                                    delay(500)
-                                                    nativeLib?.triggerNote(trackIndex, previewNote, 90)
-                                                    delay(500)
-                                                    nativeLib?.releaseNote(trackIndex, previewNote)
-                                                }
-                                            }
-                                            
-                                            change.consume()
-                                        }
-                                        dragChange = change
-                                    }
-                                } while (dragChange.pressed)
-                                
-                                draggingSliceIndex = -1
-                            }
+                            // 3. Fallback for Click-to-Note or slice selection
+                            // (Old Logic if needed)
                         }
                     }
                 }

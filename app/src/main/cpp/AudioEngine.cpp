@@ -3032,10 +3032,15 @@ void AudioEngine::trimSample(int trackIndex) {
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     if (mTracks[trackIndex].engineType == 2) {
       mTracks[trackIndex].samplerEngine.trim();
+      // Reset markers to full range after destructive trim
+      mTracks[trackIndex].parameters[330] = 0.0f;
+      mTracks[trackIndex].parameters[331] = 1.0f;
     } else if (mTracks[trackIndex].engineType == 3) { // Granular
       float start = mTracks[trackIndex].parameters[330];
       float end = mTracks[trackIndex].parameters[331];
       mTracks[trackIndex].granularEngine.trim(start, end);
+      mTracks[trackIndex].parameters[330] = 0.0f;
+      mTracks[trackIndex].parameters[331] = 1.0f;
     }
   }
 }

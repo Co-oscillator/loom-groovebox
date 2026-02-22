@@ -114,7 +114,8 @@ public:
         mFilterEnvAmount(other.mFilterEnvAmount), mGlide(other.mGlide),
         mLastPitchRatio(other.mLastPitchRatio), mPlayMode(other.mPlayMode),
         mScrubGate(other.mScrubGate), mUseEnvelope(other.mUseEnvelope),
-        mSampleRate(other.mSampleRate), mSlices(std::move(other.mSlices)) {
+        mSampleRate(other.mSampleRate), mSlices(std::move(other.mSlices)),
+        mLastTargetPos(other.mLastTargetPos) {
     mReverse.store(other.mReverse.load());
     mCurrentTime.store(other.mCurrentTime.load());
   }
@@ -148,6 +149,7 @@ public:
       mSampleRate = other.mSampleRate;
       mCurrentTime.store(other.mCurrentTime.load());
       mSlices = std::move(other.mSlices);
+      mLastTargetPos = other.mLastTargetPos;
     }
     return *this;
   }
@@ -520,7 +522,7 @@ public:
   void releaseNote(int note) {
     for (auto &v : mVoices) {
       if (v.active && v.note == note) {
-        if (mPlayMode == Sustain || mPlayMode == Chops || mPlayMode == Loop ||
+        if (mPlayMode == Sustain || mPlayMode == Loop ||
             mPlayMode == LoopChops) {
           v.envelope.release();
         }
@@ -721,44 +723,46 @@ public:
       double targetPos = mScrubPosition * buffer.size();
       double springForce = 0.0;
 
-      if (mScrubGate) {
-        double dist = targetPos - scrubVoice.position;
-        // Stiffness (k): Tuned for <3Hz Resonance (Ultra Heavy Mass)
-        springForce = dist * 0.0000003;
+      // Allow LFOs/Modulation to drive position even if gate is off
+      // We detect "Interaction" if gate is on OR if targetPos significantly
+      // moved from last frame
+      double posDelta = std::abs(targetPos - mLastTargetPos);
+      bool isInteracting = mScrubGate || (posDelta > 0.0001);
+      mLastTargetPos = targetPos;
 
-        // Handle Snap-to-start
-        if (!mLastScrubGate) {
+      if (isInteracting) {
+        double dist = targetPos - scrubVoice.position;
+        // Stiffness (k): High enough to track LFOs, but with momentum
+        springForce = dist * (mScrubGate ? 0.0000003 : 0.00005);
+
+        // Snap on initial touch
+        if (mScrubGate && !mLastScrubGate) {
           scrubVoice.position = targetPos;
           mSmoothSpeed = 0.0;
-          springForce = 0.0;
         }
       }
 
       // STATE MACHINE: Interacting vs Free-Spin
-      if (mScrubGate) {
+      if (isInteracting) {
         // STATE 1: INTERACTING (P-D Controller)
-        // Drag = 0.002 (Overdamped for tight control).
-        double drag = 0.002;
+        double drag =
+            mScrubGate ? 0.002 : 0.05; // More drag when modulated follow
         double dampingForce = -mSmoothSpeed * drag;
         double accel = springForce + dampingForce;
         mSmoothSpeed += accel;
       } else {
         // STATE 2: COASTING / MOTOR
         if (mMotorRunning) {
-          // Motor is running: gradually return to normal playback speed (1.0)
-          // Like a DJ releasing a record — it spins back up to speed.
           double targetSpeed = 1.0;
           mSmoothSpeed += (targetSpeed - mSmoothSpeed) * 0.0005;
-          // Once close enough to target, snap to it
           if (std::abs(mSmoothSpeed - targetSpeed) < 0.001)
             mSmoothSpeed = targetSpeed;
         } else {
-          // No motor: Viscous Friction (Exponential Decay to stop).
           mSmoothSpeed *= 0.999925;
           if (std::abs(mSmoothSpeed) < 0.00005)
             mSmoothSpeed = 0.0;
         }
-      } // End if/else mScrubGate
+      }
     } // End if (mPlayMode == Scrub)
 
     // Hard Speed Limit
@@ -861,73 +865,46 @@ public:
         v.start = static_cast<size_t>(mTrimStart * buffer.size());
         v.end = static_cast<size_t>(mTrimEnd * buffer.size());
       } else if (mPlayMode == Scrub) {
-        // Scrub Mode: Ensure we can scrub entire file
-        v.start = 0;
-        v.end = buffer.size();
-
-        // Scrub Release Behavior (Tape Stop / Slow Drag)
-        // If handle released, `v.position` is not driven by us.
-        // It falls through to here.
-        // We want it to stop (friction).
-
-        // Wait, simpler: We already calculated Play Physics in the block
-        // above. If !mScrubGate (Released), we want it to stop? OR continue
-        // playing if it has momentum? User says "Snaps back". If we set
-        // v.start=0, v.end=size, it won't snap back. It will play to end (One
-        // Shot) or Loop (if Loop mode).
-
-        // useGranular = false; // This is now handled above for voice 0
-        // traverseRate = 0; // This is now handled above for voice 0
-        // baseResampleRate =
-        //     0; // Prevent standard increment, let our physics block handle
-        //     it?
-        // NO! If we set baseResampleRate=0 here, the voice freezes on
-        // release. We want that? "Tape Stop". User: "Snaps back to start when
-        // I release". Taking this out implies we rely on `baseResampleRate`
-        // logic below. Below logic: `v.position += baseResampleRate`.
-        // `baseResampleRate` depends on `mSpeed` (1.0).
-        // So on release, it plays at 1.0x speed.
-        // That is "Launch" behavior.
-        // If user wants "Scrub", usually release = Stop.
-        // But let's fix the Snap Back first.
-        // Snap Back was caused by `v.position` being outside `v.start/v.end`.
-        // Setting `v.start=0, v.end=size` FIXES Snap Back.
-
-        // Now, "Ticks".
-        // Ticks caused by slow slewing (0.005).
-        // Using 0.1 in the Scrub Block (above, need to update) will fix
-        // tracking. Here, we just handle the "Loop/Trim parameters".
-
-        // Wait, I need to update the logic in the START of the file too (the
-        // Scrub Block). This `replace` only targets the loop parameter logic.
-        // I will do TWO replaces.
+        // Scrub Mode: Ensure we scrub within the trimmed section
+        v.start = static_cast<size_t>(mTrimStart * buffer.size());
+        v.end = static_cast<size_t>(mTrimEnd * buffer.size());
+        if (v.end > buffer.size())
+          v.end = buffer.size();
+        if (v.start >= v.end && v.end > 0)
+          v.start = v.end - 1;
       }
 
       float voiceOutput = 0.0f;
       if (!useGranular) {
         // Classic mode: Resampling
         v.position += baseResampleRate;
-        if (v.position >= v.end || v.position < v.start) {
+
+        // Non-destructive trim boundary enforcement
+        if (v.position >= (double)v.end) {
           if (mPlayMode == Sustain || mPlayMode == Loop ||
               mPlayMode == LoopChops) {
-            v.position = mReverse ? (double)v.end - 1.0 : (double)v.start;
+            v.position = (double)v.start;
           } else {
+            v.position = (double)v.end - 0.001;
             v.envelope.release();
-            if (mPlayMode == Scrub) {
+            if (mPlayMode == Scrub)
               mMotorRunning = false;
-            }
+          }
+        } else if (v.position < (double)v.start) {
+          if (mPlayMode == Sustain || mPlayMode == Loop ||
+              mPlayMode == LoopChops) {
+            v.position = (double)v.end - 1.0;
+          } else {
+            v.position = (double)v.start;
+            v.envelope.release();
+            if (mPlayMode == Scrub)
+              mMotorRunning = false;
           }
         }
+
         int idx = static_cast<int>(v.position);
         if (idx >= 0 && idx < (int)buffer.size()) {
-          if (mPlayMode == OneShot || mPlayMode == Chops ||
-              mPlayMode == OneShotChops) {
-            if (idx < (int)v.end) {
-              voiceOutput = getInterpolatedSample(buffer, v.position);
-            }
-          } else {
-            voiceOutput = getInterpolatedSample(buffer, v.position);
-          }
+          voiceOutput = getInterpolatedSample(buffer, v.position);
         }
       } else {
         // Granular mode
@@ -947,27 +924,17 @@ public:
         float phase = (float)v.grainTimer / (float)Voice::GRAIN_SIZE;
         float w1 = 1.0f - std::abs(phase * 2.0f - 1.0f);
 
-        float s1 = 0.0f;
-        if (idx1 >= 0 && idx1 < (int)buffer.size()) {
-          if (mPlayMode == OneShot || mPlayMode == Chops ||
-              mPlayMode == OneShotChops) {
-            if (idx1 < (int)v.end)
-              s1 = buffer[idx1];
-          } else {
-            s1 = buffer[idx1];
+        // Grain 1 & 2 read with strict boundary enforcement
+        auto getClampedSample = [&](double pos) -> float {
+          int idx = static_cast<int>(pos);
+          if (idx >= (int)v.start && idx < (int)v.end) {
+            return getInterpolatedSample(buffer, pos);
           }
-        }
+          return 0.0f;
+        };
 
-        float s2 = 0.0f;
-        if (idx2 >= 0 && idx2 < (int)buffer.size()) {
-          if (mPlayMode == OneShot || mPlayMode == Chops ||
-              mPlayMode == OneShotChops) {
-            if (idx2 < (int)v.end)
-              s2 = buffer[idx2];
-          } else {
-            s2 = buffer[idx2];
-          }
-        }
+        float s1 = getClampedSample(gp1);
+        float s2 = getClampedSample(gp2);
 
         voiceOutput = (s1 * w1) + (s2 * (1.0f - w1));
 
@@ -1268,6 +1235,7 @@ private:
 
   // Scrub State
   float mScrubPosition = 0.0f;
+  double mLastTargetPos = 0.0;
   bool mScrubGate = false;
   bool mLastScrubGate = false;
   bool mMotorRunning = false; // "Motor" state for Scrub Playback

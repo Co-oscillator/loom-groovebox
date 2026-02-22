@@ -733,67 +733,11 @@ public:
     Voice &scrubVoice = mVoices[0];
 
     // FIX: Only run this in Scrub Mode (prevents Auto-Play loop in other
-    // modes)
+    // Track target for per-sample interpolation
     if (mPlayMode == Scrub) {
-      if (!scrubVoice.active) {
-        scrubVoice.active = true;
-        scrubVoice.pitchRatio = 1.0f;
-        mSmoothSpeed = 0.0;
-        scrubVoice.envelope.forceSustain();
-      }
-
-      double trimStartSamples = mTrimStart * buffer.size();
-      double trimEndSamples = mTrimEnd * buffer.size();
-      double rawTargetPos = mScrubPosition * buffer.size();
-
-      // Clamp target to trim boundaries so spring doesn't pull into
-      // restricted zones
-      double targetPos =
-          std::max(trimStartSamples, std::min(trimEndSamples, rawTargetPos));
-      double springForce = 0.0;
-
-      // Allow LFOs/Modulation to drive position even if gate is off
-      double posDelta = std::abs(targetPos - mLastTargetPos);
-      bool isInteracting = mScrubGate || (posDelta > 0.0001);
-      mLastTargetPos = targetPos;
-
-      if (isInteracting) {
-        double dist = targetPos - scrubVoice.position;
-        // Stiffness (k): Increased for tighter touch tracking, kept LFO
-        // tracking high
-        springForce = dist * (mScrubGate ? 0.000008 : 0.00008);
-
-        // Snap on initial touch
-        if (mScrubGate && !mLastScrubGate) {
-          scrubVoice.position = targetPos;
-          mSmoothSpeed = 0.0;
-        }
-      }
-
-      // STATE MACHINE: Interacting vs Free-Spin
-      if (isInteracting) {
-        // STATE 1: INTERACTING (P-D Controller)
-        // Damping (drag): Tuned closer to Critical Damping (2*sqrt(k))
-        // manual k=0.000008, crit drag=0.0056. LFO k=0.00008, crit
-        // drag=0.018.
-        double drag = mScrubGate ? 0.004 : 0.018;
-        double dampingForce = -mSmoothSpeed * drag;
-        double accel = springForce + dampingForce;
-        mSmoothSpeed += accel;
-      } else {
-        // STATE 2: COASTING / MOTOR
-        if (mMotorRunning) {
-          double targetSpeed = 1.0;
-          mSmoothSpeed += (targetSpeed - mSmoothSpeed) * 0.0005;
-          if (std::abs(mSmoothSpeed - targetSpeed) < 0.001)
-            mSmoothSpeed = targetSpeed;
-        } else {
-          mSmoothSpeed *= 0.999925;
-          if (std::abs(mSmoothSpeed) < 0.00005)
-            mSmoothSpeed = 0.0;
-        }
-      }
-    } // End if (mPlayMode == Scrub)
+      mLastScrubParam =
+          mScrubPosition; // Will be used in next render() for range
+    }
 
     // Hard Speed Limit
     if (mSmoothSpeed > 12.0)
@@ -803,11 +747,12 @@ public:
 
     // Apply to Voice 0 state
     if (mPlayMode == Scrub) {
-      // NOTE: We no longer manually advance scrubVoice.position here.
-      // Instead, we set pitchRatio and let the per-sample render loop advance
-      // it. This eliminates the "stepping" / "glitchy" sound caused by
-      // per-buffer updates.
-      scrubVoice.pitchRatio = (float)mSmoothSpeed;
+      if (!scrubVoice.active) {
+        scrubVoice.active = true;
+        scrubVoice.pitchRatio = 0.0f;
+        mSmoothSpeed = 0.0;
+        scrubVoice.envelope.forceSustain();
+      }
       mLastScrubGate = mScrubGate;
     }
 
@@ -902,6 +847,68 @@ public:
       float voiceOutput = 0.0f;
       if (!useGranular) {
         // Classic mode: Resampling
+
+        // ANALOGUE SCRUB: Update physics PER SAMPLE for Voice 0
+        if (mPlayMode == Scrub && i == 0) {
+          double trimStartSamples = mTrimStart * buffer.size();
+          double trimEndSamples = mTrimEnd * buffer.size();
+
+          // Slew-limit the target position to avoid parameter-rate snaps
+          mSmoothedScrubPos += (mScrubPosition - mSmoothedScrubPos) * 0.005f;
+          double currentTarget = mSmoothedScrubPos * buffer.size();
+
+          // Clamp target
+          currentTarget = std::max(trimStartSamples,
+                                   std::min(trimEndSamples, currentTarget));
+
+          // Interaction Detection: Detect if user is touching OR if the target
+          // is still moving towards the smoothing goal
+          double targetDelta = std::abs(mScrubPosition - mSmoothedScrubPos);
+          bool isInteracting = mScrubGate || (targetDelta > 0.0001);
+
+          // Mass-Spring-Damper Physics
+          double dist = currentTarget - v.position;
+          // Stiffness (k): Reverting to "Ultra Heavy Mass" v2.1 constants
+          // (3e-7) This eliminates high-freq ringing (graininess) and provides
+          // fluid movement.
+          double k = 0.0000003;
+          double springForce = dist * k;
+
+          // Damping (drag): Higher damping to suppress any tiny oscillations
+          double drag = 0.002;
+          double dampingForce = -mSmoothSpeed * drag;
+
+          if (isInteracting) {
+            // Initial Snap logic on fresh touch
+            if (mScrubGate && !mLastScrubGate) {
+              v.position = currentTarget;
+              mSmoothSpeed = 0.0;
+              mSmoothedScrubPos = mScrubPosition;
+            }
+
+            mSmoothSpeed += (springForce + dampingForce);
+          } else if (mMotorRunning) {
+            // Playback motor (1.0x speed)
+            mSmoothSpeed += (1.0 - mSmoothSpeed) * 0.0005;
+          } else {
+            // NATURAL DECAY: Heavy platter friction
+            mSmoothSpeed *= 0.999925;
+            if (std::abs(mSmoothSpeed) < 0.00005)
+              mSmoothSpeed = 0.0;
+          }
+
+          mLastScrubParam = mScrubPosition;
+          mLastScrubGate = mScrubGate;
+
+          // Limit speed
+          if (mSmoothSpeed > 12.0)
+            mSmoothSpeed = 12.0;
+          if (mSmoothSpeed < -12.0)
+            mSmoothSpeed = -12.0;
+
+          baseResampleRate = (float)mSmoothSpeed;
+        }
+
         v.position += baseResampleRate;
 
         // Non-destructive trim boundary enforcement
@@ -1276,6 +1283,7 @@ private:
   bool mLastScrubGate = false;
   bool mMotorRunning = false; // "Motor" state for Scrub Playback
   double mSmoothSpeed = 0.0;
+  double mSmoothedScrubPos = 0.0;
   double mLastScrubParam = 0.0; // Track previous target for velocity calc
 
   // Parameters

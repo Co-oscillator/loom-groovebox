@@ -753,7 +753,8 @@ fun RecordingStrip(
                              }))
                         }, 
                         isSave = true,
-                        trackIndex = trackIndex
+                        trackIndex = trackIndex,
+                        title = "SAVE SAMPLE"
                     )
                 }
                 if (showLoadDialog) {
@@ -781,6 +782,7 @@ fun RecordingStrip(
                         isSave = false,
                         trackIndex = trackIndex,
                         extensions = listOf("wav"),
+                        title = "LOAD SAMPLE",
                         onExport = { index, path, format ->
                              scope.launch(Dispatchers.IO) {
                                  val pcmData = nativeLib?.getRecordedSampleData(index, 44100f)
@@ -831,13 +833,7 @@ fun RecordingStrip(
                 // sampleLength already defined above
                 
                 // Observe all factors
-                val seqStepsParam = track.parameters[364] ?: 0.25f // Default 16 steps (4 beats)? No, 364 is usually mapped 0-1.
-                // Assuming 364 maps to steps/beats. If not standard, let's assume 16 steps (4 beats) is common.
-                // But user example: "64 step long sequence".
-                // If 364 is "Sequence Length in Bars", 0.0=1 bar, 1.0=8 bars?
-                // Let's use the UI loop length logic if available. 
-                // Since I can't check logic easily, I'll rely on what was there: (stepsParam * 63f + 1f).
-                val seqSteps = (seqStepsParam * 63f + 1f).toInt() // 1 to 64 steps
+                val seqSteps = state.patternLength
                 
                 val repeatsParam = track.parameters[365] ?: 0.0f
                 val repeats = (repeatsParam * 15f + 1f).toInt() // 1 to 16 repeats
@@ -859,7 +855,7 @@ fun RecordingStrip(
                 val stretchParam = track.parameters[301] ?: 0.25f
                 val stretchFactor = (stretchParam * 4.0f).coerceAtLeast(0.01f)
 
-                val suggestedBpm = remember(sampleLength, seqSteps, repeats, tStart, tEnd, speedParam, stretchParam) {
+                val suggestedBpm = remember(sampleLength, seqSteps, repeats, tStart, tEnd, speedParam, stretchParam, state.patternLength) {
                     if (sampleLength > 0L) {
                          // Effective Fraction of Sample
                          val fraction = (tEnd - tStart).coerceAtLeast(0.01f)
@@ -975,6 +971,11 @@ fun RecordingStrip(
         
         val scrubMidiLearnable = isScrubMode && (state.midiLearnActive && state.midiLearnStep == 2)
         val scrubLearnActive = isScrubMode && (state.lfoLearnActive || state.macroLearnActive)
+
+        // Local state for smooth scrubbing without expensive global re-compositions
+        var localScrubPos by remember { mutableStateOf<Float?>(null) }
+        var localScrubGate by remember { mutableStateOf(false) }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -988,7 +989,7 @@ fun RecordingStrip(
                     RoundedCornerShape(8.dp)
                 )
                 .padding(4.dp)
-                .pointerInput(trackIndex, isScrubMode, trimStart, trimEnd, slices, slicePoints) {
+                .pointerInput(trackIndex, isScrubMode) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         val width = size.width.toFloat()
@@ -1046,23 +1047,15 @@ fun RecordingStrip(
                             return@awaitEachGesture
                         }
 
-                        // 1. Check Trim Lines or Slices first (Priority)
+                        // 1. Check Slices first (Trim Markers are now Knob-only per user request)
                         var draggingIdx = -1
-                        var isDraggingTrimStart = false
-                        var isDraggingTrimEnd = false
+                        val touchThreshold = 20.dp.toPx() 
                         
-                        val trimStartPx = effectiveTrimStart * width
-                        val trimEndPx = effectiveTrimEnd * width
-                        val touchThreshold = 30.dp.toPx() 
-                        
-                        if (kotlin.math.abs(down.position.x - trimStartPx) < touchThreshold) {
-                            isDraggingTrimStart = true
-                        } else if (kotlin.math.abs(down.position.x - trimEndPx) < touchThreshold) {
-                            isDraggingTrimEnd = true
-                        } else if (!isScrubMode) {
-                            // Find closest slice point if not scrubbing and not dragging trim
-                            currentSlicePoints?.let { points ->
-                                var minDist = 0.05f 
+                        if (!isScrubMode) {
+                            // Find closest slice point if not scrubbing - using a pixel-based threshold for consistency
+                            val threshold = 15.dp.toPx() / width 
+                            slicePoints?.let { points ->
+                                var minDist = threshold 
                                 points.forEachIndexed { i, p ->
                                     val dist = kotlin.math.abs(p - clickPos)
                                     if (dist < minDist) {
@@ -1073,8 +1066,8 @@ fun RecordingStrip(
                             }
                         }
 
-                        if (isDraggingTrimStart || isDraggingTrimEnd || draggingIdx != -1) {
-                            // Marker/Slice Dragging Logic
+                        if (draggingIdx != -1) {
+                            // Slice Dragging Logic
                             draggingSliceIndex = draggingIdx
                             down.consume()
                             
@@ -1086,45 +1079,17 @@ fun RecordingStrip(
                                     if (change.position != dragChange.position) {
                                         val newPos = (change.position.x / width).coerceIn(0f, 1f)
                                         
-                                        var previewNote = -1
-                                        if (isDraggingTrimStart) {
-                                            val maxVal = animTrimEnd - 0.01f
-                                            val finalStart = newPos.coerceAtMost(maxVal)
-                                            nativeLib?.setParameter(trackIndex, 330, finalStart)
-                                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                                if (idx == trackIndex) t.copy(parameters = t.parameters + (330 to finalStart)) else t 
-                                            }))
-                                            previewNote = 60
-                                        } else if (isDraggingTrimEnd) {
-                                            val minVal = animTrimStart + 0.01f
-                                            val finalEnd = newPos.coerceAtLeast(minVal)
-                                            nativeLib?.setParameter(trackIndex, 331, finalEnd)
-                                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                                if (idx == trackIndex) t.copy(parameters = t.parameters + (331 to finalEnd)) else t 
-                                            }))
-                                            val sCount = if (currentSlicePoints != null && currentSlicePoints.isNotEmpty()) currentSlicePoints.size + 1 else currentSlices
-                                            previewNote = 60 + sCount - 1
-                                        } else {
-                                            currentSlicePoints?.let { pts ->
-                                                val newPts = pts.copyOf()
-                                                if (draggingIdx < newPts.size) {
-                                                    newPts[draggingIdx] = newPos
-                                                    slicePoints = newPts
-                                                    // Update engine in real-time
-                                                    nativeLib?.setSlicePosition(trackIndex, draggingIdx, newPos)
-                                                }
+                                        // Use the latest slicePoints to avoid stale data during rapid updates
+                                        slicePoints?.let { pts ->
+                                            val newPts = pts.copyOf()
+                                            if (draggingIdx < newPts.size) {
+                                                newPts[draggingIdx] = newPos
+                                                slicePoints = newPts
+                                                // Update engine in real-time
+                                                nativeLib?.setSlicePosition(trackIndex, draggingIdx, newPos)
                                             }
-                                            previewNote = 60 + draggingIdx
                                         }
                                         
-                                        if (previewNote != -1) {
-                                            previewJob?.cancel()
-                                            previewJob = scope.launch(Dispatchers.IO) {
-                                                nativeLib?.triggerNote(trackIndex, previewNote, 100)
-                                                delay(500)
-                                                nativeLib?.releaseNote(trackIndex, previewNote)
-                                            }
-                                        }
                                         change.consume()
                                     }
                                     dragChange = change
@@ -1133,22 +1098,17 @@ fun RecordingStrip(
                                 }
                             } while (dragChange.pressed)
                             
-                            // Send final slice updates when done
-                            // Send final refresh when done
-                            if (draggingIdx != -1) {
-                                onWaveformRefresh()
-                            }
+                            onWaveformRefresh()
                             draggingSliceIndex = -1
-
                         } else if (isScrubMode) {
-                            // 2. SCRUB: If not on a marker, handle scrubbing
-                            // SCRUB: Touch Down = Gate ON + Position
+                            // 2. SCRUB: Optimized with local state to avoid UI lag
                             down.consume()
-                            nativeLib?.setParameter(trackIndex, 360, clickPos.coerceIn(0f, 1f))
+                            val initialPos = clickPos.coerceIn(0f, 1f)
+                            localScrubPos = initialPos
+                            localScrubGate = true
+                            
+                            nativeLib?.setParameter(trackIndex, 360, initialPos)
                             nativeLib?.setParameter(trackIndex, 361, 1.0f)
-                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                if (idx == trackIndex) t.copy(parameters = t.parameters + (360 to clickPos) + (361 to 1.0f)) else t 
-                            }))
                             
                             var dragChange = down
                             do {
@@ -1157,10 +1117,8 @@ fun RecordingStrip(
                                 if (change != null && change.pressed) {
                                     if (change.position != dragChange.position) {
                                         val newPos = (change.position.x / width).coerceIn(0f, 1f)
+                                        localScrubPos = newPos
                                         nativeLib?.setParameter(trackIndex, 360, newPos)
-                                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                            if (idx == trackIndex) t.copy(parameters = t.parameters + (360 to newPos)) else t 
-                                        }))
                                         change.consume()
                                     }
                                     dragChange = change
@@ -1169,12 +1127,15 @@ fun RecordingStrip(
                                 }
                             } while (dragChange.pressed)
                             
-                            // SCRUB: Release = Gate OFF
+                            // SCRUB: Release = Gate OFF + Final State Sync
+                            localScrubGate = false
+                            val finalPos = localScrubPos ?: initialPos
                             nativeLib?.setParameter(trackIndex, 361, 0.0f)
-                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                if (idx == trackIndex) t.copy(parameters = t.parameters + (361 to 0.0f)) else t 
-                            }))
                             
+                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                if (idx == trackIndex) t.copy(parameters = t.parameters + (360 to finalPos) + (361 to 0.0f)) else t 
+                            }))
+                            localScrubPos = null
                         } else {
                             // 3. Fallback for Click-to-Note or slice selection
                             // (Old Logic if needed)
@@ -1199,7 +1160,9 @@ fun RecordingStrip(
 
                 // Granular/Scrub Playheads
                 if (isScrubMode) {
-                    val physPos = if (granularPlayheads != null && granularPlayheads.size >= 2 && granularPlayheads[0] >= 0) granularPlayheads[0] else scrubPosition
+                    val physPos = if (localScrubPos != null) localScrubPos!! 
+                                 else if (granularPlayheads != null && granularPlayheads.size >= 2 && granularPlayheads[0] >= 0) granularPlayheads[0] 
+                                 else scrubPosition
                     val x = physPos * size.width
                     val fuschia = Color(0xFFFF00FF)
                     drawLine(fuschia, Offset(x, 0f), Offset(x, size.height), strokeWidth = 4.dp.toPx())

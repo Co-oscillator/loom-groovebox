@@ -120,7 +120,7 @@ fun Knob(
                             else Color.Transparent,
                     shape = RoundedCornerShape(knobSize / 2)
                 )
-                .pointerInput(parameterId, state.isParameterLocking, state.midiLearnActive, state.midiLearnStep, state.lfoLearnActive, state.macroLearnActive, state.macroSourceLearnActive) {
+                .pointerInput(parameterId, state.isParameterLocking, state.midiLearnActive, state.midiLearnStep, state.lfoLearnActive, state.macroLearnActive, state.macroSourceLearnActive, state.selectedTrackIndex) {
                     if (state.macroSourceLearnActive) {
                         detectTapGestures {
                             val macroIdx = latestState.macroSourceLearnIndex

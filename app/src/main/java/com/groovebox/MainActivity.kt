@@ -851,9 +851,9 @@ fun SplashScreen() {
                 painter = painterResource(id = R.drawable.ic_icon_round),
                 contentDescription = "Loom Icon",
                 modifier = Modifier
-                    .size(280.dp)
+                    .size(400.dp)
                     .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Fit
             )
             
             Spacer(modifier = Modifier.height(32.dp))

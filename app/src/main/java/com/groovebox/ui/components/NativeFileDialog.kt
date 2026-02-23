@@ -244,7 +244,8 @@ fun NativeFileDialog(
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00AAFF))
                         ) {
-                            Text("SAVE NEW PRESET FILE")
+                            val buttonText = if (title?.contains("SAMPLE", true) == true) "SAVE AS NEW SAMPLE FILE" else "SAVE NEW PRESET FILE"
+                            Text(buttonText)
                         }
 
                         // Save as Default option

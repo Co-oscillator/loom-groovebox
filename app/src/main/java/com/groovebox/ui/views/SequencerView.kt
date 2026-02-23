@@ -567,9 +567,39 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                     }
                 }
                 
-                // 16 Step Pads or 64 Step Grid
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    BoxWithConstraints {
+                // 16 Step Pads or 64 Step Grid (with Sidebar)
+                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    // Sidebar: Pattern Length Control
+                    Column(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(60.dp)
+                            .padding(end = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Knob(
+                            label = "LEN",
+                            initialValue = (state.patternLength - 16) / 48f,
+                            parameterId = -1,
+                            state = latestState,
+                            onStateChange = latestOnStateChange,
+                            nativeLib = nativeLib,
+                            knobSize = 36.dp,
+                            onValueChangeOverride = { v ->
+                                val newLen = (v * 48 + 16).toInt().coerceIn(16, 64)
+                                if (newLen != latestState.patternLength) {
+                                    nativeLib.setPatternLength(newLen)
+                                    latestOnStateChange(latestState.copy(patternLength = newLen))
+                                }
+                            },
+                            valueFormatter = { v -> "${(v * 48 + 16).toInt().coerceIn(16, 64)}" }
+                        )
+                        Text("STEPS", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 9.sp)
+                    }
+
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        BoxWithConstraints {
                         val is64 = latestState.is64StepView
                         val columns = if (is64) 8 else 4
                         val padCount = if (is64) 64 else 16
@@ -602,6 +632,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                 val stepIndex = if (is64) i else i + (state.currentSequencerBank * 16)
                                 if (stepIndex >= 64) return@items
 
+                                val isBeyondLength = stepIndex >= latestState.patternLength
                                 val step = if (isMultiTrack) track.drumSteps[track.selectedFmDrumInstrument][stepIndex] else track.steps[stepIndex]
                                 
                                 var showStepPopup by remember { mutableStateOf(false) }
@@ -621,6 +652,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                         .aspectRatio(1f)
                                         .background(
                                             when {
+                                                isBeyondLength -> Color.DarkGray.copy(alpha = 0.1f)
                                                 step.isSkipped -> Color.Black
                                                 step.active -> engineColor
                                                 isGhostActive -> engineColor.copy(alpha = 0.3f) // Ghost Note Highlight
@@ -629,11 +661,12 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                             RoundedCornerShape(if (is64) 4.dp else 8.dp)
                                         )
                                         .then(
-                                            if (latestState.isPlaying && latestState.currentStep == stepIndex) {
+                                            if (latestState.isPlaying && latestState.currentStep == stepIndex && !isBeyondLength) {
                                                 Modifier.border(2.dp, Color.White, RoundedCornerShape(if (is64) 4.dp else 8.dp))
                                             } else Modifier
                                         )
-                                        .pointerInput(i, state.currentSequencerBank, state.selectedTrackIndex, track.selectedFmDrumInstrument, is64) {
+                                        .pointerInput(i, state.currentSequencerBank, state.selectedTrackIndex, track.selectedFmDrumInstrument, is64, isBeyondLength) {
+                                            if (isBeyondLength) return@pointerInput
                                             detectTapGestures(
                                                 onTap = {
                                                     if (step.isSkipped) return@detectTapGestures
@@ -897,6 +930,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
             }
         }
     }
+}
 }
 
 @Composable

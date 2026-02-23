@@ -80,6 +80,7 @@ public:
       grainPosition = 0.0;
       grainTimer = 0;
       envelope.reset();
+      filter.setParams(10000.0f, 0.7f, 48000.0f);
       pitchRatio = 1.0f;
       targetPitchRatio = 1.0f;
       slicePitch = 0.0f;
@@ -610,6 +611,12 @@ public:
     case 355:
       setGlide(value);
       break;
+    case 112: // Alternate Cutoff
+      setFilterCutoff(value);
+      break;
+    case 113: // Alternate Resonance
+      setFilterResonance(value);
+      break;
     case 320: {
       int newMode = Scrub;
       if (value < 0.16f)
@@ -854,7 +861,8 @@ public:
           double trimEndSamples = mTrimEnd * buffer.size();
 
           // Slew-limit the target position to avoid parameter-rate snaps
-          mSmoothedScrubPos += (mScrubPosition - mSmoothedScrubPos) * 0.005f;
+          // (Increased to 0.02f for snappier feel)
+          mSmoothedScrubPos += (mScrubPosition - mSmoothedScrubPos) * 0.02f;
           double currentTarget = mSmoothedScrubPos * buffer.size();
 
           // Clamp target

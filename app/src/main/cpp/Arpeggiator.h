@@ -23,9 +23,9 @@ enum class ArpMode {
 class Arpeggiator {
 public:
   Arpeggiator()
-      : mMode(ArpMode::OFF), mStep(0), mOctaves(0), mInversion(0),
-        mIsLatched(false), mIsWaitingForNewGesture(false), mUpperLane1Index(0),
-        mUpperLane2Index(0), mRng(std::random_device{}()) {
+      : mMode(ArpMode::OFF), mStep(0), mNoteIndex(0), mOctaves(0),
+        mInversion(0), mIsLatched(false), mIsWaitingForNewGesture(false),
+        mUpperLane1Index(0), mUpperLane2Index(0), mRng(std::random_device{}()) {
     // Default: Lane 0 (Root) active, Lanes 1-3 inactive
     mRhythms.resize(4, std::vector<bool>(16, false));
     std::fill(mRhythms[0].begin(), mRhythms[0].end(), true);
@@ -54,6 +54,7 @@ public:
   void setMode(ArpMode mode) {
     mMode = mode;
     mStep = 0;
+    mNoteIndex = 0;
   }
   ArpMode getMode() const { return mMode; }
   void setOctaves(int octaves) {
@@ -127,6 +128,7 @@ public:
     mSequence.clear();
     mGeneratedChordProgression.clear();
     mStep = 0;
+    mNoteIndex = 0;
     mLastHarmonicStep = -1;
     mIsWaitingForNewGesture = false;
   }
@@ -148,40 +150,49 @@ public:
     int stepIndex = mStep % 16; // 16 step pattern
 
     int seqSize = (int)mSequence.size();
+    bool playedAnyInStep = false;
 
     // Lane 0: Root/Main Note
     if (mRhythms.size() > 0 && mRhythms[0][stepIndex]) {
-      int idx = mStep % seqSize;
+      int idx = mNoteIndex % seqSize;
 
       int noteIdx = mSequence[idx];
-      if (mInversion != 0 && (mStep % seqSize) == 0) {
+      if (mInversion != 0 && (mNoteIndex % seqSize) == 0) {
         noteIdx += mInversion * 12; // Apply inversion to root of cycle
       }
       mNotesToPlay.push_back(noteIdx);
+      playedAnyInStep = true;
     }
 
     // Lane 1: +1 Walk
     if (mRhythms.size() > 1 && mRhythms[1][stepIndex]) {
-      if (seqSize > 1) {
-        int idx = (mStep + 1) % seqSize;
+      if (seqSize > 0) {
+        int idx = (mNoteIndex + 1) % seqSize;
         mNotesToPlay.push_back(mSequence[idx]);
+        playedAnyInStep = true;
       }
     }
 
     // Lane 2: +2 Walk
     if (mRhythms.size() > 2 && mRhythms[2][stepIndex]) {
-      if (seqSize > 2) {
-        int idx = (mStep + 2) % seqSize;
+      if (seqSize > 0) {
+        int idx = (mNoteIndex + 2) % seqSize;
         mNotesToPlay.push_back(mSequence[idx]);
+        playedAnyInStep = true;
       }
     }
 
     // Lane 3: +3 Walk
     if (mRhythms.size() > 3 && mRhythms[3][stepIndex]) {
-      if (seqSize > 3) {
-        int idx = (mStep + 3) % seqSize;
+      if (seqSize > 0) {
+        int idx = (mNoteIndex + 3) % seqSize;
         mNotesToPlay.push_back(mSequence[idx]);
+        playedAnyInStep = true;
       }
+    }
+
+    if (playedAnyInStep) {
+      mNoteIndex++;
     }
 
     mStep++;
@@ -191,11 +202,15 @@ public:
   void setStrum(float strum) { mStrum = strum; }
   float getStrum() const { return mStrum; }
 
-  void reset() { mStep = 0; }
+  void reset() {
+    mStep = 0;
+    mNoteIndex = 0;
+  }
 
 private:
   ArpMode mMode;
   int mStep;
+  int mNoteIndex;
   int mOctaves;
   int mInversion;
   float mStrum = 0.0f; // 0.0 to 1.0 (Spread over step duration)

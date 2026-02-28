@@ -129,6 +129,17 @@ void AudioEngine::setTrackTranspose(int trackIndex, int semitones) {
   }
 }
 
+void AudioEngine::setPitchBend(int trackIndex, float semitones) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_PITCH_BEND;
+  cmd.trackIndex = trackIndex;
+  cmd.value = std::max(-12.0f, std::min(12.0f, semitones));
+  {
+    std::lock_guard<std::mutex> lock(mCommandLock);
+    mCommandQueue.push_back(cmd);
+  }
+}
+
 // Helper to reset a single track's parameters and engine state
 void AudioEngine::initTrack(int i) {
   mTracks[i].volume = 0.7f;
@@ -644,9 +655,10 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
     }
 
     // 2. Setup Frequency & Track State
-    float freq = (track.engineType == 5)
-                     ? 440.0f
-                     : 440.0f * powf(2.0f, (note - 69) / 12.0f);
+    float freq =
+        (track.engineType == 5)
+            ? 440.0f
+            : 440.0f * powf(2.0f, (note - 69 + track.mPitchBend) / 12.0f);
     track.currentFrequency = freq;
     track.subtractiveEngine.setFrequency(freq, mSampleRate);
     track.fmEngine.setFrequency(freq, mSampleRate);
@@ -761,7 +773,7 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
                                              (double)subStep});
           }
         } else if (track.engineType == 2 &&
-                   track.samplerEngine.getPlayMode() == 2) {
+                   track.samplerEngine.getPlayMode() >= 3) {
           int drumIdx = -1;
           if (note >= 60)
             drumIdx = note - 60;
@@ -1277,6 +1289,22 @@ void AudioEngine::processCommands() {
         mTracks[cmd.trackIndex].transpose = cmd.data1;
       }
       break;
+    case AudioCommand::SET_PITCH_BEND:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        Track &track = mTracks[cmd.trackIndex];
+        track.mPitchBend = cmd.value;
+        track.subtractiveEngine.setPitchBend(cmd.value);
+        track.fmEngine.setPitchBend(cmd.value);
+        track.wavetableEngine.setPitchBend(cmd.value);
+        track.samplerEngine.setPitchBend(cmd.value);
+        track.granularEngine.setPitchBend(cmd.value);
+      }
+      break;
+    case AudioCommand::SET_PAD_MOD:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        mTracks[cmd.trackIndex].padModValue = cmd.value;
+      }
+      break;
     case AudioCommand::SET_PATTERN_LENGTH:
       mPatternLength = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
       // Propagate to all track sequencers
@@ -1311,7 +1339,7 @@ void AudioEngine::processCommands() {
         int drumIdx = -1;
         bool isSamplerChops =
             (mTracks[cmd.trackIndex].engineType == 2 &&
-             mTracks[cmd.trackIndex].samplerEngine.getPlayMode() == 2);
+             mTracks[cmd.trackIndex].samplerEngine.getPlayMode() >= 3);
 
         if (mTracks[cmd.trackIndex].engineType == 5 ||
             mTracks[cmd.trackIndex].engineType == 6 || isSamplerChops) {
@@ -1858,6 +1886,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 #endif
 
   if (audioStream->getDirection() == oboe::Direction::Input) {
+    std::lock_guard<std::recursive_mutex> lock(mLock);
     float *input = static_cast<float *>(audioData);
     int channels = audioStream->getChannelCount();
     for (int i = 0; i < numFrames; ++i) {
@@ -2660,7 +2689,7 @@ void AudioEngine::setIsJumpMode(int trackIndex, bool isJump) {
 void AudioEngine::setSelectedFmDrumInstrument(int trackIndex, int drumIndex) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-    mTracks[trackIndex].selectedFmDrumInstrument = drumIndex % 8;
+    mTracks[trackIndex].selectedFmDrumInstrument = drumIndex % 16;
   }
 }
 
@@ -3516,14 +3545,14 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         case 1:
           envVal = t.fmEngine.getEnvelopeValue();
           break;
-        case 2:
-          envVal = t.wavetableEngine.getEnvelopeValue();
-          break;
-        case 3:
+        case 2: // SAMPLER
           envVal = t.samplerEngine.getEnvelopeValue();
           break;
-        case 4:
+        case 3: // GRANULAR
           envVal = t.granularEngine.getEnvelopeValue();
+          break;
+        case 4: // WAVETABLE
+          envVal = t.wavetableEngine.getEnvelopeValue();
           break;
         case 5:
           envVal = t.fmDrumEngine.getEnvelopeValue();
@@ -3531,8 +3560,19 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         case 6:
           envVal = t.analogDrumEngine.getEnvelopeValue();
           break;
+        case 8: // AUDIO IN
+          envVal = t.audioInEngine.getEnvelopeValue();
+          break;
+        case 9: // SOUNDFONT
+          envVal = t.soundFontEngine.getEnvelopeValue();
+          break;
         }
         mMacros[m].value = std::max(0.0f, std::min(1.0f, envVal));
+      }
+    } else if (mMacros[m].sourceType == 5) { // MIDI PADS
+      int trackIdx = mMacros[m].sourceTrackIndex;
+      if (trackIdx >= 0 && trackIdx < (int)mTracks.size()) {
+        mMacros[m].value = mTracks[trackIdx].padModValue;
       }
     }
   }
@@ -3829,7 +3869,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       // Use new Stereo Process API
       float wL = 0, wR = 0;
       mTapeWobbleFx.processStereo(fxBusesL[4], fxBusesR[4], wL, wR, sampleRate);
-      routeFx(4, wL, wR, false); // Insert Mode (Not Delta)
+      routeFx(4, wL, wR, true); // Delta Mode
     }
 
     if (std::abs(fxBusesL[5]) > 1.0e-12f || std::abs(fxBusesR[5]) > 1.0e-12f ||
@@ -3877,7 +3917,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       float fL, fR;
       fL = mFlangerFxL.process(fxBusesL[11], sampleRate);
       fR = mFlangerFxR.process(fxBusesR[11], sampleRate);
-      routeFx(11, fL, fR);
+      routeFx(11, fL, fR, true); // Delta Mode (Wet-only return)
     }
 
     // Filter 1 (Slot 12)
@@ -4107,6 +4147,15 @@ void AudioEngine::setTrackPan(int trackIndex, float pan) {
   cmd.type = AudioCommand::SET_TRACK_PAN;
   cmd.trackIndex = trackIndex;
   cmd.value = pan;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngine::setPadMod(int trackIndex, float value) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_PAD_MOD;
+  cmd.trackIndex = trackIndex;
+  cmd.value = value;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
 }

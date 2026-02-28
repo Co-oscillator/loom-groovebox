@@ -34,6 +34,7 @@ import com.groovebox.ui.components.VerticalSlider
 
 @Composable
 fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+    val latestState by rememberUpdatedState(state)
     if (state.isSelectingSidechain) {
         SidechainSelectorDialog(
             state = state,
@@ -432,7 +433,8 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                                 width = 28.dp,
                                 onValueChange = { newVal ->
                                     nativeLib.setParameter(-1, id, newVal)
-                                    onStateChange(state.copy(globalParameters = state.globalParameters + (id to newVal)))
+                                    val currentGlobal = latestState.globalParameters
+                                    onStateChange(latestState.copy(globalParameters = currentGlobal + (id to newVal)))
                                 }
                             )
                         }

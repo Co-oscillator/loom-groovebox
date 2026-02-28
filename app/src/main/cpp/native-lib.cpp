@@ -647,6 +647,21 @@ Java_com_groovebox_NativeLib_setTrackTranspose(JNIEnv *env, jobject thiz,
   }
 }
 
+extern jlong JNICALL Java_com_groovebox_NativeLib_getSampleLength(
+    JNIEnv *env, jobject thiz, jint track_index);
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setPadMod(
+    JNIEnv *env, jobject thiz, jint track_index, jfloat value) {
+  if (engine) {
+    engine->setPadMod(track_index, value);
+  }
+}
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setPitchBend(
+    JNIEnv *env, jobject thiz, jint trackIndex, jfloat semitones) {
+  if (engine) {
+    engine->setPitchBend(trackIndex, semitones);
+  }
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_loadFmPreset(
     JNIEnv *env, jobject thiz, jint track_index, jint preset_id) {
   if (engine)

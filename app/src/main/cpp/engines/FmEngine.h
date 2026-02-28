@@ -163,6 +163,7 @@ public:
   }
   void setFeedback(float fb) { mFeedback = fb; }
   void setPitchSweep(float sweep) { mPitchSweepAmount = sweep; }
+  void setPitchBend(float bend) { mPitchBend = bend; }
 
   // Getters for UI Sync
   int getAlgorithm() const { return mAlgorithm; }
@@ -1268,6 +1269,7 @@ private:
   float mSampleRate = 48000.0f, mFrequency = 440.0f, mLastFrequency = 440.0f,
         mGlide = 0.0f;
   float mPitchSweepAmount = 0.0f;
+  float mPitchBend = 0.0f;
   bool mUseEnvelope = true, mIgnoreNoteFrequency = false;
 };
 

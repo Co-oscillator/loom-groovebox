@@ -97,6 +97,7 @@ public:
     mFrequency = freq;
   }
   void setGlide(float g) { mGlide = g; }
+  void setPitchBend(float v) { mPitchBend = v; }
 
   void loadWavetable(const std::vector<float> &data) {
     std::lock_guard<std::mutex> lock(*mMutex);
@@ -242,8 +243,9 @@ public:
       }
       activeCount++;
 
+      float bendFactor = powf(2.0f, mPitchBend / 12.0f);
       float voiceDetune = 1.0f + (mDetune * 0.02f);
-      double delta = (v.frequency * voiceDetune) / mSampleRate;
+      double delta = (v.frequency * bendFactor * voiceDetune) / mSampleRate;
       v.phase += delta;
       while (v.phase >= 1.0)
         v.phase -= 1.0;
@@ -358,6 +360,7 @@ private:
   float mCutoff = 1.0f, mResonance = 0.0f, mPosition = 0.0f, mDetune = 0.0f;
   float mWarp = 0.0f, mCrush = 0.0f, mDrive = 0.0f;
   float mBits = 1.0f, mSrate = 0.0f;
+  float mPitchBend = 0.0f;
   int mFilterMode = 0;
   std::shared_ptr<std::mutex> mMutex;
   uint32_t mControlCounter = 0;

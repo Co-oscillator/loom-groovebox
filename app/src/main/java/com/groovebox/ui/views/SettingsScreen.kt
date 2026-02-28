@@ -200,6 +200,30 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                         }
                     }
                 }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("MIDI Pad Gestures", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        val xAttn = state.padXAttenuation ?: 1.0f
+                        Text("X-Axis (Pitch) Attn: ${(xAttn * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
+                        Slider(
+                            value = xAttn,
+                            onValueChange = { onStateChange(state.copy(padXAttenuation = it)) },
+                            valueRange = 0f..1f
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        val yAttn = state.padYAttenuation ?: 1.0f
+                        Text("Y-Axis (Mod) Attn: ${(yAttn * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
+                        Slider(
+                            value = yAttn,
+                            onValueChange = { onStateChange(state.copy(padYAttenuation = it)) },
+                            valueRange = 0f..1f
+                        )
+                    }
+                }
             }
         }
 

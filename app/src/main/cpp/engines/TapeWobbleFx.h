@@ -10,7 +10,6 @@ public:
   TapeWobbleFx(int maxDelay = 8192) {
     mBufferL.resize(maxDelay, 0.0f);
     mBufferR.resize(maxDelay, 0.0f);
-    mBufferR.resize(maxDelay, 0.0f);
     mRandEngine.seed(std::random_device{}());
     mDist = std::uniform_real_distribution<float>(-0.2f, 0.2f);
   }

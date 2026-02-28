@@ -1,5 +1,6 @@
 #include "../Utils.h"
 #include "Adsr.h"
+#include "Eq5BandFx.h"
 #include <algorithm>
 #include <vector>
 
@@ -109,10 +110,19 @@ public:
     case 123:
       mFilterMode = (int)(value * 2.9f); // 0=LP, 1=HP, 2=BP
       break;
+    case 1530:
+    case 1531:
+    case 1532:
+    case 1533:
+    case 1534:
+      mEq.setBandGain(id - 1530, (value - 0.5f) * 24.0f); // +/- 12dB
+      break;
     }
   }
 
   float render(float inputSample) {
+    if (mSampleRate <= 0.0f || !std::isfinite(mSampleRate))
+      return inputSample;
     Voice &v = mVoices[0];
 
     // DC Blocker (Simple One-Pole High-Pass at ~10Hz)
@@ -187,8 +197,17 @@ public:
 
     float filtered = v.svf.process(out, type);
 
+    // Apply 5-Band EQ
+    float eqOut = mEq.process(filtered, mSampleRate);
+
     // Use fast_tanh on output for safety and extra gain
-    return fast_tanh(filtered * 1.2f);
+    return fast_tanh(eqOut * 1.2f);
+  }
+
+  float getEnvelopeValue() const {
+    if (mVoices.empty())
+      return 0.0f;
+    return mVoices[0].ampEnv.getValue();
   }
 
 private:
@@ -203,4 +222,5 @@ private:
   int mFilterMode = 0; // 0=LP, 1=HP, 2=BP
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 1.0f, mRelease = 0.1f;
   float mF_Atk = 0.01f, mF_Dcy = 0.1f, mF_Sus = 1.0f, mF_Rel = 0.1f;
+  Eq5BandFx mEq;
 };

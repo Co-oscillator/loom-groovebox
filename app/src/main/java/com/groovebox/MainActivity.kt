@@ -277,6 +277,7 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         nativeLib.setTrackTranspose(trackIdx, t.transpose)
         nativeLib.setTrackActive(trackIdx, t.isActive)
         nativeLib.setTrackPan(trackIdx, t.pan) // Re-added Pan sync
+        nativeLib.setSelectedFmDrumInstrument(trackIdx, t.selectedFmDrumInstrument)
         
         t.parameters.forEach { (pid, v) -> 
             // Safety: Only prevent NaNs, allow full range (e.g. FM Algo > 1.0)
@@ -350,6 +351,7 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         }
         if ((t.soundFontPath ?: "").isNotEmpty() && t.engineType == EngineType.SOUNDFONT) {
             nativeLib.loadSoundFont(trackIdx, t.soundFontPath ?: "")
+            nativeLib.setSoundFontPreset(trackIdx, t.soundFontPresetIndex)
             // Sync mappings
             (t.soundFontMapping ?: emptyMap()).forEach { (knobId, genId) ->
                 nativeLib.setSoundFontMapping(trackIdx, knobId, genId)

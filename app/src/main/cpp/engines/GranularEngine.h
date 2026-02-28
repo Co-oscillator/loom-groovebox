@@ -25,6 +25,7 @@ public:
   void setSustain(float v) { mSustain = v; }
   void setRelease(float v) { mRelease = v; }
   void setGlide(float g) { mGlide = g; }
+  void setPitchBend(float v) { mPitchBend = v; }
   void setSampleRate(float sr) { mSampleRate = sr; }
 
   struct Grain {
@@ -657,6 +658,7 @@ private:
   float mMainSustain = 1.0f;
   float mMainRelease = 0.1f;
   float mGain = 1.0f;
+  float mPitchBend = 0.0f;
 
   void spawnGrain(float *lfoOffsets, int voiceIdx) {
     int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
@@ -686,8 +688,9 @@ private:
             (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) - 0.5f) *
             mDetune;
 
+        float bendFactor = powf(2.0f, mPitchBend / 12.0f);
         g.position = p * source.size();
-        g.speed = sp * v.basePitch * grainPitch;
+        g.speed = sp * v.basePitch * grainPitch * bendFactor;
         g.isReverse = (static_cast<float>(rand()) /
                        static_cast<float>(RAND_MAX)) < mReverseProb;
 

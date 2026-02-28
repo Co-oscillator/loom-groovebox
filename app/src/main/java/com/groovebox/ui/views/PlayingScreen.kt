@@ -169,84 +169,125 @@ fun PlayingPad(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(padIndex, note, block = {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val down = awaitFirstDown()
-                                    isLocallyPressed = true
-                                    
-                                    val currentTIdx = currentState.selectedTrackIndex
-                                    val currentBank = currentState.currentSequencerBank
-                                    val triggeredNote = note // Capture for finally block
-                                    
-                                    try {
-                                        if (currentState.jumpModeWaitingForTap) {
-                                            nativeLib.jumpToStep(currentBank * 16 + padIndex)
-                                            onStateChange(currentState.copy(jumpModeWaitingForTap = false))
-                                        } else {
-                                            if (triggeredNote in 0..127) {
-                                                nativeLib.triggerNote(currentTIdx, triggeredNote, 100)
-                                            }
-                                            // onStateChange removed to prevent race condition with UI stickiness
-                                            // Visual feedback is now handled via local isLocallyPressed state
+                            .pointerInput(padIndex, note) {
+                                awaitPointerEventScope {
+                                        while (true) {
+                                            val down = awaitFirstDown()
+                                            isLocallyPressed = true
+                                            val startPos = down.position
                                             
-                                            if (currentState.isRecording) {
-                                                val stepIdx = if (currentState.isPlaying) currentState.currentStep else (currentBank * 16 + padIndex) % 64
-                                                val currentTrack = currentState.tracks[currentTIdx]
-                                                if (currentTrack.engineType == EngineType.FM_DRUM) {
-                                                    val drumIdx = triggeredNote - 60
-                                                    if (drumIdx in 0..7) {
-                                                        val newDrumSteps = currentTrack.drumSteps.mapIndexed { idx, steps ->
-                                                            if (idx == drumIdx) steps.mapIndexed { sIdx, s -> if (sIdx == stepIdx) s.copy(active = true, notes = listOf(triggeredNote)) else s }
-                                                            else steps
-                                                        }
-                                                        onStateChange(currentState.copy(tracks = currentState.tracks.mapIndexed { idx, t -> if (idx == currentTIdx) t.copy(drumSteps = newDrumSteps) else t }))
-                                                        nativeLib.setStep(currentTIdx, stepIdx, true, intArrayOf(triggeredNote), 0.8f, 1, false, 1.0f, 1.0f, false)
-                                                    }
+                                            val currentTIdx = currentState.selectedTrackIndex
+                                            val currentBank = currentState.currentSequencerBank
+                                            val triggeredNote = note
+                                            
+                                            val modParamId = currentState.tracks[currentTIdx].padModTargetId
+                                            val initialModValue = if (modParamId != null) {
+                                                if (modParamId >= 2000) {
+                                                    currentState.macros.getOrNull(modParamId - 2000)?.value ?: 0.5f
                                                 } else {
-                                                    val newSteps = currentTrack.steps.mapIndexed { sIdx, s -> if (sIdx == stepIdx) s.copy(active = true, notes = (s.notes + triggeredNote).distinct()) else s }
-                                                    onStateChange(currentState.copy(tracks = currentState.tracks.mapIndexed { idx, t -> if (idx == currentTIdx) t.copy(steps = newSteps) else t }))
-                                                    nativeLib.setStep(currentTIdx, stepIdx, true, intArrayOf(triggeredNote), 0.8f, 1, false, 1.0f, 1.0f, false)
+                                                    currentState.tracks[currentTIdx].parameters[modParamId] ?: 0.5f
                                                 }
-                                            }
-                                        }
-                                        waitForUpOrCancellation()
-                                    } finally {
-                                        isLocallyPressed = false
-                                        if (!currentState.jumpModeWaitingForTap) {
-                                            if (triggeredNote in 0..127) {
-                                                nativeLib.releaseNote(currentTIdx, triggeredNote)
+                                            } else 0.5f
+
+                                            try {
+                                                if (currentState.jumpModeWaitingForTap) {
+                                                    nativeLib.jumpToStep(currentBank * 16 + padIndex)
+                                                    onStateChange(currentState.copy(jumpModeWaitingForTap = false))
+                                                } else {
+                                                    if (triggeredNote in 0..127) {
+                                                        nativeLib.triggerNote(currentTIdx, triggeredNote, 100)
+                                                    }
+                                                    
+                                                    // GESTURE HANDLING (X: Pitch Bend, Y: Modulation)
+                                                    var currentBend = 0.0f
+                                                    var currentModValue = initialModValue
+
+                                                    // Track movement
+                                                    while (true) {
+                                                        val event = awaitPointerEvent()
+                                                        if (event.changes.any { it.pressed }) {
+                                                            val currentPos = event.changes.first().position
+                                                            val dx = currentPos.x - startPos.x
+                                                            val dy = startPos.y - currentPos.y // Up is positive modulation
+                                                            
+                                                            // X-Axis: Pitch Bend (+/- 2 semitones mapped over pad width)
+                                                            val newBend = ((dx / size.width.toFloat() * 4.0f) * (currentState.padXAttenuation ?: 1.0f)).coerceIn(-2f, 2f)
+                                                            if (newBend != currentBend) {
+                                                                currentBend = newBend
+                                                                nativeLib.setPitchBend(currentTIdx, currentBend)
+                                                            }
+                                                            
+                                                            // Y-Axis: Modulation (Absolute mapping over pad height)
+                                                            val modDelta = (dy / size.height.toFloat()) * (currentState.padYAttenuation ?: 1.0f)
+                                                            val newMod = (initialModValue + modDelta).coerceIn(0f, 1f)
+                                                            if (newMod != currentModValue) {
+                                                                currentModValue = newMod
+                                                                if (modParamId != null) {
+                                                                    if (modParamId >= 2000) {
+                                                                        nativeLib.setMacroValue(modParamId - 2000, currentModValue)
+                                                                    } else {
+                                                                        nativeLib.setParameter(currentTIdx, modParamId, currentModValue)
+                                                                    }
+                                                                }
+                                                                // Always update for Routing Source (v2.2.5 MIDI PADS Source)
+                                                                nativeLib.setPadMod(currentTIdx, currentModValue)
+                                                            }
+                                                            
+                                                            event.changes.forEach { it.consume() }
+                                                        } else {
+                                                            break
+                                                        }
+                                                    }
+                                                }
+                                            } finally {
+                                                isLocallyPressed = false
+                                                val currentTIdx = currentState.selectedTrackIndex
+                                                nativeLib.setPitchBend(currentTIdx, 0.0f) // Reset bend on release
+                                                
+                                                // Y-Axis: Reset modulation on release (Snapback)
+                                                if (modParamId != null) {
+                                                    if (modParamId >= 2000) {
+                                                        nativeLib.setMacroValue(modParamId - 2000, initialModValue)
+                                                    } else {
+                                                        nativeLib.setParameter(currentTIdx, modParamId, initialModValue)
+                                                    }
+                                                }
+                                                nativeLib.setPadMod(currentTIdx, initialModValue)
+
+                                                if (!currentState.jumpModeWaitingForTap) {
+                                                    if (triggeredNote in 0..127) {
+                                                        nativeLib.releaseNote(currentTIdx, triggeredNote)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
+                            ,
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val label = when (latestState.tracks[latestState.selectedTrackIndex].engineType) {
+                                EngineType.FM_DRUM -> {
+                                    val names = listOf("Kick", "Snare", "Tom", "HH", "OHH", "CYMB", "PERC", "NOISE")
+                                    names.getOrElse(note - 60) { "Pad $padIndex" }
+                                }
+                                EngineType.ANALOG_DRUM -> {
+                                    val drumMap = mapOf(
+                                        60 to "Kick",
+                                        61 to "Snare",
+                                        62 to "Cymb",
+                                        63 to "Hat C",
+                                        64 to "Hat O"
+                                    )
+                                    drumMap[note] ?: "Pad $padIndex"
+                                }
+                                else -> if (isChopMode) "${padIndex + 1}" else getNoteLabel(note)
                             }
-                        })
-                    ,
-                    contentAlignment = Alignment.Center
-                ) {
-        val label = when (latestState.tracks[latestState.selectedTrackIndex].engineType) {
-            EngineType.FM_DRUM -> {
-                val names = listOf("Kick", "Snare", "Tom", "HH", "OHH", "CYMB", "PERC", "NOISE")
-                names.getOrElse(note - 60) { "Pad $padIndex" }
-            }
-            EngineType.ANALOG_DRUM -> {
-                val drumMap = mapOf(
-                    60 to "Kick",
-                    61 to "Snare",
-                    62 to "Cymb",
-                    63 to "Hat C",
-                    64 to "Hat O"
-                )
-                drumMap[note] ?: "Pad $padIndex"
-            }
-            else -> if (isChopMode) "${padIndex + 1}" else getNoteLabel(note)
-        }
                             if (!isChopMode || label.isNotEmpty()) {
                                 Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.6f))
                             }
-    }
-}
+                        }
+                }
 }
 
 
@@ -1488,14 +1529,31 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         // --- Vertical Control Column (Right Side on Phone) ---
                         Column(
                             modifier = Modifier.width(controlsWidth).fillMaxHeight(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                            verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            // PAD MOD LEARN
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Button(
+                                    onClick = { onStateChange(state.copy(isPadModLearnActive = !state.isPadModLearnActive)) },
+                                    modifier = Modifier.height(36.dp).width(52.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (state.isPadModLearnActive) Color.Cyan else Color.DarkGray
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("BND\nLRN", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, lineHeight = 10.sp, textAlign = TextAlign.Center, color = if (state.isPadModLearnActive) Color.Black else Color.White)
+                                }
+                                Text("PAD MOD", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
+                            }
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
                             // ROOT
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Button(
                                     onClick = { showTransposeMenu = true },
-                                    modifier = Modifier.height(36.dp).width(70.dp),
+                                    modifier = Modifier.height(36.dp).width(52.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(0.dp)
@@ -1509,7 +1567,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                 Button(
                                     onClick = { showScaleMenu = true },
                                     enabled = state.gridMode != GridMode.TONNETZ,
-                                    modifier = Modifier.height(36.dp).width(70.dp),
+                                    modifier = Modifier.height(36.dp).width(52.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (state.gridMode == GridMode.TONNETZ) Color.DarkGray.copy(alpha=0.3f) else Color.DarkGray
                                     ),
@@ -1560,7 +1618,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                         }
                                         onStateChange(state.copy(gridMode = newMode)) 
                                     },
-                                    modifier = Modifier.height(36.dp).width(70.dp),
+                                    modifier = Modifier.height(36.dp).width(52.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = if (state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE) else Color.DarkGray),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(0.dp)
@@ -1581,7 +1639,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     val isLatched = track.arpConfig.isLatched
                                     Box(
                                         modifier = Modifier
-                                            .width(70.dp).height(36.dp)
+                                            .width(52.dp).height(36.dp)
                                             .background(if (isLatched) Color.Yellow else if (isArpOn) Color.Yellow.copy(alpha = 0.3f) else Color.DarkGray, RoundedCornerShape(8.dp))
                                             .border(1.dp, if (isArpOn) Color.Yellow else Color.Transparent, RoundedCornerShape(8.dp))
                                             .combinedClickable(
@@ -1626,11 +1684,27 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         val rowArrangement = if (isTablet) Arrangement.SpaceBetween else Arrangement.spacedBy(8.dp)
 
                         Row(modifier = rowModifier, horizontalArrangement = rowArrangement, verticalAlignment = Alignment.CenterVertically) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                // PAD MOD LEARN
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Button(
+                                        onClick = { onStateChange(state.copy(isPadModLearnActive = !state.isPadModLearnActive)) },
+                                        modifier = Modifier.height(40.dp).width(52.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (state.isPadModLearnActive) Color.Cyan else Color.DarkGray
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text("BND\nLRN", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, lineHeight = 10.sp, textAlign = TextAlign.Center, color = if (state.isPadModLearnActive) Color.Black else Color.White)
+                                    }
+                                    Text("PAD", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
+                                }
+
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Button(
                                         onClick = { showTransposeMenu = true },
-                                        modifier = Modifier.height(40.dp).width(60.dp),
+                                        modifier = Modifier.height(40.dp).width(52.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                         shape = RoundedCornerShape(8.dp),
                                         contentPadding = PaddingValues(0.dp)
@@ -1643,7 +1717,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     Button(
                                         onClick = { showScaleMenu = true },
                                         enabled = state.gridMode != GridMode.TONNETZ,
-                                        modifier = Modifier.height(40.dp).width(80.dp),
+                                        modifier = Modifier.height(40.dp).width(52.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = if (state.gridMode == GridMode.TONNETZ) Color.DarkGray.copy(alpha=0.3f) else Color.DarkGray
                                         ),
@@ -1692,7 +1766,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                             }
                                             onStateChange(state.copy(gridMode = newMode)) 
                                         },
-                                        modifier = Modifier.height(40.dp).width(60.dp),
+                                        modifier = Modifier.height(40.dp).width(52.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = if (state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE) else Color.DarkGray),
                                         shape = RoundedCornerShape(8.dp),
                                         contentPadding = PaddingValues(0.dp)
@@ -1714,7 +1788,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     val isLatched = track.arpConfig.isLatched
                                     Box(
                                         modifier = Modifier
-                                            .width(80.dp).height(40.dp)
+                                            .width(52.dp).height(40.dp)
                                             .background(if (isLatched) Color.Yellow else if (isArpOn) Color.Yellow.copy(alpha = 0.3f) else Color.DarkGray, RoundedCornerShape(8.dp))
                                             .border(1.dp, if (isArpOn) Color.Yellow else Color.Transparent, RoundedCornerShape(8.dp))
                                             .combinedClickable(

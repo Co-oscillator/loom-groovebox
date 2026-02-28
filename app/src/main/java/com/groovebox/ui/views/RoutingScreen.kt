@@ -93,6 +93,11 @@ fun RoutingScreen(
                                  onStateChange(state.copy(lfoLearnActive = false, lfoLearnLfoIndex = -1))
                              } else if (state.lfos[index].targetId != -1) {
                                  // Clear target (un-assign)
+                                 val oldId = state.lfos[index].targetId
+                                 if (oldId != -1) {
+                                     nativeLib.setRouting(state.selectedTrackIndex, -1, 2 + index, 5, 0.0f, oldId)
+                                 }
+                                 
                                  val newLfos = state.lfos.toMutableList()
                                  newLfos[index] = state.lfos[index].copy(targetId = -1, targetLabel = "None", targetType = 0)
                                  onStateChange(state.copy(lfos = newLfos))
@@ -132,7 +137,8 @@ fun RoutingScreen(
                         nativeLib.setMacroSource(idx, newState.sourceType, newState.sourceIndex)
                     },
                     onStateChange = onStateChange,
-                    isTablet = isTablet
+                    isTablet = isTablet,
+                    nativeLib = nativeLib
                 )
             }
         }
@@ -270,7 +276,8 @@ fun MacroUnit(
     grooveboxState: GrooveboxState,
     onUpdate: (MacroState) -> Unit,
     onStateChange: (GrooveboxState) -> Unit,
-    isTablet: Boolean
+    isTablet: Boolean,
+    nativeLib: NativeLib
 ) {
     val containerColor = Color(0xFF2A2A2A)
     Card(
@@ -307,7 +314,7 @@ fun MacroUnit(
                                       (1..4).map { "STRIP $it" } + 
                                       (1..4).map { "KNOB $it" } + 
                                       (1..6).map { "LFO $it" } +
-                                      listOf("LEARN ENV...")
+                                      listOf("MIDI PADS", "LEARN ENV...")
                         
                         options.forEachIndexed { i, label ->
                             DropdownMenuItem(
@@ -321,7 +328,9 @@ fun MacroUnit(
                                             i == 0 -> 0 to -1
                                             i <= 4 -> 1 to (i - 1) // Strip
                                             i <= 8 -> 2 to (i - 5) // Knob
-                                            else -> 3 to (i - 9) // LFO
+                                            i <= 14 -> 3 to (i - 9) // LFO
+                                            i == 15 -> 5 to -1 // MIDI PADS
+                                            else -> 0 to -1
                                         }
                                         onUpdate(macroState.copy(sourceLabel = label, sourceType = type, sourceIndex = srcIdx))
                                     }
@@ -330,7 +339,6 @@ fun MacroUnit(
                         }
                     }
                 }
-                Text("CTRL ${index + 1}", fontSize = 8.sp, color = Color.Gray)
             }
 
             if (isTablet) {

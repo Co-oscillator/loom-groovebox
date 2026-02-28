@@ -146,6 +146,8 @@ public:
                                            float targetSampleRate);
   size_t getSampleLength(int trackIndex);
   int getActiveNoteMask(int trackIndex);
+  void setPitchBend(int trackIndex, float semitones);
+  void setPadMod(int trackIndex, float value);
   void panic();
   void loadFmPreset(int trackIndex, int presetId);
   void setClockMultiplier(int trackIndex, float multiplier);
@@ -230,9 +232,11 @@ private:
       SET_SLICES,
       SET_TRACK_HUMANIZE,
       SET_TRACK_TRANSPOSE,
+      SET_PITCH_BEND,
       SET_CHAIN_ENABLED,
       SET_CHAIN_LENGTH,
-      SET_CHAIN_SLOT
+      SET_CHAIN_SLOT,
+      SET_PAD_MOD
     };
     Type type;
     int trackIndex;
@@ -287,6 +291,8 @@ public:
     float smoothedVolume = 0.8f;
     float pan = 0.5f;
     int transpose = 0;
+    float mPitchBend = 0.0f;  // -1.0 to 1.0 (semitones)
+    float padModValue = 0.0f; // 0.0 to 1.0 (Y-axis)
 
     float smoothedPan = 0.5f;
     float humanize = 0.0f;

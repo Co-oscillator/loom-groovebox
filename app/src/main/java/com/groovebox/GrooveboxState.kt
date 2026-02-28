@@ -44,6 +44,7 @@ data class TrackState(
     val transpose: Int = 0,
     val steps: List<StepState> = List(64) { StepState() },
     val drumSteps: List<List<StepState>> = List(16) { List(64) { StepState() } },
+    val patternLength: Int = 16,
     val numPages: Int = 1,
     val stepsPerPage: Int = 16,
     val selectedFmDrumInstrument: Int = 0,
@@ -103,7 +104,9 @@ data class TrackState(
     ),
     val isChainEnabled: Boolean = false,
     val songChainNames: List<String?> = List(16) { null },
-    val songChainLength: Int = 1
+    val songChainLength: Int = 1,
+    val padModTargetId: Int = 1, // Default to Cutoff
+    val subTrackNames: Map<Int, String> = emptyMap() // Index -> Custom Name
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L
@@ -249,6 +252,12 @@ data class GrooveboxState(
     val isJumpMode: Boolean = false,
     val isJumpHold: Boolean = false,
     val jumpModeWaitingForTap: Boolean = false,
+    val maxChainLength: Int = 16,
+    val midiSyncOutEnabled: Boolean = false,
+    val sendMidiClock: Boolean = false,
+    val sendMidiStartStop: Boolean = false,
+    val padXAttenuation: Float? = null,
+    val padYAttenuation: Float? = null,
     val patternLength: Int = 16,
 
     // Parameter Locking & Recording State
@@ -287,6 +296,9 @@ data class GrooveboxState(
     val macroSourceLearnActive: Boolean = false,
     val macroSourceLearnIndex: Int = -1,
     
+    // Pad Modulation Learn
+    val isPadModLearnActive: Boolean = false,
+
     // MIDI UI Feedback
     val lastMidiNote: Int = -1,
     val lastMidiVelocity: Int = 0,

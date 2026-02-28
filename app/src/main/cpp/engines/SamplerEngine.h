@@ -703,6 +703,7 @@ public:
   void setFilterCutoff(float v) { mFilterCutoff = v; }
   void setFilterResonance(float v) { mFilterResonance = v; }
   void setFilterEnvAmount(float v) { mFilterEnvAmount = v; }
+  void setPitchBend(float v) { mPitchBend = v; }
 
   // BPM Sync (Public)
   bool mSyncEnabled = false;
@@ -802,7 +803,8 @@ public:
         v.pitchRatio = v.targetPitchRatio;
       }
 
-      float pitchFactor = v.pitchRatio;
+      float bendFactor = powf(2.0f, mPitchBend / 12.0f);
+      float pitchFactor = v.pitchRatio * bendFactor;
       float direction = mReverse ? -1.0f : 1.0f;
       if (mSliceLockEnabled) {
         direction = (v.sliceReverse > 0.5f) ? -1.0f : 1.0f;
@@ -979,7 +981,11 @@ public:
         auto getClampedSample = [&](double pos) -> float {
           int idx = static_cast<int>(pos);
           if (idx >= (int)v.start && idx < (int)v.end) {
-            return getInterpolatedSample(buffer, pos);
+            // Apply strict clamping to prevent small interpolation leaks from
+            // neighboring slices
+            double clampedPos = std::max((double)v.start,
+                                         std::min((double)v.end - 1.0001, pos));
+            return getInterpolatedSample(buffer, clampedPos);
           }
           return 0.0f;
         };
@@ -1303,6 +1309,7 @@ private:
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 0.8f, mRelease = 0.2f;
   float mFilterCutoff = 1.0f, mFilterResonance = 0.0f, mFilterEnvAmount = 0.0f;
   float mGlide = 0.0f, mLastPitchRatio = 1.0f;
+  float mPitchBend = 0.0f;
   PlayMode mPlayMode = OneShot;
   float mSliceIndex = -1.0f; // Range 0.0 to 1.0, -1 means use note
   bool mUseEnvelope = true;

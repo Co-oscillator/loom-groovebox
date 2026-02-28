@@ -12,6 +12,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -46,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import java.io.File
 import com.groovebox.ui.theme.getEngineColor
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, empledManager: EmpledManager) {
     val latestState by rememberUpdatedState(state)
@@ -60,6 +64,46 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
     val screenRatio = screenConfig.screenWidthDp.toFloat() / screenConfig.screenHeightDp.toFloat()
     val isWideScreen = screenRatio > 1.8f && screenConfig.screenHeightDp < 500
     
+    // Renaming Logic
+    var renamingSliceIndex by remember { mutableStateOf<Int?>(null) }
+    var renamingCurrentValue by remember { mutableStateOf("") }
+    
+    if (renamingSliceIndex != null) {
+        AlertDialog(
+            onDismissRequest = { renamingSliceIndex = null },
+            title = { Text("Rename Track") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = renamingCurrentValue,
+                        onValueChange = { renamingCurrentValue = it },
+                        label = { Text("New Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val idx = renamingSliceIndex!!
+                    val newSubNames = track.subTrackNames.toMutableMap()
+                    if (renamingCurrentValue.isBlank()) {
+                        newSubNames.remove(idx)
+                    } else {
+                        newSubNames[idx] = renamingCurrentValue
+                    }
+                    val newTracks = latestState.tracks.toMutableList()
+                    newTracks[selectedTrackIndex] = track.copy(subTrackNames = newSubNames)
+                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                    renamingSliceIndex = null
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                Button(onClick = { renamingSliceIndex = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Main UI Components
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -502,32 +546,56 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                  if (track.engineType == EngineType.FM_DRUM) {
                     Row(modifier = Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("KICK", "SNARE", "TOM", "HH", "OHH", "CYMB", "PERC", "NOISE").forEachIndexed { i, label ->
-                            Button(
-                                onClick = { 
-                                    latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> 
-                                        if (idx == selectedTrackIndex) t.copy(selectedFmDrumInstrument = i) else t 
-                                    })) 
-                                },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(0.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = if (track.selectedFmDrumInstrument == i) getEngineColor(track.engineType) else Color.DarkGray)
-                            ) { Text(label, style = MaterialTheme.typography.labelSmall, color = if (track.selectedFmDrumInstrument == i) Color.Black else Color.White) }
+                            val customLabel = track.subTrackNames[i] ?: label
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (track.selectedFmDrumInstrument == i) getEngineColor(track.engineType) else Color.DarkGray)
+                                    .combinedClickable(
+                                        onClick = { 
+                                            latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> 
+                                                if (idx == selectedTrackIndex) t.copy(selectedFmDrumInstrument = i) else t 
+                                            })) 
+                                        },
+                                        onLongClick = {
+                                            renamingSliceIndex = i
+                                            renamingCurrentValue = customLabel
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) { 
+                                Text(customLabel, style = MaterialTheme.typography.labelSmall, color = if (track.selectedFmDrumInstrument == i) Color.Black else Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis) 
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                 } else if (track.engineType == EngineType.ANALOG_DRUM) {
                      Row(modifier = Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("KICK", "SNARE", "CYMB", "HAT C", "HAT O").forEachIndexed { i, label ->
-                            Button(
-                                onClick = { 
-                                    latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> 
-                                        if (idx == selectedTrackIndex) t.copy(selectedFmDrumInstrument = i) else t 
-                                    })) 
-                                },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(0.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = if (track.selectedFmDrumInstrument == i) getEngineColor(track.engineType) else Color.DarkGray)
-                            ) { Text(label, style = MaterialTheme.typography.labelSmall, color = if (track.selectedFmDrumInstrument == i) Color.Black else Color.White) }
+                            val customLabel = track.subTrackNames[i] ?: label
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (track.selectedFmDrumInstrument == i) getEngineColor(track.engineType) else Color.DarkGray)
+                                    .combinedClickable(
+                                        onClick = { 
+                                            latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> 
+                                                if (idx == selectedTrackIndex) t.copy(selectedFmDrumInstrument = i) else t 
+                                            })) 
+                                        },
+                                        onLongClick = {
+                                            renamingSliceIndex = i
+                                            renamingCurrentValue = customLabel
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) { 
+                                Text(customLabel, style = MaterialTheme.typography.labelSmall, color = if (track.selectedFmDrumInstrument == i) Color.Black else Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis) 
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -535,32 +603,50 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                      // Check for Sampler Chop Mode
                      val samplerMode = track.parameters[320] ?: 0f
                      val isSamplerChops = track.engineType == EngineType.SAMPLER && samplerMode >= 0.49f
-                     
-                     if (isSamplerChops) {
+                                           if (isSamplerChops) {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                             val buttonColors = ButtonDefaults.buttonColors(containerColor = getEngineColor(track.engineType))
-                             val inactiveColors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                             val numSlices = (((track.parameters[340] ?: 0f) * 15f).toInt() + 1).coerceIn(1, 16)
                              
-                             // Rows of 8
-                             for (row in 0..1) {
+                             // Calculate rows needed
+                             val rowCount = (numSlices + 7) / 8
+                             for (row in 0 until rowCount) {
                                  Row(modifier = Modifier.fillMaxWidth().height(32.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                     for (col in 0..7) {
-                                         val i = row * 8 + col
-                                         Button(
-                                             onClick = { 
-                                                latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> 
-                                                    if (idx == selectedTrackIndex) t.copy(selectedFmDrumInstrument = i) else t 
-                                                })) 
-                                             },
-                                             modifier = Modifier.weight(1f),
-                                             contentPadding = PaddingValues(0.dp),
-                                             colors = if (track.selectedFmDrumInstrument == i) buttonColors else inactiveColors
+                                     val start = row * 8
+                                     val end = minOf(start + 8, numSlices)
+                                     
+                                     for (i in start until end) {
+                                         val defaultLabel = "S${i + 1}"
+                                         val customLabel = track.subTrackNames[i] ?: defaultLabel
+                                         Box(
+                                             modifier = Modifier
+                                                 .weight(1f)
+                                                 .fillMaxHeight()
+                                                 .clip(RoundedCornerShape(4.dp))
+                                                 .background(if (track.selectedFmDrumInstrument == i) getEngineColor(track.engineType) else Color.DarkGray)
+                                                 .combinedClickable(
+                                                     onClick = { 
+                                                        latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> 
+                                                            if (idx == selectedTrackIndex) t.copy(selectedFmDrumInstrument = i) else t 
+                                                        })) 
+                                                     },
+                                                     onLongClick = {
+                                                         renamingSliceIndex = i
+                                                         renamingCurrentValue = customLabel
+                                                     }
+                                                 ),
+                                             contentAlignment = Alignment.Center
                                          ) { 
-                                             Text("S${i + 1}", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = if (track.selectedFmDrumInstrument == i) Color.Black else Color.White) 
+                                             Text(customLabel, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = if (track.selectedFmDrumInstrument == i) Color.Black else Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis) 
                                          }
                                      }
+                                     
+                                     // Fill empty space if row is not full
+                                     val itemsInRow = end - start
+                                     if (itemsInRow < 8) {
+                                         Spacer(modifier = Modifier.weight((8 - itemsInRow).toFloat()))
+                                     }
                                  }
-                                 if (row == 0) Spacer(modifier = Modifier.height(4.dp))
+                                 if (row < rowCount - 1) Spacer(modifier = Modifier.height(4.dp))
                              }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -570,33 +656,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 // 16 Step Pads or 64 Step Grid (with Sidebar)
                 Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     // Sidebar: Pattern Length Control
-                    Column(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(60.dp)
-                            .padding(end = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Knob(
-                            label = "LEN",
-                            initialValue = (state.patternLength - 16) / 48f,
-                            parameterId = -1,
-                            state = latestState,
-                            onStateChange = latestOnStateChange,
-                            nativeLib = nativeLib,
-                            knobSize = 36.dp,
-                            onValueChangeOverride = { v ->
-                                val newLen = (v * 48 + 16).toInt().coerceIn(16, 64)
-                                if (newLen != latestState.patternLength) {
-                                    nativeLib.setPatternLength(newLen)
-                                    latestOnStateChange(latestState.copy(patternLength = newLen))
-                                }
-                            },
-                            valueFormatter = { v -> "${(v * 48 + 16).toInt().coerceIn(16, 64)}" }
-                        )
-                        Text("STEPS", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 9.sp)
-                    }
+                    // LEN Control moved to BottomLeft
 
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         BoxWithConstraints {
@@ -615,11 +675,12 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                          track.engineType == EngineType.ANALOG_DRUM ||
                                          isSamplerChop
 
-                        val instrumentLabel = if (isSamplerChop) "SLICE" else "INST"
                         val selectedInst = track.selectedFmDrumInstrument
+                        val defaultLabel = if (isSamplerChop) "SLICE ${selectedInst + 1}" else "INST ${selectedInst + 1}"
+                        val customLabel = track.subTrackNames[selectedInst] ?: defaultLabel
                         
                         if (isMultiTrack) {
-                            Text("$instrumentLabel ${selectedInst + 1}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                            Text(customLabel, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
                         }
                         
                         LazyVerticalGrid(
@@ -632,7 +693,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                 val stepIndex = if (is64) i else i + (state.currentSequencerBank * 16)
                                 if (stepIndex >= 64) return@items
 
-                                val isBeyondLength = stepIndex >= latestState.patternLength
+                                val isBeyondLength = stepIndex >= track.patternLength
                                 val step = if (isMultiTrack) track.drumSteps[track.selectedFmDrumInstrument][stepIndex] else track.steps[stepIndex]
                                 
                                 var showStepPopup by remember { mutableStateOf(false) }
@@ -765,7 +826,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(bottom = 8.dp, end = 8.dp)
-                            .offset(x = (-30).dp) // Balanced position (30dp from right edge)
+                            .offset(x = (-10).dp) // Moved 20dp right v1.12.x
                             .background(
                                 if (track.isChainEnabled) getEngineColor(track.engineType).copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.6f), 
                                 RoundedCornerShape(8.dp)
@@ -838,27 +899,62 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         }
                     }
 
-                    // Transpose UI (Relocated v1.11.3 - Lower Left)
+                    // Left Side Controls (LEN + Transpose)
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(8.dp)
-                            .background(
-                                if (track.transpose != 0) getEngineColor(track.engineType).copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.6f), 
-                                RoundedCornerShape(8.dp)
-                            )
-                            .border(
-                                width = if (track.transpose != 0) 1.dp else 0.dp,
-                                color = if (track.transpose != 0) getEngineColor(track.engineType).copy(alpha = 0.5f) else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .padding(8.dp),
+                            .padding(start = 8.dp, bottom = 108.dp), // Moved up 100dp v1.12.x
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(100.dp) // 100dp space between LEN and Transpose
                     ) {
-                        val engineColor = getEngineColor(track.engineType)
-                        Text("TRANSPOSE", style = MaterialTheme.typography.labelSmall, color = if (track.transpose != 0) engineColor else Color.Gray, fontSize = 9.sp)
-                        val st = track.transpose
+                        // Pattern Length Control (Per-Track)
+                        Column(
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Knob(
+                                label = "LEN",
+                                initialValue = (track.patternLength - 16) / 48f,
+                                parameterId = -1,
+                                state = latestState,
+                                onStateChange = latestOnStateChange,
+                                nativeLib = nativeLib,
+                                knobSize = 36.dp,
+                                onValueChangeOverride = { v ->
+                                    val newLen = (v * 48 + 16).toInt().coerceIn(16, 64)
+                                    if (newLen != track.patternLength) {
+                                        val newTracks = latestState.tracks.toMutableList()
+                                        newTracks[selectedTrackIndex] = track.copy(patternLength = newLen)
+                                        latestOnStateChange(latestState.copy(tracks = newTracks))
+                                        nativeLib.setSequencerConfig(selectedTrackIndex, 1, newLen)
+                                    }
+                                },
+                                valueFormatter = { v -> "${(v * 48 + 16).toInt().coerceIn(16, 64)}" }
+                            )
+                            Text("STEPS", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontSize = 9.sp)
+                        }
+
+                        // Transpose UI
+                        Column(
+                            modifier = Modifier
+                                .background(
+                                    if (track.transpose != 0) getEngineColor(track.engineType).copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.6f), 
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .border(
+                                    width = if (track.transpose != 0) 1.dp else 0.dp,
+                                    color = if (track.transpose != 0) getEngineColor(track.engineType).copy(alpha = 0.5f) else Color.Transparent,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .padding(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val engineColor = getEngineColor(track.engineType)
+                            Text("TRANSPOSE", style = MaterialTheme.typography.labelSmall, color = if (track.transpose != 0) engineColor else Color.Gray, fontSize = 9.sp)
+                            val st = track.transpose
                         val sign = if (st > 0) "+" else ""
                         Text("$sign$st", style = MaterialTheme.typography.titleMedium, color = if (st != 0) Color.White else engineColor, fontWeight = FontWeight.Bold)
                         
@@ -914,7 +1010,8 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
                             ) { Text("+1", fontSize = 10.sp) }
                         }
-                    }
+                    } // Close Transpose UI
+                    } // Close Left Side Controls
 
                     if (showChainSelect) {
                         ChainSlotPopup(
@@ -1192,7 +1289,7 @@ fun PadOptionPopup(
                  Slider(
                     value = currentGate,
                     onValueChange = { onApply(stepState.ratchet, stepState.punch, stepState.probability, it, stepState.notes, stepState.velocity, stepState.isSkipped, stepState.parameterLocks, stepState.subStepOffset) },
-                    valueRange = 0.1f..4.0f,
+                    valueRange = 0.1f..8.0f,
                     modifier = Modifier.fillMaxWidth()
                 )
 

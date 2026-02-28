@@ -121,6 +121,7 @@ public:
   void setIgnoreNoteFrequency(bool ignore) { mIgnoreNoteFrequency = ignore; }
 
   void setGlide(float v) { mGlide = v; }
+  void setPitchBend(float semitones) { mPitchBend = semitones; }
 
   void allNotesOff() {
     for (auto &v : mVoices) {
@@ -302,11 +303,13 @@ public:
         float glideTimeSamples = mGlide * mSampleRate * 0.5f;
         float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
         v.frequency += (v.targetFrequency - v.frequency) * glideAlpha;
-        for (int i = 0; i < 4; ++i) {
-          v.oscillators[i].setFrequency(v.frequency, mSampleRate);
-        }
       } else {
         v.frequency = v.targetFrequency;
+      }
+
+      float bendFactor = powf(2.0f, mPitchBend / 12.0f);
+      for (int i = 0; i < 4; ++i) {
+        v.oscillators[i].setFrequency(v.frequency * bendFactor, mSampleRate);
       }
 
       float envVal = mUseEnvelope ? v.ampEnv.nextValue() : 1.0f;
@@ -411,6 +414,7 @@ private:
   bool mReverse = false;
   bool mOscSync = false, mRingMod = false, mIgnoreNoteFrequency = false;
   float mFmAmt = 0.0f;
+  float mPitchBend = 0.0f;
   int mFilterMode = 0;
   float mOscPitch[4] = {1.0f, 1.0f, 0.5f, 1.0f},
         mOscDrive[4] = {1.0f, 1.0f, 1.0f, 1.0f},

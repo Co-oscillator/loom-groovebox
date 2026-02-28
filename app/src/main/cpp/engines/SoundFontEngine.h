@@ -1,7 +1,9 @@
 #ifndef SOUNDFONT_ENGINE_H
 #define SOUNDFONT_ENGINE_H
 
+#include "../Utils.h"
 #include "../libs/tsf.h"
+#include "Adsr.h"
 #include <memory>
 #include <mutex>
 #include <string>
@@ -16,7 +18,12 @@ public:
       : mTsf(other.mTsf), mGlide(other.mGlide), mLastNote(other.mLastNote),
         mCurrentPitchWheel(other.mCurrentPitchWheel),
         mSampleRate(other.mSampleRate), mBufferPos(other.mBufferPos),
-        mBufferFrames(other.mBufferFrames), mMutex(std::move(other.mMutex)) {
+        mBufferFrames(other.mBufferFrames), mMutex(std::move(other.mMutex)),
+        mEnvelope(std::move(other.mEnvelope)),
+        mFilter(std::move(other.mFilter)), mAttack(other.mAttack),
+        mDecay(other.mDecay), mSustain(other.mSustain),
+        mRelease(other.mRelease), mCutoff(other.mCutoff),
+        mResonance(other.mResonance), mFilterMode(other.mFilterMode) {
     other.mTsf = nullptr;
     memcpy(mInternalBuffer, other.mInternalBuffer, sizeof(mInternalBuffer));
   }
@@ -34,6 +41,15 @@ public:
       mBufferPos = other.mBufferPos;
       mBufferFrames = other.mBufferFrames;
       mMutex = std::move(other.mMutex);
+      mEnvelope = std::move(other.mEnvelope);
+      mFilter = std::move(other.mFilter);
+      mAttack = other.mAttack;
+      mDecay = other.mDecay;
+      mSustain = other.mSustain;
+      mRelease = other.mRelease;
+      mCutoff = other.mCutoff;
+      mResonance = other.mResonance;
+      mFilterMode = other.mFilterMode;
       memcpy(mInternalBuffer, other.mInternalBuffer, sizeof(mInternalBuffer));
     }
     return *this;
@@ -60,6 +76,8 @@ public:
 
   void setSampleRate(float sr) {
     mSampleRate = sr;
+    mEnvelope.setSampleRate(sr);
+    mFilter.setParams(mCutoff * 10000.0f, mResonance, sr);
     if (mTsf) {
       tsf_set_output(mTsf, TSF_STEREO_INTERLEAVED, (int)sr, 0.0f);
     }
@@ -98,12 +116,18 @@ public:
       mLastNote = note;
       tsf_channel_note_on(mTsf, 0, note, velocity / 127.0f);
       updatePitchWheel();
+
+      mEnvelope.setParameters(mAttack, mDecay, mSustain, mRelease);
+      mEnvelope.trigger();
     }
   }
 
   void noteOff(int note) {
     if (mMutex && mTsf) {
       std::lock_guard<std::mutex> lock(*mMutex);
+      if (mLastNote == note) {
+        mEnvelope.release();
+      }
       tsf_channel_note_off(mTsf, 0, note);
     }
   }
@@ -128,8 +152,15 @@ public:
           tsf_render_float(mTsf, mInternalBuffer, mBufferFrames, 0);
           mBufferPos = 0;
         }
-        left[i] = mInternalBuffer[mBufferPos * 2];
-        right[i] = mInternalBuffer[mBufferPos * 2 + 1];
+
+        float env = mEnvelope.nextValue();
+        float sL = mInternalBuffer[mBufferPos * 2];
+        float sR = mInternalBuffer[mBufferPos * 2 + 1];
+
+        // Filter processing
+        left[i] = mFilter.process(sL, (TSvf::Type)mFilterMode) * env;
+        right[i] = mFilter.process(sR, (TSvf::Type)mFilterMode) * env;
+
         mBufferPos++;
       }
     } else {
@@ -143,6 +174,7 @@ public:
     if (mMutex && mTsf) {
       std::lock_guard<std::mutex> lock(*mMutex);
       tsf_note_off_all(mTsf);
+      mEnvelope.reset();
     }
   }
 
@@ -169,17 +201,22 @@ public:
         midiControl(76, (int)(value * 127));
       } else if (id == 8) { // Depth -> CC 1 (Mod Wheel)
         midiControl(1, (int)(value * 127));
-      } else if (id == 100) { // Attack -> CC 73
-        midiControl(73, (int)(value * 127));
-      } else if (id == 101) { // Decay -> CC 75
-        midiControl(75, (int)(value * 127));
-      } else if (id == 103) { // Release -> CC 72
-        midiControl(72, (int)(value * 127));
-      } else if (id == 112 || id == 1) { // Cutoff -> CC 74 (Brightness)
-        midiControl(74, (int)(value * 127));
-      } else if (id == 113 ||
-                 id == 2) { // Resonance -> CC 71 (Harmonic Content)
-        midiControl(71, (int)(value * 127));
+      } else if (id == 100) { // Forced Attack
+        mAttack = value;
+      } else if (id == 101) { // Forced Decay
+        mDecay = value;
+      } else if (id == 102) { // Forced Sustain
+        mSustain = value;
+      } else if (id == 103) { // Forced Release
+        mRelease = value;
+      } else if (id == 112 || id == 1) { // Forced Cutoff
+        mCutoff = value;
+        mFilter.setParams(mCutoff * 10000.0f, mResonance, mSampleRate);
+      } else if (id == 113 || id == 2) { // Forced Resonance
+        mResonance = 0.7f + value * 5.0f;
+        mFilter.setParams(mCutoff * 10000.0f, mResonance, mSampleRate);
+      } else if (id == 20) { // Filter Mode
+        mFilterMode = (int)(value * 3.99f);
       } else if (id == 150) { // Reverb Send -> CC 91
         midiControl(91, (int)(value * 127));
       } else if (id == 151) { // Chorus Send -> CC 93
@@ -198,6 +235,8 @@ public:
   void setMapping(int knobId, int genId) {
     // Implementation for mapping knobs to TSF generators (future expansion)
   }
+
+  float getEnvelopeValue() const { return mEnvelope.getValue(); }
 
 private:
   void updatePitchWheel() {
@@ -221,6 +260,13 @@ private:
   int mBufferPos = 128;
   int mBufferFrames = 128;
   std::unique_ptr<std::mutex> mMutex;
+
+  // New Bolt-on Components
+  Adsr mEnvelope;
+  TSvf mFilter;
+  float mAttack = 0.01f, mDecay = 0.1f, mSustain = 1.0f, mRelease = 0.2f;
+  float mCutoff = 1.0f, mResonance = 0.7f;
+  int mFilterMode = 0;
 };
 
 #endif // SOUNDFONT_ENGINE_H

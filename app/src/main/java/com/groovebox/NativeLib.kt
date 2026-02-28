@@ -69,6 +69,8 @@ class NativeLib {
     external fun setTrackTranspose(trackIndex: Int, semitones: Int)
     external fun panic()
     external fun getActiveNoteMask(trackIndex: Int): Int
+    external fun setPitchBend(trackIndex: Int, value: Float)
+    external fun setPadMod(trackIndex: Int, value: Float)
     external fun getCpuLoad(): Float
 
     // Routing / Macro Controls

@@ -19,6 +19,7 @@ import com.groovebox.EngineType
 import com.groovebox.ui.components.Knob
 import com.groovebox.ui.components.EngineIcon
 import com.groovebox.ui.theme.getEngineColor
+import com.groovebox.ui.components.VerticalSlider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import com.groovebox.ToggleIcon
@@ -855,23 +856,34 @@ fun RecordingStrip(
                 val stretchParam = track.parameters[301] ?: 0.25f
                 val stretchFactor = (stretchParam * 4.0f).coerceAtLeast(0.01f)
 
-                val suggestedBpm = remember(sampleLength, seqSteps, repeats, tStart, tEnd, speedParam, stretchParam, state.patternLength) {
+                val suggestedBpm = remember(sampleLength, seqSteps, repeats, tStart, tEnd, speedParam, stretchParam, state.patternLength, track.id, track.parameters[342], track.parameters[341], track.parameters[320]) {
                     if (sampleLength > 0L) {
-                         // Effective Fraction of Sample
-                         val fraction = (tEnd - tStart).coerceAtLeast(0.01f)
-                         val effectiveSamples = sampleLength * fraction
+                         val isSliceLock = (track.parameters[342] ?: 0.0f) > 0.5f
+                         val samplerMode = track.parameters[320] ?: 0f
+                         val isChops = samplerMode >= 0.49f && samplerMode < 0.95f
                          
-                         // Native Duration (at 1x speed, 1x stretch)
-                         val nativeDur = effectiveSamples / 48000f 
-                         
-                         // Actual Duration = Native / Speed * Stretch
-                         // Higher Speed -> Shorter Time
-                         // Higher Stretch -> Longer Time
-                         val actualDur = (nativeDur / speedFactor) * stretchFactor
+                         var effectiveSamples = if (isSliceLock && isChops) {
+                             val slicePoints = nativeLib?.getSlicePoints(trackIndex) ?: floatArrayOf()
+                             if (slicePoints.isNotEmpty()) {
+                                 val selParam = track.parameters[341] ?: 0.0f
+                                 val selIdx = (selParam * (slicePoints.size - 0.001f)).toInt().coerceIn(0, slicePoints.size - 1)
+                                 val sStart = slicePoints[selIdx]
+                                 val sEnd = if (selIdx < slicePoints.size - 1) slicePoints[selIdx + 1] else 1.0f
+                                 (sEnd - sStart).coerceAtLeast(0.001f) * sampleLength
+                             } else {
+                                 (tEnd - tStart).coerceAtLeast(0.01f) * sampleLength
+                             }
+                         } else {
+                              (tEnd - tStart).coerceAtLeast(0.01f) * sampleLength
+                         }
+
+                         // Actual Duration = (Samples / 48000) / Speed * Stretch
+                         val actualDur = ((effectiveSamples / 48000f) / speedFactor) * stretchFactor
                          
                          if (actualDur > 0.001f) {
-                             // BPM = (SeqSteps * 15) / (ActualDuration * Repeats)
-                             ((seqSteps * 15f) / (actualDur * repeats)).toInt()
+                             // BPM = (15 * Steps) / (Duration * Repeats)
+                             val bpm = (seqSteps * 15f) / (actualDur * repeats)
+                             bpm.toInt().coerceIn(20, 999)
                          } else null
                     } else null
                 }
@@ -2421,6 +2433,10 @@ fun SoundFontParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
             onFileSelected = { path ->
                 try {
                     nativeLib.loadSoundFont(trackIndex, path)
+                    val fileName = File(path).name.removeSuffix(".sf2").removeSuffix(".sf3").removeSuffix(".SF2").removeSuffix(".SF3")
+                    onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t ->
+                        if (idx == trackIndex) t.copy(soundFontPath = path, soundFontPresetName = fileName, soundFontPresetIndex = 0) else t
+                    }))
                     onRefresh()
                 } catch (e: Exception) {
                     Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -2692,7 +2708,7 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
                         }
                      }
                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Knob("SLICE", 0.0f, 340, state, onStateChange, nativeLib, knobSize = 32.dp, valueFormatter = { v -> "${(v * 14f).toInt() + 2}" })
+                        Knob("SLICE", 0.0f, 340, state, onStateChange, nativeLib, knobSize = 32.dp, valueFormatter = { v -> "${(v * 15f).toInt() + 1}" })
                         Knob("SEL", 0.0f, 341, state, onStateChange, nativeLib, knobSize = 32.dp, 
                             valueFormatter = { v -> if (v < 0) "OFF" else "${(v * 15.99f).toInt() + 1}" },
                             onValueChangeOverride = { v ->
@@ -2888,6 +2904,34 @@ fun AudioInParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
                 ) {
                     Text(if (isGated) "OPEN" else "GATED", fontSize = 10.sp, color = if (isGated) Color.Black else Color.White)
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("CHARACTER EQ", style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().height(100.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val eqBands = listOf("LOW", "L-MID", "MID", "H-MID", "HIGH")
+            eqBands.forEachIndexed { i, label ->
+                val paramId = 1530 + i
+                val value = track.parameters[paramId] ?: 0.5f
+                VerticalSlider(
+                    label = label,
+                    value = value,
+                    color = getEngineColor(EngineType.AUDIO_IN),
+                    height = 70.dp,
+                    width = 28.dp,
+                    onValueChange = { newVal: Float ->
+                        nativeLib.setParameter(trackIndex, paramId, newVal)
+                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                            if (idx == trackIndex) t.copy(parameters = t.parameters + (paramId to newVal)) else t 
+                        }))
+                    }
+                )
             }
         }
         

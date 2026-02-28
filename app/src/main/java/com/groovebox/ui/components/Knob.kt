@@ -67,6 +67,8 @@ fun Knob(
     var value by remember(parameterId, trackIndex, effectiveValue) { mutableStateOf(effectiveValue) }
     var isHeld by remember { mutableStateOf(false) }
 
+    val isModTarget = latestState.tracks[trackIndex].padModTargetId == parameterId
+
     val engineColor = overrideColor ?: getEngineColor(state.tracks[state.selectedTrackIndex].engineType)
     
     // Check if this parameter is locked on the current track (any step)
@@ -199,6 +201,19 @@ fun Knob(
                         forEachGesture {
                             awaitPointerEventScope {
                                 val down = awaitFirstDown()
+                                
+                                // PAD MOD LEARN LOGIC
+                                if (latestState.isPadModLearnActive && parameterId != -1) {
+                                    latestOnStateChange(latestState.copy(
+                                        isPadModLearnActive = false,
+                                        tracks = latestState.tracks.mapIndexed { idx, t ->
+                                            if (idx == latestState.selectedTrackIndex) t.copy(padModTargetId = parameterId)
+                                            else t
+                                        }
+                                    ))
+                                    return@awaitPointerEventScope
+                                }
+                                
                                 isHeld = true
                                 var lastY = down.position.y
                                 
@@ -376,6 +391,9 @@ fun Knob(
                         }
                     }
                     drawArc(color = engineColor, startAngle = 135f, sweepAngle = value * 270f, useCenter = false, topLeft = Offset(center.x - radius, center.y - radius), size = Size(radius * 2, radius * 2), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round))
+                }
+                if (isModTarget && latestState.isPadModLearnActive) {
+                    drawCircle(color = Color.Cyan, radius = radius + 8.dp.toPx(), center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx()))
                 }
                 if (isLockedOnTarget) drawCircle(color = Color.Magenta, radius = 4.dp.toPx(), center = center)
             }

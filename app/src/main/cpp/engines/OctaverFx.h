@@ -5,7 +5,9 @@
 #include <cmath>
 #include <vector>
 
-// Simple Granular Pitch Shifter for Octaver
+// Pitch-shifting Octaver & Harmony effect
+// Uses delay-line granular pitch shifting with overlapping triangular windows.
+// Supports octave shifts and chord harmonies with downward inversions.
 class OctaverFx {
 public:
   void updateSampleRate(float sr) {}
@@ -25,47 +27,29 @@ public:
     // Render voices based on Mode
     float wet = 0.0f;
 
-    // Main Pitch Logic:
-    // pitchRatio 0.5 = Oct Down
-    // pitchRatio 2.0 = Oct Up
+    // 10 modes (0-9):
+    // 0: Oct Up       (+1 oct)
+    // 1: 2 Oct Up     (+2 oct)
+    // 2: Oct Down     (-1 oct)
+    // 3: 2 Oct Down   (-2 oct)
+    // 4: Up/Down      (+1 oct and -1 oct)
+    // 5: Major        (5th down inversion + Major 3rd up)
+    // 6: Dom7         (5th down + Major 3rd up + minor 7th up)
+    // 7: Maj7         (5th down + Major 3rd up + Major 7th up)
+    // 8: Min7         (5th down + minor 3rd up + minor 7th up)
+    // 9: Dim          (tritone down + minor 3rd up)
 
-    // 0: Oct Up
-    // 1: Octs Up (1up, 2up)
-    // 2: Oct Down
-    // 3: Octs Down (1down, 2down)
-    // 4: Up/Down
-    // 5..11: Chords
-
-    int mode = (int)(mMode * 11.9f);
+    int mode = (int)(mMode * 9.99f);
+    if (mode < 0)
+      mode = 0;
+    if (mode > 9)
+      mode = 9;
 
     auto processVoice = [&](float ratio, float &phase,
                             float &windowPhase) -> float {
-      // Grain Logic:
-      // Traversing buffer at speed 'ratio'.
-      // But we are constantly writing.
-      // Effective read speed needs to stay within buffer relative to write
-      // head. Simple Pitch Shifter: ReadRate = Ratio. But we need to window to
-      // avoid clicks.
-
-      // Increment Phase
-      float rate = ratio;
-      // Correction: If reading faster (2.0), we pass write head.
-      // We need typically 2 overlapping windows.
-      // Let's use a simpler "phasor" approach for pitch shifting.
-      // Phasor 0..1 at freq = (1 - ratio) / WindowSize?
-      // Actually, for real-time delay-based pitch shifting:
-      // Delay ramps from 0 to WindowSize.
-      // Slope determines pitch.
-
-      // Delay modulation rate:
-      // (1.0 - ratio) samples per sample.
-      // If ratio 0.5 (Down), delay increases by 0.5 samples/sample.
-      // If ratio 2.0 (Up), delay decreases by 1.0 samples/sample.
-
       float drift = 1.0f - ratio;
       phase += drift;
 
-      // Wrap / Window
       const float windowSize = 2048.0f; // ~46ms
 
       auto getGrain = [&](float p) -> float {
@@ -74,9 +58,7 @@ public:
         while (p >= windowSize)
           p -= windowSize;
 
-        // Actual delay
-        float delay = p; // 0..Window
-
+        float delay = p;
         float rPos = (float)mWritePos - delay;
         while (rPos < 0.0f)
           rPos += mBuffer.size();
@@ -99,21 +81,72 @@ public:
       return v1 + v2;
     };
 
-    if (mode == 0) { // Oct Up
+    // Semitone ratio helper: 2^(semitones/12)
+    // Pre-computed constants for chord intervals:
+    static const float kP5Down = 0.74915f; // 2^(-5/12)  Perfect 5th down
+    static const float kTTDown = 0.70711f; // 2^(-6/12)  Tritone down
+    static const float kMin3Up = 1.18921f; // 2^(3/12)   Minor 3rd up
+    static const float kMaj3Up = 1.25992f; // 2^(4/12)   Major 3rd up
+    static const float kMin7Up = 1.78180f; // 2^(10/12)  Minor 7th up
+    static const float kMaj7Up = 1.88775f; // 2^(11/12)  Major 7th up
+
+    switch (mode) {
+    case 0: // Oct Up
       wet += processVoice(2.0f, mPhase1, mWin1);
       if (mUnison > 0.3f)
-        wet += processVoice(2.01f, mPhase2, mWin2); // Detuned
-    } else if (mode == 2) {                         // Oct Down
+        wet += processVoice(2.01f, mPhase2, mWin2);
+      break;
+
+    case 1: // 2 Oct Up
+      wet += processVoice(4.0f, mPhase1, mWin1);
+      if (mUnison > 0.3f)
+        wet += processVoice(4.02f, mPhase2, mWin2);
+      break;
+
+    case 2: // Oct Down
       wet += processVoice(0.5f, mPhase1, mWin1);
       if (mUnison > 0.3f)
         wet += processVoice(0.505f, mPhase2, mWin2);
-    } else if (mode == 4) { // Up/Down
+      break;
+
+    case 3: // 2 Oct Down
+      wet += processVoice(0.25f, mPhase1, mWin1);
+      if (mUnison > 0.3f)
+        wet += processVoice(0.253f, mPhase2, mWin2);
+      break;
+
+    case 4: // Up/Down
       wet += processVoice(2.0f, mPhase1, mWin1);
       wet += processVoice(0.5f, mPhase2, mWin2);
-    } else {
-      // Default placeholder for complex chord modes
-      // Just Oct Up/Down mix for now
-      wet += processVoice(2.0f, mPhase1, mWin1);
+      break;
+
+    case 5: // Major chord (5th down inversion + Major 3rd up)
+      wet += processVoice(kP5Down, mPhase1, mWin1);
+      wet += processVoice(kMaj3Up, mPhase2, mWin2);
+      break;
+
+    case 6: // Dom7 (5th down + Major 3rd up + minor 7th up)
+      wet += processVoice(kP5Down, mPhase1, mWin1);
+      wet += processVoice(kMaj3Up, mPhase2, mWin2);
+      wet += processVoice(kMin7Up, mPhase3, mWin3);
+      break;
+
+    case 7: // Maj7 (5th down + Major 3rd up + Major 7th up)
+      wet += processVoice(kP5Down, mPhase1, mWin1);
+      wet += processVoice(kMaj3Up, mPhase2, mWin2);
+      wet += processVoice(kMaj7Up, mPhase3, mWin3);
+      break;
+
+    case 8: // Min7 (5th down + minor 3rd up + minor 7th up)
+      wet += processVoice(kP5Down, mPhase1, mWin1);
+      wet += processVoice(kMin3Up, mPhase2, mWin2);
+      wet += processVoice(kMin7Up, mPhase3, mWin3);
+      break;
+
+    case 9: // Diminished (tritone down + minor 3rd up)
+      wet += processVoice(kTTDown, mPhase1, mWin1);
+      wet += processVoice(kMin3Up, mPhase2, mWin2);
+      break;
     }
 
     // Advance Write
@@ -143,7 +176,7 @@ private:
   std::vector<float> mBuffer;
   int mWritePos = 0;
 
-  // Voices state
+  // Voices state (6 phase/window pairs for up to 3 harmony voices + unison)
   float mPhase1 = 0.0f, mPhase2 = 0.0f, mPhase3 = 0.0f;
   float mWin1 = 0.0f, mWin2 = 0.0f, mWin3 = 0.0f;
 

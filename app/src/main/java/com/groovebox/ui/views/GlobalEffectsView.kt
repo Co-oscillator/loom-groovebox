@@ -365,7 +365,7 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                          }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             GlobalKnob("MODE", 0.5f, 1521, state, onStateChange, nativeLib, fullLabel = "Octave Mode", valueFormatter = { v ->
-                                val mode = (v * 11.99f).toInt()
+                                val mode = (v * 9.99f).toInt()
                                 when(mode) {
                                     0 -> "OCT UP"
                                     1 -> "2 OCT UP"
@@ -373,13 +373,10 @@ fun GlobalEffectsView(state: GrooveboxState, onStateChange: (GrooveboxState) -> 
                                     3 -> "2 OCT DWN"
                                     4 -> "UP/DWN"
                                     5 -> "MAJ"
-                                    6 -> "Cymbal"
-                                    7 -> "Cowbell"
-                                    8 -> "DOM7"
-                                    9 -> "MAJ7"
-                                    10 -> "MIN7"
-                                    11 -> "DIM"
-                                    else -> "PWR"
+                                    6 -> "DOM7"
+                                    7 -> "MAJ7"
+                                    8 -> "MIN7"
+                                    else -> "DIM"
                                 }
                             })
                             GlobalKnob("UNISON", 0.0f, 1522, state, onStateChange, nativeLib) 

@@ -42,4 +42,4 @@ A powerful, native Android groovebox featuring a hybrid C++/Kotlin audio engine,
 3. Audio latency settings are automatically tuned for the device.
 
 ## License
-MIT License.
+GPL

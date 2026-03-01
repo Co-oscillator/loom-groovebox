@@ -41,7 +41,7 @@ public:
     // Control rate update (every 16 samples)
     if (mControlCounter++ % 16 == 0) {
       // 1. LFO Calculation (Control Rate)
-      float rateHz = 0.02f + (mRate * mRate) * 49.98f; // 0.02Hz to 50Hz range
+      float rateHz = 0.02f + (mRate * mRate) * 29.98f; // 0.02Hz to 30Hz range
       mPhase += (rateHz * 16.0f) / sampleRate;
       if (mPhase >= 1.0f) {
         mPhase -= floorf(mPhase);

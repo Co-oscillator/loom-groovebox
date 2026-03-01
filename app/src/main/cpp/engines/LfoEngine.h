@@ -32,7 +32,7 @@ public:
     float effectiveFreq = mFrequency;
     if (mSync) {
       float beatFreq = mBpm / 60.0f;
-      int syncIdx = (int)(mUiRate * 7.99f);
+      int syncIdx = (int)(mUiRate * 12.99f);
       switch (syncIdx) {
       case 0:
         effectiveFreq = beatFreq / 32.0f;
@@ -58,6 +58,21 @@ public:
       case 7:
         effectiveFreq = beatFreq * 4.0f;
         break; // 1/16
+      case 8:
+        effectiveFreq = beatFreq * 8.0f;
+        break; // 1/32
+      case 9:
+        effectiveFreq = beatFreq * 12.0f;
+        break; // 1/48
+      case 10:
+        effectiveFreq = beatFreq * 16.0f;
+        break; // 1/64
+      case 11:
+        effectiveFreq = beatFreq * 18.0f;
+        break; // 1/72
+      case 12:
+        effectiveFreq = beatFreq * 24.0f;
+        break; // 1/96
       default:
         effectiveFreq = beatFreq;
       }
@@ -95,7 +110,7 @@ public:
     float effectiveFreq = mFrequency;
     if (mSync) {
       float beatFreq = mBpm / 60.0f;
-      int syncIdx = (int)(mUiRate * 7.99f);
+      int syncIdx = (int)(mUiRate * 12.99f);
       switch (syncIdx) {
       case 0:
         effectiveFreq = beatFreq / 32.0f;
@@ -121,6 +136,21 @@ public:
       case 7:
         effectiveFreq = beatFreq * 4.0f;
         break; // 1/16
+      case 8:
+        effectiveFreq = beatFreq * 8.0f;
+        break; // 1/32
+      case 9:
+        effectiveFreq = beatFreq * 12.0f;
+        break; // 1/48
+      case 10:
+        effectiveFreq = beatFreq * 16.0f;
+        break; // 1/64
+      case 11:
+        effectiveFreq = beatFreq * 18.0f;
+        break; // 1/72
+      case 12:
+        effectiveFreq = beatFreq * 24.0f;
+        break; // 1/96
       default:
         effectiveFreq = beatFreq;
       }

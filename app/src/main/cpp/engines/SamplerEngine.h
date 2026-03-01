@@ -901,9 +901,10 @@ public:
             // Playback motor (1.0x speed)
             mSmoothSpeed += (1.0 - mSmoothSpeed) * 0.0005;
           } else {
-            // NATURAL DECAY: Heavy platter friction
-            mSmoothSpeed *= 0.999925;
-            if (std::abs(mSmoothSpeed) < 0.00005)
+            // NATURAL DECAY: Reduced platter friction for longer "throw"
+            // coasting
+            mSmoothSpeed *= 0.99998;
+            if (std::abs(mSmoothSpeed) < 0.015)
               mSmoothSpeed = 0.0;
           }
 

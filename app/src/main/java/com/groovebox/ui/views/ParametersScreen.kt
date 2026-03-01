@@ -817,8 +817,11 @@ fun RecordingStrip(
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(onClick = { 
                     nativeLib?.trimSample(trackIndex)
+                    onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                        if (idx == trackIndex) t.copy(parameters = t.parameters + (330 to 0.0f) + (331 to 1.0f)) else t 
+                    }))
                     onWaveformRefresh()
-                }, modifier = Modifier.size(60.dp, 30.dp), 
+                }, modifier = Modifier.size(60.dp, 30.dp),  
                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
                     contentPadding = PaddingValues(0.dp)) { Text("TRIM", fontSize = 10.sp) }
                 
@@ -1462,7 +1465,7 @@ fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange:
             // FILTER
             CompactParameterBox(title = "FILTER", startColor = themeColor, modifier = Modifier.weight(1f)) {
                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("CUTOFF", 0.8f, 112, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("CUTOFF", 0.8f, 1, state, onStateChange, nativeLib, knobSize = 34.dp)
                     Knob("RES", 0.2f, 113, state, onStateChange, nativeLib, knobSize = 34.dp)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {

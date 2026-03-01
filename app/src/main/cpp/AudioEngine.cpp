@@ -179,6 +179,7 @@ void AudioEngine::initTrack(int i) {
         mTracks[i].fmDrumEngine.resetToDefaults();
         mTracks[i].analogDrumEngine.resetToDefaults();
         mTracks[i].wavetableEngine.resetToDefaults();
+        mTracks[i].audioInEngine.resetToDefaults();
         mTracks[i].soundFontEngine.allNotesOff();
 
         // Apply loaded parameters to engines
@@ -212,6 +213,9 @@ void AudioEngine::initTrack(int i) {
 
   // Analog Drum Defaults
   mTracks[i].analogDrumEngine.resetToDefaults();
+
+  // Audio In Defaults
+  mTracks[i].audioInEngine.resetToDefaults();
 
   // FM Drum Defaults
   for (int k = 0; k < 8; k++) {
@@ -3275,10 +3279,10 @@ void AudioEngine::setGenericLfoParam(int lfoIndex, int paramId, float value) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   switch (paramId) {
   case 0:
-    // Cubic scaling: 0.01Hz to 50Hz
-    // Range = 50 - 0.01 = 49.99
-    // Val = 0.01 + (v^3 * 49.99)
-    mLfos[lfoIndex].setFrequency(0.01f + (value * value * value) * 49.99f);
+    // Cubic scaling: 0.01Hz to 30Hz
+    // Range = 30 - 0.01 = 29.99
+    // Val = 0.01 + (v^3 * 29.99)
+    mLfos[lfoIndex].setFrequency(0.01f + (value * value * value) * 29.99f);
     mLfos[lfoIndex].setUiRate(value);
     break;
   case 1:
@@ -3523,8 +3527,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
 
   // --- Block Rate Control Updates ---
   for (int l = 0; l < 6; ++l) {
-    mLfos[l].process(sampleRate,
-                     1); // Only 1 "sample" of progression per buffer cycle
+    mLfos[l].process(sampleRate, numFrames);
   }
   for (int m = 0; m < 8; ++m) {
     if (mMacros[m].sourceType == 3) { // LFO
@@ -3750,7 +3753,7 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
           // Per-track mix balance
           float wetAmount = track.smoothedFxSends[f] * track.fxMix[f];
 
-          if (!skipTrackSends) {
+          if (!skipTrackSends && !shouldMute) {
             fxBusesL[f] += preFaderL * wetAmount;
             fxBusesR[f] += preFaderR * wetAmount;
           }
@@ -4082,13 +4085,19 @@ void AudioEngine::getStepActiveStates(int trackIndex, bool *out, int maxSize) {
   }
 }
 void AudioEngine::setInputDevice(int deviceId) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-
-  if (mInputStream) {
-    mInputStream->stop();
-    mInputStream->close();
-    mInputStream.reset();
+  std::shared_ptr<oboe::AudioStream> streamToClose;
+  {
+    std::lock_guard<std::recursive_mutex> lock(mLock);
+    streamToClose = mInputStream;
   }
+
+  if (streamToClose) {
+    streamToClose->stop();
+    streamToClose->close();
+  }
+
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  mInputStream.reset();
 
   oboe::AudioStreamBuilder inBuilder;
   inBuilder.setDirection(oboe::Direction::Input)

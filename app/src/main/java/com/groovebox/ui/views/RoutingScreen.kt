@@ -134,7 +134,7 @@ fun RoutingScreen(
                         val newMacros = state.macros.toMutableList()
                         newMacros[idx] = newState
                         onStateChange(state.copy(macros = newMacros))
-                        nativeLib.setMacroSource(idx, newState.sourceType, newState.sourceIndex)
+                        nativeLib.setMacroSource(idx, newState.sourceType, newState.sourceIndex, state.selectedTrackIndex)
                     },
                     onStateChange = onStateChange,
                     isTablet = isTablet,
@@ -200,7 +200,7 @@ fun LfoModule(
                         onValueChangeOverride = { v -> onUpdate(lfoState.copy(rate = v)) }, 
                         valueFormatter = { v ->
                             if (lfoState.sync) {
-                                listOf("8/1", "4/1", "2/1", "1/1", "1/2", "1/4", "1/8", "1/16")[(v * 7.99f).toInt().coerceIn(0, 7)]
+                                listOf("8/1", "4/1", "2/1", "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/48", "1/64", "1/72", "1/96")[(v * 12.99f).toInt().coerceIn(0, 12)]
                             } else {
                                 String.format(java.util.Locale.US, "%.2f", v)
                             }
@@ -331,6 +331,14 @@ fun MacroUnit(
                                             i <= 14 -> 3 to (i - 9) // LFO
                                             i == 15 -> 5 to -1 // MIDI PADS
                                             else -> 0 to -1
+                                        }
+                                        if (type == 5) { // MIDI PADS
+                                            // Auto-bind the Pad Y-Axis to this exact Macro so it stops driving default parameters like Cutoff
+                                            val newTracks = grooveboxState.tracks.mapIndexed { tIdx, t ->
+                                                if (tIdx == grooveboxState.selectedTrackIndex) t.copy(padModTargetId = 2000 + index)
+                                                else t
+                                            }
+                                            onStateChange(grooveboxState.copy(tracks = newTracks))
                                         }
                                         onUpdate(macroState.copy(sourceLabel = label, sourceType = type, sourceIndex = srcIdx))
                                     }

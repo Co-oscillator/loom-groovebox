@@ -19,7 +19,8 @@ Check out walkthroughs and feature demos on the [Loom Audio YouTube Channel](htt
 
 ### Play Screen
 The hub for live performance. Toggle between Melodic and Drum Kit layouts depending on your track type.  
-**Grid**: The play screen supports a large 4x4 playing grid, a 6x6 grid for a wider musical range, or a Tonnetz layout for a 76 key range.  All three layouts can transpose the root note and home octave. The 4x4 and 6x6 grids can be set to a scale, while the Tonnetz layout is always showing a full chromatic range.  
+**Grid**:The play screen supports a large 4x4 playing grid, a 6x6 grid for a wider musical range, or a Tonnetz layout for a 76 key range.  All three layouts can transpose the root note and home octave. The 4x4 and 6x6 grids can be set to a scale, while the Tonnetz layout is always showing a full chromatic range.  
+**Expressive Pad Controls**: The playing pads have a pitch bend built in and controlled by wobbling left to right.  The up and down motion can be assigned to any parameter with a knob for volume, filter cutoff, wavefolding, drive, an FX send, etc.
 **Assignable Midi Controls**: The Play screen has 4 touch strips and 4 knobs, which can each be assigned to any knob in the app for easy access.  You can also connect up to three parameters to each midi control using the Macro feature in the Patch screen.  Launch the midi learning from the "MIDI LRN" button in the upper right corner of the Param screen, which launches a mode to select the parameter you will link to the Play screen.
 
 ````carousel
@@ -36,18 +37,7 @@ The hub for live performance. Toggle between Melodic and Drum Kit layouts depend
     - **Chord Progression Generator**: Uses the selected root note, currently played notes, and arpeggiator settings.  Choose a mood and a level of complexity for the pattern (both melodic and rhythmic complexity).  When switched on, it will alter the arpeggiator notes around your playing (or a latched arpeggiator) to create a 32 bar chord progression.
 - **MIDI Learn**: Launches a mode highlighting the MIDI controls on the play screen to select one, and then highlighting every knob in the app, while the user navigates to the screen with the knob they want to control.  Tapping the knob will assign it to the Play screen controller.  Tap again to cancel.
 - **Active FX**: At the bottom of every Param screen are strips to show any FX pedals that this track is sending audio to.  Each active effect will have a Send knob displayed in this section allowing the effect to be cut quickly and allowing the user to see where their sound is routed.
-
----
-
-### Mixer
-
-The Mixer panel is visible on the left side of the screen. Each of the 8 tracks gets a horizontal channel strip with the following controls:
-
-- **Engine Selector (ENG)**: Turn this knob to switch the synthesis engine for the track (Subtractive, FM, Wavetable, Sampler, Granular, FM Drum, Analog Drum, Audio In, SoundFont, MIDI Out).
-- **Engine Icon**: Tap to select the track. **Long-press** the engine icon to open the **Mute/Solo** menu for that track.
-- **Volume (VOL)**: Controls the track's output level in the mix.
-- **Pan (PAN)**: Stereo positioning for the track (left to right).
-
+- **Bend Learn**: Assign the Y axis modulation from the MIDI playing pads to any knob in Loom.  
 ---
 
 ### Sequencing Screen
@@ -76,7 +66,8 @@ Create and edit patterns with the 16-pad grid.
 - **Skipped Step Restoration**: Long-press a pad on the sequencer grid to restore a previously "removed" step.
 - **Transpose +/-**: Quickly shift the entire sequence pitch by the number of selected steps+octaves.
 - **Sequence Chain +/-**: Chain together up to 16 saved sequences in any order and combination to create a longer song.
-- **Copy/Paste**: Copy the entire sequence to paste into another track.  If you select a shorter pattern (e.g. 16 steps) and paste into a longer sequence (e.g. 64 steps), the pattern will be pasted into the first available steps.
+- **Length in Steps**: Use the Len Step knob to define the length of the sequence pattern in steps.  This is non-destructive and will not delete any steps from the sequence.  Each track can have a different number of steps in the sequence (between 16 and 64 steps).
+- **Copy/Paste**: Copy the entire sequence to paste into another track.  If you select a shorter pattern (eg 16 steps) and paste into a longer sequence (eg 64 steps) the pattern will be pasted into the first available steps.
 - **Save/Load**: Save your sequence to a local file, or load a saved sequence.
 - **Humanize**: Adds variation in the microtiming and velocity for each step in the current sequence.
 - **Order**: In the bottom of the Transport bar, you can change the order of the steps played in the sequence.  Plays forward, backward, ping-pong, or random.
@@ -118,7 +109,7 @@ Shape your sound using the dedicated controls for each engine.  Every engine sup
 **Sounds Like**: Classic 70s and 80s analog synths. Great for fat basses, lush pads, and sharp leads.
 - **Osc 1-2 Pitch**: Semitone offset for each of the two oscillators.
 - **Sub Oscillator**: An additional low-frequency oscillator one octave below for added weight.
-- **Osc 1-2 Fold / Drive**: Add harmonic grit via wave-folding or traditional saturation.
+- **Osc 1-2-Sub Fold / Drive**: Add harmonic grit via wave-folding or traditional saturation.
 - **PW (Pulse Width)**: Modifies the symmetry of square waves for "thin" or "nasal" timbres.
 - **Cutoff / Resonance**: Filter the sound to remove high frequencies and add "squelch."
 - **Detune**: Offsets oscillator pitches slightly for a thicker, wider sound.
@@ -155,6 +146,7 @@ Shape your sound using the dedicated controls for each engine.  Every engine sup
   - **Loop**: Perpetually loops the selected region.
   - **Scrub**: Creates a large pink handle on the sample playhead.  Dragging this handle allows you to manually scrub through the sample with realistic physics to simulate the feel of analogue media.  Fast motions will give a record scratch, slower motion creates dramatic tape stops, and manually dragging the playhead through the sample creates a uniquely warped playback effect.
   **Slice Lock**: When the lock is triggered, each slice of the sample can have its parameters edited independently of the others, allowing you to tailor each slice to create a wide range of sounds for a drum kit, which can be saved as a preset for future tracks.  The select knob (SEL) is used to select which slice to edit.
+  **Renaming sequencer tracks**: When samples are slices, each slice will have a separate track in the sequencer Long press on the label for each track on the Seq screen to rename it
 
 #### Granular Engine
 **Sounds Like**: Ambient "clouds" and textures. Turns any sample into a wash of microscopic sound particles.
@@ -206,139 +198,11 @@ Unlike traditional mixer "sends," the effects in serial mode are connected head-
    - **Cumulative Gain**: Be careful with **Overdrive** or **Bitcrusher** early in the chain, as they can significantly boost the signal level hitting subsequent effects, potentially leading to clipped or "smashed" sounding tails in the Reverb or Delay.
    - **Temporal Feedback**: Effects with internal feedback (Delay, Reverb) keep "playing" even after you stop sending audio to them. This feedback will continue to be processed by any pedals that follow them in the chain.
 
-#### Effect Pedals Reference
-
-**Compressor** — Dynamics control with sidechain capability.
-- **THR** (Threshold): Signal level above which compression kicks in.
-- **RATIO**: How aggressively the signal is compressed.
-- **ATK** (Attack): How quickly the compressor responds.
-- **REL** (Release): How quickly the compressor lets go.
-- **GAIN**: Makeup gain to compensate for volume reduction.
-- **SC TRG** (Sidechain Trigger): Select any track — or even a specific drum voice (e.g., the kick from an FM Drum track) — as the sidechain source. The compressor will "duck" in response to that source, creating pumping and rhythmic dynamics.
-
-**Overdrive** — Analog-style saturation and distortion.
-- **DRIVE**: Amount of gain into the saturation stage.
-- **DIST**: Distortion character/intensity.
-- **LEVEL**: Output volume.
-- **TONE**: Brightness of the distorted signal.
-
-**Bitcrusher** — Digital lo-fi destruction.
-- **BITS**: Bit depth reduction (1–16 bits).
-- **SRATE**: Sample rate reduction multiplier.
-- **MIX**: Dry/wet balance.
-
-**Chorus** — Lush detuned doubling.
-- **RATE**: Speed of the modulation.
-- **DPTH** (Depth): Intensity of the pitch wobble.
-- **MIX**: Dry/wet balance.
-- **VOC** (Voices): Number of chorus voices for thicker effects.
-
-**Phaser** — Sweeping notch filter effect.
-- **RATE**: Speed of the phase sweep.
-- **DPTH** (Depth): How wide the sweep travels.
-- **MIX**: Dry/wet balance.
-- **INTEN** (Intensity): Feedback/resonance of the phaser stages.
-
-**Wobble** — Tape-style wow and saturation.
-- **RATE**: Speed of the tape wobble.
-- **DPTH** (Depth): Amount of pitch fluctuation.
-- **SAT** (Saturation): Analog tape warmth/distortion.
-- **MIX**: Dry/wet balance.
-
-**Delay** — Versatile echo with 4 types and filtering.
-- **TIME**: Delay time.
-- **FEED** (Feedback): Number of repeats.
-- **MIX**: Dry/wet balance.
-- **FILT** (Filter): Cutoff frequency for the delay's built-in filter.
-- **RES** (Resonance): Filter resonance.
-- **TYPE**: Delay character — *Digital* (clean), *Tape* (warm degradation), *Ping-Pong* (stereo bounce), or *Reverse* (backward echoes).
-- **MODE**: Filter mode — *LP* (Low-pass), *HP* (High-pass), or *BP* (Band-pass).
-
-**Reverb** — Spatial ambience with 4 room types.
-- **SIZE**: Room size / decay length.
-- **MIX**: Dry/wet balance.
-- **TYPE**: Room character — *Plate*, *Room*, *Hall*, or *Space*.
-- **DAMP** (Damping): High-frequency absorption in the reverb tail.
-- **MOD** (Modulation): Subtle pitch modulation in the reverb for a shimmering quality.
-- **TONE**: Overall brightness of the reverb.
-- **P.DLY** (Pre-delay): Time before the reverb begins, creating separation from the dry signal.
-
-**Tape Echo** — Vintage tape delay emulation.
-- **TIME**: Echo time.
-- **FEED** (Feedback): Number of repeats.
-- **MIX**: Dry/wet balance.
-- **DRV** (Drive): Tape saturation on the repeats — each echo gets progressively warmer.
-- **WOW**: Slow pitch waver, emulating tape machine imperfections.
-- **FLUT** (Flutter): Fast pitch variation for authentic tape character.
-
-**Flanger** — Jet-sweep comb filter effect.
-- **RATE**: Speed of the sweep.
-- **DPTH** (Depth): Intensity of the sweep.
-- **MIX**: Dry/wet balance.
-- **FEED** (Feedback): Sharpness of the flanging resonance.
-- **DLAY** (Delay): Base delay time — shorter values are more metallic, longer are more vocal.
-
-**HP LFO Filter** — High-pass filter with built-in LFO modulation.
-- **RATE**: LFO speed.
-- **DPTH** (Depth): LFO modulation intensity.
-- **SHAPE**: LFO waveform.
-- **CUT** (Cutoff): Base filter cutoff frequency.
-- **RES** (Resonance): Filter resonance.
-- **MIX**: Dry/wet balance.
-
-**LP LFO Filter** — Low-pass filter with built-in LFO modulation.
-- **RATE**: LFO speed.
-- **DPTH** (Depth): LFO modulation intensity.
-- **SHAPE**: LFO waveform.
-- **CUT** (Cutoff): Base filter cutoff frequency.
-- **RES** (Resonance): Filter resonance.
-- **MIX**: Dry/wet balance.
-
-**Filter 1 / Filter 2 / Filter 3** — Three independent static filters.
-- **CUT** (Cutoff): Filter cutoff frequency.
-- **RES** (Resonance): Filter resonance.
-- **Mode button**: Cycles between *LP* (Low-pass), *HP* (High-pass), and *BP* (Band-pass). Having three filters available lets you sculpt multiple frequency ranges simultaneously.
-
-**Slicer** — Rhythmic volume gating synced to BPM.
-- **1/4, 1/3, 1/5**: Three independent rate lanes with toggle buttons. Activate any combination for complex polyrhythmic gate patterns.
-- **DPTH** (Depth): How deep the volume cuts — from subtle tremolo to hard gating.
-
-**Octaver** — Pitch shifting and harmonics generator.
-- **MIX**: Dry/wet balance.
-- **MODE**: Selects the pitch shift interval — *Oct Up* (+1 octave), *2 Oct Up* (+2 octaves), *Oct Down* (−1 octave), *2 Oct Down* (−2 octaves), *Up/Down* (both simultaneously), *Major* (Major 3rd + inverted 5th), *Dom7* (Major 3rd + inverted 5th + minor 7th), *Maj7* (Major 3rd + inverted 5th + Major 7th), *Min7* (minor 3rd + inverted 5th + minor 7th), *Diminished* (minor 3rd + inverted tritone). Chord modes use downward inversions so the harmony wraps around the root note rather than stacking above it.
-- **UNISON**: Adds a slightly detuned copy of the shifted voice for a fatter, chorused sound.
-
-**5-Band EQ** — Graphic equalizer for tonal shaping.
-- **LOW / L-MID / MID / H-MID / HIGH**: Five vertical sliders controlling gain for each frequency band. Center position is flat; push up to boost, pull down to cut.
-- **MIX**: Dry/wet balance.
-
----
-
-### Patch Screen — Routing, LFOs, Macros & FX Chain
-
-The Patch screen is where you connect modulation sources to destinations, shape your modulation, and configure the serial effects chain.
-
-![Patch Screen](assets/Patch_Screen.png)
-
-#### LFO Bank (6 LFOs)
-Loom has a bank of **6 independent LFOs** that can be assigned to any knob in the app — a sound engine parameter, volume or panning in the mixer, a parameter for an effect pedal, and so on.
-
-- **Rate**: Speed of the LFO. When **Sync** is enabled, rate snaps to musical divisions (8/1, 4/1, 2/1, 1/1, 1/2, 1/4, 1/8, 1/16, 1/32, 1/48, 1/64, 1/72, 1/96).
-- **Depth**: Intensity of the modulation.
-- **Shape**: Waveform — Sine, Triangle, Square, Saw, or Random (sample & hold).
-- **Sync**: Toggle to lock the LFO rate to the project BPM.
-- **Target Assignment**: Tap the target button to enter learn mode, then navigate to and tap any knob in the app to assign it. Tap the button again to un-assign.
-
-#### Macro Patch Bay (8 Macros)
-Loom has a bank of **8 macros** (phone layouts show 4 at a time and require scrolling to see the rest). Each macro connects a modulation **source** (left) to up to **3 destinations** (right).
-
-- **Sources**: Tap the purple source button to choose from: Touch Strip 1–4, Knob 1–4, LFO 1–6, MIDI Pads (Y-axis), or Learn Envelope (tap a parameter's knob to use its engine envelope as the source).
-- **Targets**: Tap a target slot to enter learn mode, then navigate to and tap any knob to assign it. Tap again to un-assign.
-- **Polarity**: Long-press a modulation target to switch the polarity of the modulation (indicated with a red highlight and reversed arrow). This inverts the modulation direction.
-- **Interactive Nodes**: Green nodes represent active connections.
-
-#### FX Chain Editor
-At the bottom of the Patch screen is a visual **5-slot serial effects chain**. Tap any slot to open a menu and assign one of the 18 available effects. The signal flows left to right through the chain. Tap a filled slot to remove it or swap to a different effect. The chain is independent of the parallel sends — it provides an alternative routing for when you want effects to process each other's output.
+### Patch Screen - Routing and Macros
+- **LFOs**: Loom has a bank of 6 LFOs that can be assigned to any knob in the app (a sound engine parameter, volume or panning in the mixer, a parameter for an effect pedal, etc.)
+- **Macros**: Loom has a bank of 8 macros (phone screens need to scroll to see all 8)Connect any modulation source (Left) to up to 3 destinations (Right).  Long-press a modulation target to switch the polarity of the modulation, which is indicated with a red highlight.  Can be connected to the envelope of any currently loaded instrument, an LFO, an assignable knob/slider, or the Y axis modulation of the MIDI play pads.
+- **Interactive Nodes**: Tap a node to set the modulation depth. Green nodes represent active connections.  (On phone layout, long press a node to set the modulation polarity)
+- **Pedal Chains**: The signal flow goes form left to right, select and remove pedals in any order.  
 
 ---
 

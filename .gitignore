@@ -15,3 +15,43 @@
 .cxx
 local.properties
 /app/release/
+
+# Build logs & error dumps
+*.log
+build_*.txt
+build_*.log
+final_*.txt
+vs_build*.txt
+
+# APK binaries
+/APK/
+*.apk
+
+# Debug scripts
+brace_check*.py
+check*.py
+count_braces.py
+simple_check.py
+find_*.py
+hello.py
+parse_dx7.py
+braces_only.txt
+
+# DX7 sysex ROMs
+*.syx
+dx7_presets.txt
+
+# Duplicate screenshots
+/Loom Screenshots/
+
+# Build artifacts
+.last_version
+version.properties
+
+# Editor configs
+.vscode/
+
+# Misc
+1KB
+UserManual.pdf
+

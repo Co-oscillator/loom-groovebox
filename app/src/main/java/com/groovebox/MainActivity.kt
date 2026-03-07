@@ -617,14 +617,12 @@ class MainActivity : ComponentActivity() {
 
             var finalState = loadedState ?: createInitialState()
             
-            splashScreenStatus = "Initializing Core Audio..."
-            // Initialize Native
+            splashScreenStatus = "Initializing Core Audio Engine..."
+            // Initialize Native (creates AudioEngine object, but does NOT start Oboe streams)
             nativeLib.init()
             nativeLib.setAppDataDir(filesDir.absolutePath)
             splashScreenStatus = "Restoring Audio Engine State..."
             nativeLib.loadAppState()
-            splashScreenStatus = "Starting Oboe RT Audio Threads..."
-            nativeLib.start()
 
             splashScreenStatus = "Sanitizing Engine Parameters..."
             // Apply Universal Sanitization to the initial/loaded state
@@ -637,10 +635,19 @@ class MainActivity : ComponentActivity() {
             }
 
             splashScreenStatus = "Synchronizing Native JNI State..."
-            // Sync full state to native engine
+            // Sync full state to native engine BEFORE starting audio streams.
+            // This is critical: syncNativeState calls loadSoundFont() which holds C++
+            // mutexes while parsing a 30MB file. If we called nativeLib.start() first,
+            // the Oboe RT callback thread would spin-wait on those mutexes for minutes,
+            // causing Android priority-inheritance to block the main thread → ANR.
             syncNativeState(finalState, nativeLib)
 
+            splashScreenStatus = "Starting Oboe RT Audio Threads..."
+            // NOW start audio streams, after all state is loaded and mutexes are free.
+            nativeLib.start()
+
             splashScreenStatus = "Finalizing Load..."
+
             // Sync Kotlin state with loaded samples
             val initialTracks = finalState.tracks.mapIndexed { i, t ->
                 val lastPath = nativeLib.getLastSamplePath(i)

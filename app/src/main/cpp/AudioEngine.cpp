@@ -496,10 +496,10 @@ bool AudioEngine::start() {
 
   // Fix for startup choppiness:
   // Exclusive mode often defaults to 1 burst, which is too aggressive during
-  // app initialization jitter. We explicitly set it to 4 bursts (Quad
-  // Buffering) for stability.
+  // app initialization jitter. We explicitly set it to 8 bursts
+  // Buffering for stability and to prevent garbled audio on load.
   int burstFrames = mStream->getFramesPerBurst();
-  mStream->setBufferSizeInFrames(burstFrames * 4);
+  mStream->setBufferSizeInFrames(burstFrames * 8);
 
   mReverbFx.setSampleRate(mStream->getSampleRate());
   mSampleRate = mStream->getSampleRate();
@@ -531,7 +531,8 @@ bool AudioEngine::start() {
   oboe::AudioStreamBuilder inBuilder;
   inBuilder.setDirection(oboe::Direction::Input)
       ->setFormat(oboe::AudioFormat::Float)
-      ->setChannelCount(oboe::ChannelCount::Stereo) // Request Stereo
+      ->setChannelCount(oboe::ChannelCount::Mono) // Fallback Fix: Request Mono
+                                                  // instead of Stereo
       ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
       ->setSharingMode(oboe::SharingMode::Exclusive)
       ->setInputPreset(oboe::InputPreset::Camcorder)

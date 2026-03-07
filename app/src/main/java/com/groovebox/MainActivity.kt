@@ -43,6 +43,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.groovebox.utils.*
 import android.media.projection.MediaProjectionManager
 import android.media.projection.MediaProjection
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioPlaybackCaptureConfiguration
@@ -536,43 +538,6 @@ class MainActivity : ComponentActivity() {
              perms.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
         
-        // Copy bundled SoundFonts to internal storage if not present
-        Thread {
-            try {
-                val sfDir = File(PersistenceManager.getLoomFolder(this), "soundfonts")
-                // Proactive Fix: Migrate singular "soundfont" folder if it exists (legacy typo fix)
-                val legacySfDir = File(PersistenceManager.getLoomFolder(this), "soundfont")
-                if (legacySfDir.exists() && !sfDir.exists()) {
-                    legacySfDir.renameTo(sfDir)
-                    android.util.Log.d("MainActivity", "Migrated singular soundfont folder to plural soundfonts")
-                }
-                
-                if (!sfDir.exists()) sfDir.mkdirs()
-                
-                val assetsToCopy = listOf(
-                    "soundfonts/GeneralUser_GS.sf2" to "GeneralUser_GS.sf2"
-                )
-                
-                assetsToCopy.forEach { (assetPath, destName) ->
-                    val destFile = File(sfDir, destName)
-                    if (!destFile.exists() || destFile.length() < 1024) {
-                        try {
-                            assets.open(assetPath).use { input ->
-                                destFile.outputStream().use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
-
-
         perms.add(Manifest.permission.RECORD_AUDIO)
         
         val permissionsToRequest = perms.filter {
@@ -583,14 +548,16 @@ class MainActivity : ComponentActivity() {
             ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), 1001)
         }
         
-        // Migrate and copy assets (PersistenceManager now handles try-catch and fallbacks)
-        try {
-            PersistenceManager.migrateToExternalStorage(this)
-            PersistenceManager.copyWavetablesToFilesDir(this)
-            PersistenceManager.copySoundFontsToFilesDir(this)
-            PersistenceManager.copyDefaultsToFilesDir(this)
-        } catch (e: Exception) {
-            Log.e("Groovebox", "Persistence startup error: ${e.message}")
+        // Background Initialization for Assets
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                PersistenceManager.migrateToExternalStorage(this@MainActivity)
+                PersistenceManager.copyWavetablesToFilesDir(this@MainActivity)
+                PersistenceManager.copySoundFontsToFilesDir(this@MainActivity)
+                PersistenceManager.copyDefaultsToFilesDir(this@MainActivity)
+            } catch (e: Exception) {
+                Log.e("Groovebox", "Persistence startup error: ${e.message}")
+            }
         }
 
         

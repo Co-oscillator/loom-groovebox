@@ -378,25 +378,42 @@ fun ParameterGroup(title: String, modifier: Modifier = Modifier, titleSize: Int 
 }
 
 @Composable
-fun TestTriggerButton(trackIndex: Int, nativeLib: NativeLib, modifier: Modifier = Modifier) {
+fun TestTriggerButton(trackIndex: Int, track: TrackState, nativeLib: NativeLib, modifier: Modifier = Modifier) {
     var isPressed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    
+    // Calculate the target note: default 60, but if Sampler is in a Chop mode, 
+    // trigger the specific slice based on the Select param (331)
+    val targetNote = remember(track.engineType, track.parameters) {
+        if (track.engineType == EngineType.SAMPLER) {
+            val modeId = track.parameters[320] ?: 0f
+            if (modeId >= 0.7f && modeId <= 0.95f) { // Chop, One Chop, Loop Chop
+                val selectVal = track.parameters[331] ?: 0f
+                val sliceIndex = (selectVal * 15f).toInt().coerceIn(0, 15)
+                60 + sliceIndex
+            } else {
+                60
+            }
+        } else {
+            60
+        }
+    }
 
     Box(
         modifier = modifier
             .size(width = 80.dp, height = 32.dp)
             .background(if (isPressed) Color.White.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
             .border(1.dp, if (isPressed) Color.White else Color.White.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-            .pointerInput(Unit) {
+            .pointerInput(targetNote) {
                 detectTapGestures(
                     onPress = {
                         try {
                             isPressed = true
-                            nativeLib.triggerNote(trackIndex, 60, 100)
+                            nativeLib.triggerNote(trackIndex, targetNote, 100)
                             awaitRelease()
                         } finally {
                             isPressed = false
-                            nativeLib.releaseNote(trackIndex, 60)
+                            nativeLib.releaseNote(trackIndex, targetNote)
                         }
                     }
                 )
@@ -2815,8 +2832,10 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
         )
 
         // BPM MATCHING ROW
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            TestTriggerButton(trackIndex, track, nativeLib)
             Spacer(modifier = Modifier.weight(1f)) // Just push it to the left
+            RandomizeButton(trackIndex, state, onStateChange, nativeLib)
         }
 
         Spacer(modifier = Modifier.height(8.dp))

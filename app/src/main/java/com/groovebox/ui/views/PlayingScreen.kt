@@ -1444,8 +1444,13 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 
                 val currentMaxWidth = maxWidth
                 val currentMaxHeight = maxHeight
-                val rows = if (state.gridMode == GridMode.GRID_6X6) 6 else 4
-                val cols = if (state.gridMode == GridMode.GRID_6X6) 6 else 4
+                
+                // Identify if Sampler Chop Mode is active
+                val samplerMode = track.parameters[320] ?: 0f
+                val isChopMode = track.engineType == EngineType.SAMPLER && samplerMode >= 0.6f
+                
+                val rows = if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else 4
+                val cols = if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else 4
                 val isWideScreen = screenRatio > 1.8f && screenConfig.screenHeightDp < 500
                 val spacing = 6.dp
                 
@@ -1483,7 +1488,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                             ).coerceAtLeast(40.dp)
                             
                             val is64 = latestState.is64StepView
-                            val columns = if (is64) 8 else if (state.gridMode == GridMode.GRID_6X6) 6 else 4
+                            val columns = if (is64) 8 else if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else 4
                             val gridSpacing = if (is64) 4.dp else spacing
 
                             LazyVerticalGrid(
@@ -1494,9 +1499,8 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                 userScrollEnabled = false
                             ) {
                                 // Pad items logic... (rest remains similar, just ensuring it's centered)
-                                items(if (is64) 64 else if (state.gridMode == GridMode.GRID_6X6) 36 else 16) { i ->
-                                    val samplerMode = track.parameters[320] ?: 0f
-                                    val isChopMode = track.engineType == EngineType.SAMPLER && samplerMode >= 0.6f
+                                items(if (is64) 64 else if (isChopMode) 16 else if (state.gridMode == GridMode.GRID_6X6) 36 else 16) { i ->
+                                    // chop mode already extracted
                                     val numSlices = if (isChopMode) (((track.parameters[340] ?: 0f) * 14f).toInt() + 2) else 0
 
                                     val note = if (track.engineType == EngineType.FM_DRUM) {

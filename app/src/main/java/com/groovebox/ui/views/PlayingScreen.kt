@@ -1430,14 +1430,14 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(0.22f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(0.25f).fillMaxHeight()) {
             TouchStripsPanel(state, onStateChange, nativeLib, engineColor)
         }
-        Box(modifier = Modifier.weight(0.07f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(0.09f).fillMaxHeight()) {
             AssignableKnobsPanel(state, onStateChange, nativeLib, engineColor)
         }
         
-        Box(modifier = Modifier.weight(0.71f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(0.66f).fillMaxHeight()) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                 val screenConfig = LocalConfiguration.current
                 val screenRatio = screenConfig.screenWidthDp.toFloat() / screenConfig.screenHeightDp.toFloat()

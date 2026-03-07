@@ -2200,14 +2200,25 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                         color = if (track.selectedFmPreset == presetId) Color.White else Color.Transparent,
                                         shape = RoundedCornerShape(8.dp)
                                     )
-                                    .clickable {
-                                        applyImportedFmVoice(voiceMap, trackIndex, nativeLib)
-                                        val allParams = nativeLib.getAllTrackParameters(trackIndex)
-                                        val paramMap = if (allParams.isNotEmpty()) allParams.mapIndexed { idx, value -> idx to value }.toMap() else state.tracks[trackIndex].parameters
-                                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                            if (idx == trackIndex) t.copy(selectedFmPreset = presetId, parameters = paramMap) else t 
-                                        }))
-                                        showPresetDrawer = false
+                                    .pointerInput(importIdx) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                applyImportedFmVoice(voiceMap, trackIndex, nativeLib)
+                                                val allParams = nativeLib.getAllTrackParameters(trackIndex)
+                                                val paramMap = if (allParams.isNotEmpty()) allParams.mapIndexed { idx, value -> idx to value }.toMap() else state.tracks[trackIndex].parameters
+                                                onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                    if (idx == trackIndex) t.copy(selectedFmPreset = presetId, parameters = paramMap) else t 
+                                                }))
+                                                showPresetDrawer = false
+                                            },
+                                            onLongPress = {
+                                                val updated = state.importedFmPresets.toMutableList().apply { removeAt(importIdx) }
+                                                onStateChange(state.copy(
+                                                    importedFmPresets = updated,
+                                                    focusedValue = "Deleted: $name"
+                                                ))
+                                            }
+                                        )
                                     }
                                     .padding(4.dp),
                                 contentAlignment = Alignment.Center

@@ -1307,6 +1307,13 @@ fun MainScreen(
 
             // Parameter Value Display (Bottom Right)
             val displayValue = localFocusedValue ?: state.focusedValue
+            // Auto-clear focusedValue after 3 seconds
+            LaunchedEffect(state.focusedValue) {
+                if (state.focusedValue != null) {
+                    kotlinx.coroutines.delay(3000)
+                    onStateChange(state.copy(focusedValue = null))
+                }
+            }
             val isPhone = LocalConfiguration.current.screenWidthDp < 600
             displayValue?.let { valStr ->
                 Text(

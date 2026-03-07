@@ -464,6 +464,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var empledManager: EmpledManager
     private var grooveboxState by mutableStateOf(createInitialState())
     private var isNativeInitialized by mutableStateOf(false)
+    private var splashScreenStatus by mutableStateOf("Initializing...")
+
 
     private var mediaProjectionManager: MediaProjectionManager? = null
 
@@ -551,15 +553,20 @@ class MainActivity : ComponentActivity() {
         
         // Background Initialization for Assets
         lifecycleScope.launch(Dispatchers.IO) {
+            splashScreenStatus = "Migrating Storage..."
             try {
                 PersistenceManager.migrateToExternalStorage(this@MainActivity)
+                splashScreenStatus = "Copying Wavetables..."
                 PersistenceManager.copyWavetablesToFilesDir(this@MainActivity)
+                splashScreenStatus = "Unpacking SoundFonts (Might take 1-2 mins on first install)..."
                 PersistenceManager.copySoundFontsToFilesDir(this@MainActivity)
+                splashScreenStatus = "Copying Defaults..."
                 PersistenceManager.copyDefaultsToFilesDir(this@MainActivity)
             } catch (e: Exception) {
                 Log.e("Groovebox", "Persistence startup error: ${e.message}")
             }
             
+            splashScreenStatus = "Loading Session Data..."
             // Initialize State with Safe Loading & Crash Loop Protection
             val prefs = getSharedPreferences("GrooveboxPrefs", Context.MODE_PRIVATE)
             val crashedLastLaunch = prefs.getBoolean("crashed_on_launch", false)
@@ -610,23 +617,30 @@ class MainActivity : ComponentActivity() {
 
             var finalState = loadedState ?: createInitialState()
             
+            splashScreenStatus = "Initializing Core Audio..."
             // Initialize Native
             nativeLib.init()
             nativeLib.setAppDataDir(filesDir.absolutePath)
+            splashScreenStatus = "Restoring Audio Engine State..."
             nativeLib.loadAppState()
+            splashScreenStatus = "Starting Oboe RT Audio Threads..."
             nativeLib.start()
 
+            splashScreenStatus = "Sanitizing Engine Parameters..."
             // Apply Universal Sanitization to the initial/loaded state
             finalState = sanitizeGrooveboxState(finalState)
             
+            splashScreenStatus = "Clearing Sequencer Buffers..."
             // Explicitly clear native sequencers on startup to ensure no RAM junk
             for (i in 0 until 8) {
                  nativeLib.clearSequencer(i)
             }
 
+            splashScreenStatus = "Synchronizing Native JNI State..."
             // Sync full state to native engine
             syncNativeState(finalState, nativeLib)
 
+            splashScreenStatus = "Finalizing Load..."
             // Sync Kotlin state with loaded samples
             val initialTracks = finalState.tracks.mapIndexed { i, t ->
                 val lastPath = nativeLib.getLastSamplePath(i)
@@ -762,7 +776,7 @@ class MainActivity : ComponentActivity() {
                         visible = !(splashtimeElapsed && isNativeInitialized),
                         exit = fadeOut(animationSpec = tween(1000))
                     ) {
-                        SplashScreen()
+                        SplashScreen(splashScreenStatus)
                     }
                 }
             }
@@ -811,7 +825,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun SplashScreen() {
+fun SplashScreen(statusText: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -840,6 +854,18 @@ fun SplashScreen() {
                     letterSpacing = 8.sp,
                     color = Color.White
                 )
+            )
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Normal,
+                    letterSpacing = 2.sp,
+                    color = Color.Gray
+                ),
+                textAlign = TextAlign.Center
             )
         }
     }

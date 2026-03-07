@@ -261,6 +261,7 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
     nativeLib.setMasterVolume(state.masterVolume)
     nativeLib.setScaleConfig(state.rootNote, state.scaleType.intervals.toIntArray())
     nativeLib.setRecordingSource(state.recordingSource)
+    nativeLib.setSwing(state.swing)
     
     // Sync Global Parameters (sent to Track 0)
     state.globalParameters.forEach { (pid, v) -> nativeLib.setParameter(0, pid, v) }
@@ -587,6 +588,7 @@ class MainActivity : ComponentActivity() {
             PersistenceManager.migrateToExternalStorage(this)
             PersistenceManager.copyWavetablesToFilesDir(this)
             PersistenceManager.copySoundFontsToFilesDir(this)
+            PersistenceManager.copyDefaultsToFilesDir(this)
         } catch (e: Exception) {
             Log.e("Groovebox", "Persistence startup error: ${e.message}")
         }

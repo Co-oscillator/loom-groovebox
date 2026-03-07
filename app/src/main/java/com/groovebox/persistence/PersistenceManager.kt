@@ -240,6 +240,10 @@ object PersistenceManager {
         copyAssetsToFilesDir(context, "soundfonts")
     }
 
+    fun copyDefaultsToFilesDir(context: Context) {
+        copyAssetsToFilesDir(context, "defaults")
+    }
+
     private fun copyAssetsToFilesDir(context: Context, dirName: String) {
         try {
             val destDir = File(getLoomFolder(context), dirName)

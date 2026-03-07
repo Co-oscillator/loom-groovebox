@@ -93,10 +93,6 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                             val engineIdx = (newVal * (engineTypes.size - 1).toFloat() + 0.5f).toInt().coerceIn(0, engineTypes.size - 1)
                             val newType = engineTypes[engineIdx]
                             if (newType != latestState.tracks[i].engineType) {
-                                // Explicitly clear native sequencers when engine type changes
-                                // to prevent "garbage" patterns from leaking between engines.
-                                nativeLib.clearSequencer(i)
-                                
                                 val newTracks = latestState.tracks.toMutableList()
                                 newTracks[i] = newTracks[i].copy(engineType = newType)
                                 latestOnStateChange(latestState.copy(

@@ -553,111 +553,93 @@ class MainActivity : ComponentActivity() {
         
         // Background Initialization for Assets
         lifecycleScope.launch(Dispatchers.IO) {
-            splashScreenStatus = "Migrating Storage..."
             try {
-                PersistenceManager.migrateToExternalStorage(this@MainActivity)
-                splashScreenStatus = "Copying Wavetables..."
-                PersistenceManager.copyWavetablesToFilesDir(this@MainActivity)
-                splashScreenStatus = "Unpacking SoundFonts (Might take 1-2 mins on first install)..."
-                PersistenceManager.copySoundFontsToFilesDir(this@MainActivity)
-                splashScreenStatus = "Copying Defaults..."
-                PersistenceManager.copyDefaultsToFilesDir(this@MainActivity)
-            } catch (e: Exception) {
-                Log.e("Groovebox", "Persistence startup error: ${e.message}")
-            }
-            
-            splashScreenStatus = "Loading Session Data..."
-            // Initialize State with Safe Loading & Crash Loop Protection
-            val prefs = getSharedPreferences("GrooveboxPrefs", Context.MODE_PRIVATE)
-            val crashedLastLaunch = prefs.getBoolean("crashed_on_launch", false)
-            
-            // Mark this launch as "Potentially Crashing" (cleared after 10s)
-            prefs.edit().putBoolean("crashed_on_launch", true).apply()
-            
-            // Clear the flag after 10 seconds of stability
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                prefs.edit().putBoolean("crashed_on_launch", false).apply()
-                Log.d("Groovebox", "Stability Check Passed. Crash Flag Cleared.")
-            }, 10000)
-
-            var loadedState: GrooveboxState? = null
-            if (crashedLastLaunch) {
-                Log.e("Groovebox", "CRASH LOOP DETECTED! Resetting to Fresh State.")
-                // To display a Toast from a background thread, we must switch to Main
-                launch(Dispatchers.Main) {
-                    android.widget.Toast.makeText(this@MainActivity, "Safe Mode: Settings Reset due to Crash", android.widget.Toast.LENGTH_LONG).show()
+                withContext(Dispatchers.Main) { splashScreenStatus = "Copying Assets..." }
+                
+                try {
+                    PersistenceManager.migrateToExternalStorage(this@MainActivity)
+                    PersistenceManager.copyWavetablesToFilesDir(this@MainActivity)
+                    PersistenceManager.copySoundFontsToFilesDir(this@MainActivity)
+                    PersistenceManager.copyDefaultsToFilesDir(this@MainActivity)
+                } catch (e: Exception) {
+                    Log.e("Groovebox", "Persistence startup error: ${e.message}")
                 }
                 
-                // Force Fresh State
-                loadedState = createInitialState()
-                // Overwrite corrupt session
-                PersistenceManager.saveProject(this@MainActivity, loadedState, "last_session.gbx")
-            } else {
-                 try {
-                     // Load Init project as priority template if it exists, otherwise last session
-                     val initProject = PersistenceManager.loadProject(this@MainActivity, "Init.gbx")
-                     val lastSession = PersistenceManager.loadProject(this@MainActivity, "last_session.gbx")
-                     
-                     if (initProject == null) {
-                         // Create a fresh Init.gbx if missing
-                         val freshState = createInitialState()
-                         PersistenceManager.saveProject(this@MainActivity, freshState, "Init.gbx")
-                         loadedState = freshState
-                         Log.d("Groovebox", "Created new Init.gbx default template")
-                     } else {
-                         loadedState = initProject ?: lastSession
-                     }
-                     
-                     Log.d("Groovebox", "Started with ${if (initProject != null) "Init.gbx" else "last_session.gbx"}")
-                 } catch (e: Exception) {
-                     e.printStackTrace()
-                     loadedState = createInitialState() // Fallback if regular load throws
-                 }
-            }
+                withContext(Dispatchers.Main) { splashScreenStatus = "Loading Session Data..." }
+                val prefs = getSharedPreferences("GrooveboxPrefs", Context.MODE_PRIVATE)
+                val crashedLastLaunch = prefs.getBoolean("crashed_on_launch", false)
+                prefs.edit().putBoolean("crashed_on_launch", true).apply()
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    prefs.edit().putBoolean("crashed_on_launch", false).apply()
+                }, 10000)
 
-            var finalState = loadedState ?: createInitialState()
-            
-            splashScreenStatus = "Initializing Core Audio Engine..."
-            // Initialize Native (creates AudioEngine object, but does NOT start Oboe streams)
-            nativeLib.init()
-            nativeLib.setAppDataDir(filesDir.absolutePath)
-            splashScreenStatus = "Restoring Audio Engine State..."
-            nativeLib.loadAppState()
+                var loadedState: GrooveboxState? = null
+                if (crashedLastLaunch) {
+                    Log.e("Groovebox", "CRASH LOOP DETECTED! Resetting to Fresh State.")
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(this@MainActivity, "Safe Mode: Settings Reset due to Crash", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                    loadedState = createInitialState()
+                    PersistenceManager.saveProject(this@MainActivity, loadedState, "last_session.gbx")
+                } else {
+                    try {
+                        val initProject = PersistenceManager.loadProject(this@MainActivity, "Init.gbx")
+                        val lastSession = PersistenceManager.loadProject(this@MainActivity, "last_session.gbx")
+                        loadedState = if (initProject == null) {
+                            val fresh = createInitialState()
+                            PersistenceManager.saveProject(this@MainActivity, fresh, "Init.gbx")
+                            fresh
+                        } else {
+                            initProject ?: lastSession
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        loadedState = createInitialState()
+                    }
+                }
 
-            splashScreenStatus = "Sanitizing Engine Parameters..."
-            // Apply Universal Sanitization to the initial/loaded state
-            finalState = sanitizeGrooveboxState(finalState)
-            
-            splashScreenStatus = "Clearing Sequencer Buffers..."
-            // Explicitly clear native sequencers on startup to ensure no RAM junk
-            for (i in 0 until 8) {
-                 nativeLib.clearSequencer(i)
-            }
+                withContext(Dispatchers.Main) { splashScreenStatus = "Initializing Audio Engine..." }
+                nativeLib.init()
+                nativeLib.setAppDataDir(filesDir.absolutePath)
+                
+                withContext(Dispatchers.Main) { splashScreenStatus = "Restoring Sample Paths..." }
+                nativeLib.loadAppState()
 
-            splashScreenStatus = "Synchronizing Native JNI State..."
-            // Sync full state to native engine BEFORE starting audio streams.
-            // This is critical: syncNativeState calls loadSoundFont() which holds C++
-            // mutexes while parsing a 30MB file. If we called nativeLib.start() first,
-            // the Oboe RT callback thread would spin-wait on those mutexes for minutes,
-            // causing Android priority-inheritance to block the main thread → ANR.
-            syncNativeState(finalState, nativeLib)
+                var finalState = sanitizeGrooveboxState(loadedState ?: createInitialState())
 
-            splashScreenStatus = "Starting Oboe RT Audio Threads..."
-            // NOW start audio streams, after all state is loaded and mutexes are free.
-            nativeLib.start()
+                withContext(Dispatchers.Main) { splashScreenStatus = "Clearing Sequencer Buffers..." }
+                for (i in 0 until 8) { nativeLib.clearSequencer(i) }
 
-            splashScreenStatus = "Finalizing Load..."
+                withContext(Dispatchers.Main) { splashScreenStatus = "Syncing State to Native Engine..." }
+                // CRITICAL ORDER: SoundFont loading must complete before audio streams start.
+                // syncNativeState calls loadSoundFont() which holds C++ mutexes for 30MB file parses.
+                // If nativeLib.start() is called first, the Oboe RT thread contends on those
+                // mutexes and Android priority-inheritance escalates to ANR the main thread.
+                syncNativeState(finalState, nativeLib)
 
-            // Sync Kotlin state with loaded samples
-            val initialTracks = finalState.tracks.mapIndexed { i, t ->
-                val lastPath = nativeLib.getLastSamplePath(i)
-                t.copy(lastSamplePath = lastPath)
-            }
-            finalState = finalState.copy(tracks = initialTracks)
-            
-            withContext(Dispatchers.Main) {
-                grooveboxState = finalState
-                isNativeInitialized = true
+                withContext(Dispatchers.Main) { splashScreenStatus = "Starting Audio Streams..." }
+                nativeLib.start()
+
+                withContext(Dispatchers.Main) { splashScreenStatus = "Finalizing..." }
+                val initialTracks = finalState.tracks.mapIndexed { i, t ->
+                    t.copy(lastSamplePath = nativeLib.getLastSamplePath(i))
+                }
+                finalState = finalState.copy(tracks = initialTracks)
+
+                withContext(Dispatchers.Main) {
+                    grooveboxState = finalState
+                    isNativeInitialized = true
+                }
+            } catch (e: Throwable) {
+                Log.e("Groovebox", "FATAL: Background init failed: ${e.message}", e)
+                // Even on catastrophic failure, unblock the UI with a safe fresh state
+                withContext(Dispatchers.Main) {
+                    splashScreenStatus = "Init Error: ${e.message?.take(80)}"
+                    // Give user 3 seconds to read error then load with empty state
+                    kotlinx.coroutines.delay(3000)
+                    grooveboxState = createInitialState()
+                    isNativeInitialized = true
+                }
             }
         }
 

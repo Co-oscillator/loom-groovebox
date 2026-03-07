@@ -745,14 +745,16 @@ class MainActivity : ComponentActivity() {
 
             GrooveboxTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    MainScreen(empledManager, nativeLib, grooveboxState, midiManager, onRecordingSourceChange = ::handleRecordingSourceChange) { grooveboxState = it }
-                    
-                    // RETRY HANDSHAKE after UI load
-                    // Some devices aren't ready for input instantly after connection
-                    LaunchedEffect(Unit) {
-                        delay(1000)
-                        Log.e("Groovebox", "@@@ RETRY HANDSHAKE (1s delay)")
-                        empledManager.sendHandshake()
+                    if (isNativeInitialized) {
+                        MainScreen(empledManager, nativeLib, grooveboxState, midiManager, onRecordingSourceChange = ::handleRecordingSourceChange) { grooveboxState = it }
+                        
+                        // RETRY HANDSHAKE after UI load
+                        // Some devices aren't ready for input instantly after connection
+                        LaunchedEffect(Unit) {
+                            delay(1000)
+                            Log.e("Groovebox", "@@@ RETRY HANDSHAKE (1s delay)")
+                            empledManager.sendHandshake()
+                        }
                     }
                     
 

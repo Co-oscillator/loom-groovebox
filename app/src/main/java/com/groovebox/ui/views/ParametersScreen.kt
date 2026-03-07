@@ -1287,6 +1287,32 @@ fun RecordingStrip(
     }
 }
 
+@Suppress("UNCHECKED_CAST")
+fun applyImportedFmVoice(voiceMap: Map<String, Any>, trackIndex: Int, nativeLib: NativeLib) {
+    val algorithm = voiceMap["algorithm"] as? Int ?: 0
+    val feedback = voiceMap["feedback"] as? Int ?: 0
+    val carrierMask = voiceMap["carrierMask"] as? Int ?: 1
+    val opLevels = voiceMap["opLevels"] as? List<Float> ?: List(6) { 0.5f }
+    val opRatios = voiceMap["opRatios"] as? List<Float> ?: List(6) { 1f / 16f }
+    val opAttack = voiceMap["opAttack"] as? List<Float> ?: List(6) { 0.01f }
+    val opDecay = voiceMap["opDecay"] as? List<Float> ?: List(6) { 0.5f }
+    val opSustain = voiceMap["opSustain"] as? List<Float> ?: List(6) { 0.8f }
+    val opRelease = voiceMap["opRelease"] as? List<Float> ?: List(6) { 0.4f }
+    
+    nativeLib.setParameter(trackIndex, 150, algorithm.toFloat() / 31f)
+    nativeLib.setParameter(trackIndex, 154, feedback.toFloat() / 7f)
+    nativeLib.setParameter(trackIndex, 153, carrierMask.toFloat())
+    for (op in 0 until 6) {
+        val baseId = 160 + (op * 6)
+        nativeLib.setParameter(trackIndex, baseId + 0, opLevels[op])
+        nativeLib.setParameter(trackIndex, baseId + 1, opAttack[op])
+        nativeLib.setParameter(trackIndex, baseId + 2, opDecay[op])
+        nativeLib.setParameter(trackIndex, baseId + 3, opSustain[op])
+        nativeLib.setParameter(trackIndex, baseId + 4, opRelease[op])
+        nativeLib.setParameter(trackIndex, baseId + 5, opRatios[op])
+    }
+}
+
 data class FmPreset(val id: Int, val name: String, val category: String)
 
 val fmPresets = listOf(
@@ -2123,7 +2149,6 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                     )
                                     .clickable {
                                         nativeLib.loadFmPreset(trackIndex, preset.id)
-                                        // Perform unified update so selectedFmPreset persists instead of wiped by onRefresh
                                         val allParams = nativeLib.getAllTrackParameters(trackIndex)
                                         if (allParams.isNotEmpty()) {
                                             val paramMap = allParams.mapIndexed { idx, value -> idx to value }.toMap()
@@ -2152,6 +2177,53 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                 }
                             }
                         }
+                        // Imported DX7 Presets
+                        val importedColors = listOf(
+                            Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF3F51B5),
+                            Color(0xFF00BCD4), Color(0xFF4CAF50), Color(0xFFFFC107),
+                            Color(0xFFFF5722), Color(0xFF607D8B)
+                        )
+                        val importedIcons = listOf(
+                            Icons.Outlined.Circle, Icons.Outlined.Star,
+                            Icons.Outlined.FavoriteBorder, Icons.Outlined.PlayArrow
+                        )
+                        items(state.importedFmPresets.size) { importIdx ->
+                            val voiceMap = state.importedFmPresets[importIdx]
+                            val name = voiceMap["name"] as? String ?: "DX7 ${importIdx + 1}"
+                            val presetId = 1000 + importIdx
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (track.selectedFmPreset == presetId) Color.DarkGray else Color(0xFF333333))
+                                    .border(
+                                        width = if (track.selectedFmPreset == presetId) 2.dp else 0.dp,
+                                        color = if (track.selectedFmPreset == presetId) Color.White else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        applyImportedFmVoice(voiceMap, trackIndex, nativeLib)
+                                        val allParams = nativeLib.getAllTrackParameters(trackIndex)
+                                        val paramMap = if (allParams.isNotEmpty()) allParams.mapIndexed { idx, value -> idx to value }.toMap() else state.tracks[trackIndex].parameters
+                                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                            if (idx == trackIndex) t.copy(selectedFmPreset = presetId, parameters = paramMap) else t 
+                                        }))
+                                        showPresetDrawer = false
+                                    }
+                                    .padding(4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = importedIcons[importIdx % importedIcons.size],
+                                        contentDescription = "Imported",
+                                        modifier = Modifier.size(32.dp),
+                                        tint = importedColors[importIdx % importedColors.size]
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(name, style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.White, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
@@ -2171,45 +2243,38 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                     if (bytes != null) {
                                         val voices = com.groovebox.utils.SysexParser.parse(bytes)
                                         if (voices.isNotEmpty()) {
-                                            // Apply the first voice immediately
-                                            val voice = voices[0]
-                                            // Set algorithm
-                                            nativeLib.setParameter(trackIndex, 150, voice.algorithm.toFloat() / 31f)
-                                            // Set feedback
-                                            nativeLib.setParameter(trackIndex, 154, voice.feedback.toFloat() / 7f)
-                                            // Set carrier mask
-                                            nativeLib.setParameter(trackIndex, 153, voice.carrierMask.toFloat())
-                                            // Set per-operator parameters
-                                            for (op in 0 until 6) {
-                                                val baseId = 160 + (op * 6)
-                                                nativeLib.setParameter(trackIndex, baseId + 0, voice.opLevels[op]) // Level
-                                                nativeLib.setParameter(trackIndex, baseId + 1, voice.opAttack[op]) // Attack
-                                                nativeLib.setParameter(trackIndex, baseId + 2, voice.opDecay[op])  // Decay
-                                                nativeLib.setParameter(trackIndex, baseId + 3, voice.opSustain[op]) // Sustain
-                                                nativeLib.setParameter(trackIndex, baseId + 4, voice.opRelease[op]) // Release
-                                                nativeLib.setParameter(trackIndex, baseId + 5, voice.opRatios[op]) // Ratio
+                                            // Convert all voices to serializable maps for state storage
+                                            val voiceMaps = voices.map { voice ->
+                                                mapOf<String, Any>(
+                                                    "name" to voice.name,
+                                                    "algorithm" to voice.algorithm,
+                                                    "feedback" to voice.feedback,
+                                                    "carrierMask" to voice.carrierMask,
+                                                    "opLevels" to voice.opLevels.toList(),
+                                                    "opRatios" to voice.opRatios.toList(),
+                                                    "opAttack" to voice.opAttack.toList(),
+                                                    "opDecay" to voice.opDecay.toList(),
+                                                    "opSustain" to voice.opSustain.toList(),
+                                                    "opRelease" to voice.opRelease.toList()
+                                                )
                                             }
-                                            // Refresh params from engine
+                                            // Apply first voice immediately
+                                            applyImportedFmVoice(voiceMaps[0], trackIndex, nativeLib)
+                                            // Refresh params and store all voices
                                             val allParams = nativeLib.getAllTrackParameters(trackIndex)
-                                            if (allParams.isNotEmpty()) {
-                                                val paramMap = allParams.mapIndexed { idx, value -> idx to value }.toMap()
-                                                onStateChange(state.copy(
-                                                    tracks = state.tracks.mapIndexed { idx, t -> 
-                                                        if (idx == trackIndex) t.copy(parameters = paramMap) else t 
-                                                    },
-                                                    focusedValue = "Loaded: ${voice.name}"
-                                                ))
-                                            }
-                                            // If multiple voices, store them for future selection
-                                            if (voices.size > 1) {
-                                                onStateChange(state.copy(
-                                                    focusedValue = "Imported ${voices.size} DX7 presets: ${voice.name}"
-                                                ))
-                                            }
+                                            val paramMap = if (allParams.isNotEmpty()) allParams.mapIndexed { idx, value -> idx to value }.toMap() else state.tracks[trackIndex].parameters
+                                            val existingImports = state.importedFmPresets
+                                            onStateChange(state.copy(
+                                                tracks = state.tracks.mapIndexed { idx, t -> 
+                                                    if (idx == trackIndex) t.copy(selectedFmPreset = 1000, parameters = paramMap) else t 
+                                                },
+                                                importedFmPresets = existingImports + voiceMaps,
+                                                focusedValue = "Imported ${voices.size} DX7 presets"
+                                            ))
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    onStateChange(state.copy(focusedValue = "Import failed"))
+                                    onStateChange(state.copy(focusedValue = "Import failed: ${e.message}"))
                                 }
                             }
                         }

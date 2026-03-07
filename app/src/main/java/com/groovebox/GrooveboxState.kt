@@ -309,7 +309,8 @@ data class GrooveboxState(
     
     // UI State
     val gridMode: GridMode = GridMode.GRID_4X4,
-    val uiLayoutMode: Int = 0 // 0=Auto, 1=Phone, 2=Tablet
+    val uiLayoutMode: Int = 0, // 0=Auto, 1=Phone, 2=Tablet
+    val importedFmPresets: List<Map<String, Any>> = emptyList() // Imported DX7 voice data
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L

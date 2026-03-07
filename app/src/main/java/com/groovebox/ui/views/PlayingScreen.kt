@@ -222,8 +222,9 @@ fun PlayingPad(
                                                                 
                                                                 // Live record pitch bend as parameter lock
                                                                 if (currentState.isRecording && currentState.isPlaying) {
+                                                                    val liveStep = nativeLib.getCurrentStep(currentTIdx)
                                                                     val bendNormalized = ((currentBend + bendLimit) / (2f * bendLimit)).coerceIn(0f, 1f)
-                                                                    nativeLib.setParameterLock(currentTIdx, currentState.currentStep, 355, bendNormalized)
+                                                                    nativeLib.setParameterLock(currentTIdx, liveStep, 355, bendNormalized)
                                                                 }
                                                             }
                                                             
@@ -241,7 +242,8 @@ fun PlayingPad(
                                                                     
                                                                     // Live record Y modulation as parameter lock
                                                                     if (currentState.isRecording && currentState.isPlaying) {
-                                                                        nativeLib.setParameterLock(currentTIdx, currentState.currentStep, modParamId, currentModValue)
+                                                                        val liveStep = nativeLib.getCurrentStep(currentTIdx)
+                                                                        nativeLib.setParameterLock(currentTIdx, liveStep, modParamId, currentModValue)
                                                                     }
                                                                 }
                                                                 // Always update for Routing Source (v2.2.5 MIDI PADS Source)
@@ -1428,14 +1430,14 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(0.15f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(0.22f).fillMaxHeight()) {
             TouchStripsPanel(state, onStateChange, nativeLib, engineColor)
         }
-        Box(modifier = Modifier.weight(0.08f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(0.07f).fillMaxHeight()) {
             AssignableKnobsPanel(state, onStateChange, nativeLib, engineColor)
         }
         
-        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(0.71f).fillMaxHeight()) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                 val screenConfig = LocalConfiguration.current
                 val screenRatio = screenConfig.screenWidthDp.toFloat() / screenConfig.screenHeightDp.toFloat()

@@ -463,6 +463,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var midiRouter: MidiRouter
     private lateinit var empledManager: EmpledManager
     private var grooveboxState by mutableStateOf(createInitialState())
+    private var isNativeInitialized by mutableStateOf(false)
 
     private var mediaProjectionManager: MediaProjectionManager? = null
 
@@ -558,85 +559,86 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 Log.e("Groovebox", "Persistence startup error: ${e.message}")
             }
-        }
-
-        
-        // Initialize State with Safe Loading
-        // Initialize State with Safe Loading & Crash Loop Protection
-        val prefs = getSharedPreferences("GrooveboxPrefs", Context.MODE_PRIVATE)
-        val crashedLastLaunch = prefs.getBoolean("crashed_on_launch", false)
-        
-        // Mark this launch as "Potentially Crashing" (cleared after 10s)
-        prefs.edit().putBoolean("crashed_on_launch", true).apply()
-        
-        // Clear the flag after 10 seconds of stability
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            prefs.edit().putBoolean("crashed_on_launch", false).apply()
-            Log.d("Groovebox", "Stability Check Passed. Crash Flag Cleared.")
-        }, 10000)
-
-        var loadedState: GrooveboxState? = null
-        if (crashedLastLaunch) {
-            Log.e("Groovebox", "CRASH LOOP DETECTED! Resetting to Fresh State.")
-            android.widget.Toast.makeText(this, "Safe Mode: Settings Reset due to Crash", android.widget.Toast.LENGTH_LONG).show()
             
-            // Force Fresh State
-            loadedState = createInitialState()
-            // Overwrite corrupt session
-             PersistenceManager.saveProject(this, loadedState, "last_session.gbx")
-        } else {
-             try {
-                 // Load Init project as priority template if it exists, otherwise last session
-                 val initProject = PersistenceManager.loadProject(this, "Init.gbx")
-                 val lastSession = PersistenceManager.loadProject(this, "last_session.gbx")
-                 
-                 if (initProject == null) {
-                     // Create a fresh Init.gbx if missing
-                     val freshState = createInitialState()
-                     PersistenceManager.saveProject(this, freshState, "Init.gbx")
-                     loadedState = freshState
-                     Log.d("Groovebox", "Created new Init.gbx default template")
-                 } else {
-                     loadedState = initProject ?: lastSession
+            // Initialize State with Safe Loading & Crash Loop Protection
+            val prefs = getSharedPreferences("GrooveboxPrefs", Context.MODE_PRIVATE)
+            val crashedLastLaunch = prefs.getBoolean("crashed_on_launch", false)
+            
+            // Mark this launch as "Potentially Crashing" (cleared after 10s)
+            prefs.edit().putBoolean("crashed_on_launch", true).apply()
+            
+            // Clear the flag after 10 seconds of stability
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                prefs.edit().putBoolean("crashed_on_launch", false).apply()
+                Log.d("Groovebox", "Stability Check Passed. Crash Flag Cleared.")
+            }, 10000)
+
+            var loadedState: GrooveboxState? = null
+            if (crashedLastLaunch) {
+                Log.e("Groovebox", "CRASH LOOP DETECTED! Resetting to Fresh State.")
+                // To display a Toast from a background thread, we must switch to Main
+                launch(Dispatchers.Main) {
+                    android.widget.Toast.makeText(this@MainActivity, "Safe Mode: Settings Reset due to Crash", android.widget.Toast.LENGTH_LONG).show()
+                }
+                
+                // Force Fresh State
+                loadedState = createInitialState()
+                // Overwrite corrupt session
+                PersistenceManager.saveProject(this@MainActivity, loadedState, "last_session.gbx")
+            } else {
+                 try {
+                     // Load Init project as priority template if it exists, otherwise last session
+                     val initProject = PersistenceManager.loadProject(this@MainActivity, "Init.gbx")
+                     val lastSession = PersistenceManager.loadProject(this@MainActivity, "last_session.gbx")
+                     
+                     if (initProject == null) {
+                         // Create a fresh Init.gbx if missing
+                         val freshState = createInitialState()
+                         PersistenceManager.saveProject(this@MainActivity, freshState, "Init.gbx")
+                         loadedState = freshState
+                         Log.d("Groovebox", "Created new Init.gbx default template")
+                     } else {
+                         loadedState = initProject ?: lastSession
+                     }
+                     
+                     Log.d("Groovebox", "Started with ${if (initProject != null) "Init.gbx" else "last_session.gbx"}")
+                 } catch (e: Exception) {
+                     e.printStackTrace()
+                     loadedState = createInitialState() // Fallback if regular load throws
                  }
-                 
-                 Log.d("Groovebox", "Started with ${if (initProject != null) "Init.gbx" else "last_session.gbx"}")
-             } catch (e: Exception) {
-                 e.printStackTrace()
-                 loadedState = createInitialState() // Fallback if regular load throws
-             }
+            }
+
+            var finalState = loadedState ?: createInitialState()
+            
+            // Initialize Native
+            nativeLib.init()
+            nativeLib.setAppDataDir(filesDir.absolutePath)
+            nativeLib.loadAppState()
+            nativeLib.start()
+
+            // Apply Universal Sanitization to the initial/loaded state
+            finalState = sanitizeGrooveboxState(finalState)
+            
+            // Explicitly clear native sequencers on startup to ensure no RAM junk
+            for (i in 0 until 8) {
+                 nativeLib.clearSequencer(i)
+            }
+
+            // Sync full state to native engine
+            syncNativeState(finalState, nativeLib)
+
+            // Sync Kotlin state with loaded samples
+            val initialTracks = finalState.tracks.mapIndexed { i, t ->
+                val lastPath = nativeLib.getLastSamplePath(i)
+                t.copy(lastSamplePath = lastPath)
+            }
+            finalState = finalState.copy(tracks = initialTracks)
+            
+            withContext(Dispatchers.Main) {
+                grooveboxState = finalState
+                isNativeInitialized = true
+            }
         }
-
-
-
-        grooveboxState = loadedState ?: createInitialState()
-        
-        // REMOVED: Redundant loadAssignment logic that was overwriting last_session.gbx data.
-        // Assignments are now part of GrooveboxState and saved in the project/session file.
-
-        // Initialize Native
-        nativeLib.init()
-        nativeLib.setAppDataDir(filesDir.absolutePath)
-        nativeLib.loadAppState()
-        nativeLib.start()
-
-        // Apply Universal Sanitization to the initial/loaded state
-        grooveboxState = sanitizeGrooveboxState(grooveboxState)
-        
-        // Explicitly clear native sequencers on startup to ensure no RAM junk
-        for (i in 0 until 8) {
-             nativeLib.clearSequencer(i)
-        }
-
-        // Sync full state to native engine
-        syncNativeState(grooveboxState, nativeLib)
-
-        // Sync Kotlin state with loaded samples
-        val initialTracks = grooveboxState.tracks.mapIndexed { i, t ->
-            val lastPath = nativeLib.getLastSamplePath(i)
-            t.copy(lastSamplePath = lastPath)
-        }
-        grooveboxState = grooveboxState.copy(tracks = initialTracks)
 
         midiRouter = MidiRouter(nativeLib) { command ->
             when (command) {
@@ -735,10 +737,10 @@ class MainActivity : ComponentActivity() {
         empledManager.sendHandshake()
 
         setContent {
-            var showSplash by remember { mutableStateOf(true) }
+            var splashtimeElapsed by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
                 delay(2000)
-                showSplash = false
+                splashtimeElapsed = true
             }
 
             GrooveboxTheme {
@@ -755,7 +757,7 @@ class MainActivity : ComponentActivity() {
                     
 
                     AnimatedVisibility(
-                        visible = showSplash,
+                        visible = !(splashtimeElapsed && isNativeInitialized),
                         exit = fadeOut(animationSpec = tween(1000))
                     ) {
                         SplashScreen()

@@ -496,10 +496,10 @@ bool AudioEngine::start() {
 
   // Fix for startup choppiness:
   // Exclusive mode often defaults to 1 burst, which is too aggressive during
-  // app initialization jitter. We explicitly set it to 4 bursts (Quad
-  // Buffering) for stability.
+  // app initialization jitter. We explicitly set it to 8 bursts
+  // Buffering for stability and to prevent garbled audio on load.
   int burstFrames = mStream->getFramesPerBurst();
-  mStream->setBufferSizeInFrames(burstFrames * 4);
+  mStream->setBufferSizeInFrames(burstFrames * 8);
 
   mReverbFx.setSampleRate(mStream->getSampleRate());
   mSampleRate = mStream->getSampleRate();
@@ -531,7 +531,8 @@ bool AudioEngine::start() {
   oboe::AudioStreamBuilder inBuilder;
   inBuilder.setDirection(oboe::Direction::Input)
       ->setFormat(oboe::AudioFormat::Float)
-      ->setChannelCount(oboe::ChannelCount::Stereo) // Request Stereo
+      ->setChannelCount(oboe::ChannelCount::Mono) // Fallback Fix: Request Mono
+                                                  // instead of Stereo
       ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
       ->setSharingMode(oboe::SharingMode::Exclusive)
       ->setInputPreset(oboe::InputPreset::Camcorder)
@@ -2013,9 +2014,15 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
           int safetyCounter = 0;
           while (track.mStepCountdown <= 0 && safetyCounter < 4) {
             safetyCounter++;
-            track.mStepCountdown += trackSamplesPerStep;
 
             bool looped = track.sequencer.advance();
+
+            // Apply SWING: even steps are longer, odd steps are shorter
+            // mSwing range is -0.23 to +0.23
+            int currentStep = track.sequencer.getCurrentStepIndex();
+            float swingFactor =
+                (currentStep % 2 == 0) ? (1.0f + mSwing) : (1.0f - mSwing);
+            track.mStepCountdown += trackSamplesPerStep * swingFactor;
             if (looped && track.isChainEnabled) {
               // 1. COMMIT EXECUTED STEPS BACK TO SLOT (Required for
               // recording!)

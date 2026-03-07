@@ -43,6 +43,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.groovebox.utils.*
 import android.media.projection.MediaProjectionManager
 import android.media.projection.MediaProjection
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioPlaybackCaptureConfiguration
@@ -261,6 +263,7 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
     nativeLib.setMasterVolume(state.masterVolume)
     nativeLib.setScaleConfig(state.rootNote, state.scaleType.intervals.toIntArray())
     nativeLib.setRecordingSource(state.recordingSource)
+    nativeLib.setSwing(state.swing)
     
     // Sync Global Parameters (sent to Track 0)
     state.globalParameters.forEach { (pid, v) -> nativeLib.setParameter(0, pid, v) }
@@ -460,6 +463,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var midiRouter: MidiRouter
     private lateinit var empledManager: EmpledManager
     private var grooveboxState by mutableStateOf(createInitialState())
+    private var isNativeInitialized by mutableStateOf(false)
+    private var splashScreenStatus by mutableStateOf("Initializing...")
+
 
     private var mediaProjectionManager: MediaProjectionManager? = null
 
@@ -535,43 +541,6 @@ class MainActivity : ComponentActivity() {
              perms.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
         
-        // Copy bundled SoundFonts to internal storage if not present
-        Thread {
-            try {
-                val sfDir = File(PersistenceManager.getLoomFolder(this), "soundfonts")
-                // Proactive Fix: Migrate singular "soundfont" folder if it exists (legacy typo fix)
-                val legacySfDir = File(PersistenceManager.getLoomFolder(this), "soundfont")
-                if (legacySfDir.exists() && !sfDir.exists()) {
-                    legacySfDir.renameTo(sfDir)
-                    android.util.Log.d("MainActivity", "Migrated singular soundfont folder to plural soundfonts")
-                }
-                
-                if (!sfDir.exists()) sfDir.mkdirs()
-                
-                val assetsToCopy = listOf(
-                    "soundfonts/GeneralUser_GS.sf2" to "GeneralUser_GS.sf2"
-                )
-                
-                assetsToCopy.forEach { (assetPath, destName) ->
-                    val destFile = File(sfDir, destName)
-                    if (!destFile.exists() || destFile.length() < 1024) {
-                        try {
-                            assets.open(assetPath).use { input ->
-                                destFile.outputStream().use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
-
-
         perms.add(Manifest.permission.RECORD_AUDIO)
         
         val permissionsToRequest = perms.filter {
@@ -582,92 +551,97 @@ class MainActivity : ComponentActivity() {
             ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), 1001)
         }
         
-        // Migrate and copy assets (PersistenceManager now handles try-catch and fallbacks)
-        try {
-            PersistenceManager.migrateToExternalStorage(this)
-            PersistenceManager.copyWavetablesToFilesDir(this)
-            PersistenceManager.copySoundFontsToFilesDir(this)
-        } catch (e: Exception) {
-            Log.e("Groovebox", "Persistence startup error: ${e.message}")
+        // Background Initialization for Assets
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) { splashScreenStatus = "Copying Assets..." }
+                
+                try {
+                    PersistenceManager.migrateToExternalStorage(this@MainActivity)
+                    PersistenceManager.copyWavetablesToFilesDir(this@MainActivity)
+                    PersistenceManager.copySoundFontsToFilesDir(this@MainActivity)
+                    PersistenceManager.copyDefaultsToFilesDir(this@MainActivity)
+                } catch (e: Exception) {
+                    Log.e("Groovebox", "Persistence startup error: ${e.message}")
+                }
+                
+                withContext(Dispatchers.Main) { splashScreenStatus = "Loading Session Data..." }
+                val prefs = getSharedPreferences("GrooveboxPrefs", Context.MODE_PRIVATE)
+                val crashedLastLaunch = prefs.getBoolean("crashed_on_launch", false)
+                prefs.edit().putBoolean("crashed_on_launch", true).apply()
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    prefs.edit().putBoolean("crashed_on_launch", false).apply()
+                }, 10000)
+
+                var loadedState: GrooveboxState? = null
+                if (crashedLastLaunch) {
+                    Log.e("Groovebox", "CRASH LOOP DETECTED! Resetting to Fresh State.")
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(this@MainActivity, "Safe Mode: Settings Reset due to Crash", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                    loadedState = createInitialState()
+                    PersistenceManager.saveProject(this@MainActivity, loadedState, "last_session.gbx")
+                } else {
+                    try {
+                        val initProject = PersistenceManager.loadProject(this@MainActivity, "Init.gbx")
+                        val lastSession = PersistenceManager.loadProject(this@MainActivity, "last_session.gbx")
+                        loadedState = if (initProject == null) {
+                            val fresh = createInitialState()
+                            PersistenceManager.saveProject(this@MainActivity, fresh, "Init.gbx")
+                            fresh
+                        } else {
+                            initProject ?: lastSession
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        loadedState = createInitialState()
+                    }
+                }
+
+                withContext(Dispatchers.Main) { splashScreenStatus = "Initializing Audio Engine..." }
+                nativeLib.init()
+                nativeLib.setAppDataDir(filesDir.absolutePath)
+                
+                withContext(Dispatchers.Main) { splashScreenStatus = "Restoring Sample Paths..." }
+                nativeLib.loadAppState()
+
+                var finalState = sanitizeGrooveboxState(loadedState ?: createInitialState())
+
+                withContext(Dispatchers.Main) { splashScreenStatus = "Clearing Sequencer Buffers..." }
+                for (i in 0 until 8) { nativeLib.clearSequencer(i) }
+
+                withContext(Dispatchers.Main) { splashScreenStatus = "Syncing State to Native Engine..." }
+                // CRITICAL ORDER: SoundFont loading must complete before audio streams start.
+                // syncNativeState calls loadSoundFont() which holds C++ mutexes for 30MB file parses.
+                // If nativeLib.start() is called first, the Oboe RT thread contends on those
+                // mutexes and Android priority-inheritance escalates to ANR the main thread.
+                syncNativeState(finalState, nativeLib)
+
+                withContext(Dispatchers.Main) { splashScreenStatus = "Starting Audio Streams..." }
+                nativeLib.start()
+
+                withContext(Dispatchers.Main) { splashScreenStatus = "Finalizing..." }
+                val initialTracks = finalState.tracks.mapIndexed { i, t ->
+                    t.copy(lastSamplePath = nativeLib.getLastSamplePath(i))
+                }
+                finalState = finalState.copy(tracks = initialTracks)
+
+                withContext(Dispatchers.Main) {
+                    grooveboxState = finalState
+                    isNativeInitialized = true
+                }
+            } catch (e: Throwable) {
+                Log.e("Groovebox", "FATAL: Background init failed: ${e.message}", e)
+                // Even on catastrophic failure, unblock the UI with a safe fresh state
+                withContext(Dispatchers.Main) {
+                    splashScreenStatus = "Init Error: ${e.message?.take(80)}"
+                    // Give user 3 seconds to read error then load with empty state
+                    kotlinx.coroutines.delay(3000)
+                    grooveboxState = createInitialState()
+                    isNativeInitialized = true
+                }
+            }
         }
-
-        
-        // Initialize State with Safe Loading
-        // Initialize State with Safe Loading & Crash Loop Protection
-        val prefs = getSharedPreferences("GrooveboxPrefs", Context.MODE_PRIVATE)
-        val crashedLastLaunch = prefs.getBoolean("crashed_on_launch", false)
-        
-        // Mark this launch as "Potentially Crashing" (cleared after 10s)
-        prefs.edit().putBoolean("crashed_on_launch", true).apply()
-        
-        // Clear the flag after 10 seconds of stability
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            prefs.edit().putBoolean("crashed_on_launch", false).apply()
-            Log.d("Groovebox", "Stability Check Passed. Crash Flag Cleared.")
-        }, 10000)
-
-        var loadedState: GrooveboxState? = null
-        if (crashedLastLaunch) {
-            Log.e("Groovebox", "CRASH LOOP DETECTED! Resetting to Fresh State.")
-            android.widget.Toast.makeText(this, "Safe Mode: Settings Reset due to Crash", android.widget.Toast.LENGTH_LONG).show()
-            
-            // Force Fresh State
-            loadedState = createInitialState()
-            // Overwrite corrupt session
-             PersistenceManager.saveProject(this, loadedState, "last_session.gbx")
-        } else {
-             try {
-                 // Load Init project as priority template if it exists, otherwise last session
-                 val initProject = PersistenceManager.loadProject(this, "Init.gbx")
-                 val lastSession = PersistenceManager.loadProject(this, "last_session.gbx")
-                 
-                 if (initProject == null) {
-                     // Create a fresh Init.gbx if missing
-                     val freshState = createInitialState()
-                     PersistenceManager.saveProject(this, freshState, "Init.gbx")
-                     loadedState = freshState
-                     Log.d("Groovebox", "Created new Init.gbx default template")
-                 } else {
-                     loadedState = initProject ?: lastSession
-                 }
-                 
-                 Log.d("Groovebox", "Started with ${if (initProject != null) "Init.gbx" else "last_session.gbx"}")
-             } catch (e: Exception) {
-                 e.printStackTrace()
-                 loadedState = createInitialState() // Fallback if regular load throws
-             }
-        }
-
-
-
-        grooveboxState = loadedState ?: createInitialState()
-        
-        // REMOVED: Redundant loadAssignment logic that was overwriting last_session.gbx data.
-        // Assignments are now part of GrooveboxState and saved in the project/session file.
-
-        // Initialize Native
-        nativeLib.init()
-        nativeLib.setAppDataDir(filesDir.absolutePath)
-        nativeLib.loadAppState()
-        nativeLib.start()
-
-        // Apply Universal Sanitization to the initial/loaded state
-        grooveboxState = sanitizeGrooveboxState(grooveboxState)
-        
-        // Explicitly clear native sequencers on startup to ensure no RAM junk
-        for (i in 0 until 8) {
-             nativeLib.clearSequencer(i)
-        }
-
-        // Sync full state to native engine
-        syncNativeState(grooveboxState, nativeLib)
-
-        // Sync Kotlin state with loaded samples
-        val initialTracks = grooveboxState.tracks.mapIndexed { i, t ->
-            val lastPath = nativeLib.getLastSamplePath(i)
-            t.copy(lastSamplePath = lastPath)
-        }
-        grooveboxState = grooveboxState.copy(tracks = initialTracks)
 
         midiRouter = MidiRouter(nativeLib) { command ->
             when (command) {
@@ -766,30 +740,32 @@ class MainActivity : ComponentActivity() {
         empledManager.sendHandshake()
 
         setContent {
-            var showSplash by remember { mutableStateOf(true) }
+            var splashtimeElapsed by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
                 delay(2000)
-                showSplash = false
+                splashtimeElapsed = true
             }
 
             GrooveboxTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    MainScreen(empledManager, nativeLib, grooveboxState, midiManager, onRecordingSourceChange = ::handleRecordingSourceChange) { grooveboxState = it }
-                    
-                    // RETRY HANDSHAKE after UI load
-                    // Some devices aren't ready for input instantly after connection
-                    LaunchedEffect(Unit) {
-                        delay(1000)
-                        Log.e("Groovebox", "@@@ RETRY HANDSHAKE (1s delay)")
-                        empledManager.sendHandshake()
+                    if (isNativeInitialized) {
+                        MainScreen(empledManager, nativeLib, grooveboxState, midiManager, onRecordingSourceChange = ::handleRecordingSourceChange) { grooveboxState = it }
+                        
+                        // RETRY HANDSHAKE after UI load
+                        // Some devices aren't ready for input instantly after connection
+                        LaunchedEffect(Unit) {
+                            delay(1000)
+                            Log.e("Groovebox", "@@@ RETRY HANDSHAKE (1s delay)")
+                            empledManager.sendHandshake()
+                        }
                     }
                     
 
                     AnimatedVisibility(
-                        visible = showSplash,
+                        visible = !(splashtimeElapsed && isNativeInitialized),
                         exit = fadeOut(animationSpec = tween(1000))
                     ) {
-                        SplashScreen()
+                        SplashScreen(splashScreenStatus)
                     }
                 }
             }
@@ -838,7 +814,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun SplashScreen() {
+fun SplashScreen(statusText: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -867,6 +843,18 @@ fun SplashScreen() {
                     letterSpacing = 8.sp,
                     color = Color.White
                 )
+            )
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Normal,
+                    letterSpacing = 2.sp,
+                    color = Color.Gray
+                ),
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -1305,6 +1293,13 @@ fun MainScreen(
 
             // Parameter Value Display (Bottom Right)
             val displayValue = localFocusedValue ?: state.focusedValue
+            // Auto-clear focusedValue after 3 seconds
+            LaunchedEffect(state.focusedValue) {
+                if (state.focusedValue != null) {
+                    kotlinx.coroutines.delay(3000)
+                    onStateChange(state.copy(focusedValue = null))
+                }
+            }
             val isPhone = LocalConfiguration.current.screenWidthDp < 600
             displayValue?.let { valStr ->
                 Text(

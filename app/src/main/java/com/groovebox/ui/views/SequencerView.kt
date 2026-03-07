@@ -360,41 +360,30 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                                     }
                                                 }
                                            }
-                                         } else if (track.engineType != EngineType.FM_DRUM && latestState.copiedSteps != null) {
+                                          } else if (track.engineType != EngineType.FM_DRUM && latestState.copiedSteps != null) {
                                               val srcSteps = latestState.copiedSteps!!
                                               val targetSteps = track.steps
-                                              val targetLen = targetSteps.size
                                               val srcLen = srcSteps.size
+                                              val targetLen = targetSteps.size
                                               
-                                              var pasteIndex = 0
-                                              // Smart Find Gap
-                                              if (srcLen < targetLen) {
-                                                  // Find consecutive empty steps of length srcLen
-                                                  for (i in 0..targetLen - srcLen) {
-                                                      var gapFound = true
-                                                      for (j in 0 until srcLen) {
-                                                          if (targetSteps[i + j].active) {
-                                                              gapFound = false
-                                                              break
-                                                          }
-                                                      }
-                                                      if (gapFound) {
-                                                          pasteIndex = i
-                                                          break
-                                                      }
+                                              // Auto-expand: if source is longer, grow target to match
+                                              val finalLen = maxOf(srcLen, targetLen)
+                                              val newSteps = targetSteps.toMutableList()
+                                              while (newSteps.size < finalLen) {
+                                                  newSteps.add(com.groovebox.StepState())
+                                              }
+                                              
+                                              // Always paste at step 0 (overwrite mode)
+                                              for (i in 0 until srcLen) {
+                                                  val srcStep = srcSteps[i]
+                                                  if (srcStep.active) {
+                                                      newSteps[i] = srcStep
                                                   }
                                               }
                                               
-                                              // Create merged list
-                                              val newSteps = targetSteps.toMutableList()
-                                              for (i in 0 until srcLen) {
-                                                  if (pasteIndex + i < newSteps.size) {
-                                                      // Ensure we copy the FULL StepState including notes!
-                                                      val srcStep = srcSteps[i]
-                                                      if (srcStep.active) {
-                                                          newSteps[pasteIndex + i] = srcStep
-                                                      }
-                                                  }
+                                              // If we expanded, update native sequencer config to new length
+                                              if (finalLen > targetLen) {
+                                                  nativeLib.setSequencerConfig(selectedTrackIndex, finalLen, -1)
                                               }
                                               
                                               latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == selectedTrackIndex) t.copy(steps = newSteps) else t }))
@@ -402,11 +391,10 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                               // Sync Native (Full Sync for consistency after paste)
                                               newSteps.forEachIndexed { stepIdx, step ->
                                                    if (step.active) {
-                                                       // Better note handling: Use stored notes or fallback to 60 (C4)
                                                        val finalNotes = if (step.notes.isNotEmpty()) {
                                                            step.notes.toIntArray()
                                                        } else {
-                                                           intArrayOf(60) // Default pitch if none stored
+                                                           intArrayOf(60)
                                                        }
                                                        
                                                        nativeLib.setStep(

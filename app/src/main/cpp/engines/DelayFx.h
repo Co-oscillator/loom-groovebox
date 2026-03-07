@@ -206,6 +206,19 @@ public:
     float filteredL = processFilter(delayedL, mSvfZ1L, mSvfZ2L, g, k);
     float filteredR = processFilter(delayedR, mSvfZ1R, mSvfZ2R, g, k);
 
+    // NaN/Inf guard on filter state (can blow up with extreme resonance +
+    // feedback)
+    if (!std::isfinite(mSvfZ1L) || !std::isfinite(mSvfZ2L)) {
+      mSvfZ1L = mSvfZ2L = 0.0f;
+    }
+    if (!std::isfinite(mSvfZ1R) || !std::isfinite(mSvfZ2R)) {
+      mSvfZ1R = mSvfZ2R = 0.0f;
+    }
+    if (!std::isfinite(filteredL))
+      filteredL = 0.0f;
+    if (!std::isfinite(filteredR))
+      filteredR = 0.0f;
+
     // Cross-Feedback / Ping-Pong
     float nextL = 0, nextR = 0;
     float currentFb = mFeedback;
@@ -221,6 +234,10 @@ public:
       nextL = inL + filteredL * currentFb;
       nextR = inR + filteredR * currentFb;
     }
+
+    // Hard limiter on feedback to prevent runaway (clamp to ±4.0 before tanh)
+    nextL = std::max(-4.0f, std::min(4.0f, nextL));
+    nextR = std::max(-4.0f, std::min(4.0f, nextR));
 
     // Denormal prevention
     if (std::abs(nextL) < 1.0e-9f)
@@ -241,8 +258,14 @@ public:
       filteredR = mDiffR[i].process(filteredR, 0.5f);
     }
 
-    outL = filteredL * mMix;
-    outR = filteredR * mMix;
+    // Final NaN guard and hard clamp on output
+    if (!std::isfinite(filteredL))
+      filteredL = 0.0f;
+    if (!std::isfinite(filteredR))
+      filteredR = 0.0f;
+
+    outL = std::max(-1.0f, std::min(1.0f, filteredL * mMix));
+    outR = std::max(-1.0f, std::min(1.0f, filteredR * mMix));
 
     // Silence tracking
     if (std::abs(outL) < 1e-9f && std::abs(outR) < 1e-9f) {

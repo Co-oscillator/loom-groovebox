@@ -2,6 +2,8 @@ package com.groovebox.ui.views
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -232,7 +234,21 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                                     nativeLib.setParameter(trackIndex, id, value)
                                 }
                                 
-                                // 2. SYNC UI: Update Kotlin State
+                                // 2. RELOAD SAMPLE: If preset includes a sample path, reload it
+                                val samplePath = loadedState.lastSamplePath
+                                if (!samplePath.isNullOrEmpty()) {
+                                    val sampleFile = java.io.File(samplePath)
+                                    if (sampleFile.exists()) {
+                                        when (track.engineType) {
+                                            EngineType.WAVETABLE -> nativeLib.loadWavetable(trackIndex, samplePath)
+                                            else -> nativeLib.loadSample(trackIndex, samplePath)
+                                        }
+                                    } else {
+                                        Toast.makeText(context, "Sample not found: ${sampleFile.name}\nUse LOAD to browse for it.", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                                
+                                // 3. SYNC UI: Update Kotlin State
                                 onStateChange(state.copy(tracks = state.tracks.mapIndexed { i, t -> 
                                     if (i == trackIndex) loadedState.copy(id = t.id) else t 
                                 }))
@@ -1271,6 +1287,32 @@ fun RecordingStrip(
     }
 }
 
+@Suppress("UNCHECKED_CAST")
+fun applyImportedFmVoice(voiceMap: Map<String, Any>, trackIndex: Int, nativeLib: NativeLib) {
+    val algorithm = voiceMap["algorithm"] as? Int ?: 0
+    val feedback = voiceMap["feedback"] as? Int ?: 0
+    val carrierMask = voiceMap["carrierMask"] as? Int ?: 1
+    val opLevels = voiceMap["opLevels"] as? List<Float> ?: List(6) { 0.5f }
+    val opRatios = voiceMap["opRatios"] as? List<Float> ?: List(6) { 1f / 16f }
+    val opAttack = voiceMap["opAttack"] as? List<Float> ?: List(6) { 0.01f }
+    val opDecay = voiceMap["opDecay"] as? List<Float> ?: List(6) { 0.5f }
+    val opSustain = voiceMap["opSustain"] as? List<Float> ?: List(6) { 0.8f }
+    val opRelease = voiceMap["opRelease"] as? List<Float> ?: List(6) { 0.4f }
+    
+    nativeLib.setParameter(trackIndex, 150, algorithm.toFloat() / 31f)
+    nativeLib.setParameter(trackIndex, 154, feedback.toFloat() / 7f)
+    nativeLib.setParameter(trackIndex, 153, carrierMask.toFloat())
+    for (op in 0 until 6) {
+        val baseId = 160 + (op * 6)
+        nativeLib.setParameter(trackIndex, baseId + 0, opLevels[op])
+        nativeLib.setParameter(trackIndex, baseId + 1, opAttack[op])
+        nativeLib.setParameter(trackIndex, baseId + 2, opDecay[op])
+        nativeLib.setParameter(trackIndex, baseId + 3, opSustain[op])
+        nativeLib.setParameter(trackIndex, baseId + 4, opRelease[op])
+        nativeLib.setParameter(trackIndex, baseId + 5, opRatios[op])
+    }
+}
+
 data class FmPreset(val id: Int, val name: String, val category: String)
 
 val fmPresets = listOf(
@@ -1494,24 +1536,24 @@ fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange:
             // AMP ENV
             CompactParameterBox(title = "AMP ENV", startColor = themeColor, modifier = Modifier.weight(1f)) {
                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                     Knob("A", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 34.dp)
-                     Knob("D", 0.2f, 101, state, onStateChange, nativeLib, knobSize = 34.dp)
+                     Knob("Atk", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 34.dp)
+                     Knob("Dec", 0.2f, 101, state, onStateChange, nativeLib, knobSize = 34.dp)
                  }
                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                     Knob("S", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 34.dp)
-                     Knob("R", 0.3f, 103, state, onStateChange, nativeLib, knobSize = 34.dp)
+                     Knob("Sus", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 34.dp)
+                     Knob("Rel", 0.3f, 103, state, onStateChange, nativeLib, knobSize = 34.dp)
                  }
             }
 
             // FILTER ENV
             CompactParameterBox(title = "FILTER ENV", startColor = themeColor, modifier = Modifier.weight(1f)) {
                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                     Knob("A", 0.01f, 114, state, onStateChange, nativeLib, knobSize = 34.dp)
-                     Knob("D", 0.2f, 115, state, onStateChange, nativeLib, knobSize = 34.dp)
+                     Knob("Atk", 0.01f, 114, state, onStateChange, nativeLib, knobSize = 34.dp)
+                     Knob("Dec", 0.2f, 115, state, onStateChange, nativeLib, knobSize = 34.dp)
                  }
                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                     Knob("S", 0.5f, 116, state, onStateChange, nativeLib, knobSize = 34.dp)
-                     Knob("R", 0.3f, 117, state, onStateChange, nativeLib, knobSize = 34.dp)
+                     Knob("Sus", 0.5f, 116, state, onStateChange, nativeLib, knobSize = 34.dp)
+                     Knob("Rel", 0.3f, 117, state, onStateChange, nativeLib, knobSize = 34.dp)
                  }
             }
         }
@@ -2107,7 +2149,6 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                     )
                                     .clickable {
                                         nativeLib.loadFmPreset(trackIndex, preset.id)
-                                        // Perform unified update so selectedFmPreset persists instead of wiped by onRefresh
                                         val allParams = nativeLib.getAllTrackParameters(trackIndex)
                                         if (allParams.isNotEmpty()) {
                                             val paramMap = allParams.mapIndexed { idx, value -> idx to value }.toMap()
@@ -2136,10 +2177,128 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                                 }
                             }
                         }
+                        // Imported DX7 Presets
+                        val importedColors = listOf(
+                            Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF3F51B5),
+                            Color(0xFF00BCD4), Color(0xFF4CAF50), Color(0xFFFFC107),
+                            Color(0xFFFF5722), Color(0xFF607D8B)
+                        )
+                        val importedIcons = listOf(
+                            Icons.Outlined.Circle, Icons.Outlined.Star,
+                            Icons.Outlined.FavoriteBorder, Icons.Outlined.PlayArrow
+                        )
+                        items(state.importedFmPresets.size) { importIdx ->
+                            val voiceMap = state.importedFmPresets[importIdx]
+                            val name = voiceMap["name"] as? String ?: "DX7 ${importIdx + 1}"
+                            val presetId = 1000 + importIdx
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (track.selectedFmPreset == presetId) Color.DarkGray else Color(0xFF333333))
+                                    .border(
+                                        width = if (track.selectedFmPreset == presetId) 2.dp else 0.dp,
+                                        color = if (track.selectedFmPreset == presetId) Color.White else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .pointerInput(importIdx) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                applyImportedFmVoice(voiceMap, trackIndex, nativeLib)
+                                                val allParams = nativeLib.getAllTrackParameters(trackIndex)
+                                                val paramMap = if (allParams.isNotEmpty()) allParams.mapIndexed { idx, value -> idx to value }.toMap() else state.tracks[trackIndex].parameters
+                                                onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                    if (idx == trackIndex) t.copy(selectedFmPreset = presetId, parameters = paramMap) else t 
+                                                }))
+                                                showPresetDrawer = false
+                                            },
+                                            onLongPress = {
+                                                val updated = state.importedFmPresets.toMutableList().apply { removeAt(importIdx) }
+                                                onStateChange(state.copy(
+                                                    importedFmPresets = updated,
+                                                    focusedValue = "Deleted: $name"
+                                                ))
+                                            }
+                                        )
+                                    }
+                                    .padding(4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = importedIcons[importIdx % importedIcons.size],
+                                        contentDescription = "Imported",
+                                        modifier = Modifier.size(32.dp),
+                                        tint = importedColors[importIdx % importedColors.size]
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(name, style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.White, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { showPresetDrawer = false }, modifier = Modifier.align(Alignment.End)) {
-                        Text("Close")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Import DX7 Sysex Button
+                        val context = LocalContext.current
+                        val sysexLauncher = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.GetContent()
+                        ) { uri ->
+                            uri?.let {
+                                try {
+                                    val inputStream = context.contentResolver.openInputStream(it)
+                                    val bytes = inputStream?.readBytes()
+                                    inputStream?.close()
+                                    if (bytes != null) {
+                                        val voices = com.groovebox.utils.SysexParser.parse(bytes)
+                                        if (voices.isNotEmpty()) {
+                                            // Convert all voices to serializable maps for state storage
+                                            val voiceMaps = voices.map { voice ->
+                                                mapOf<String, Any>(
+                                                    "name" to voice.name,
+                                                    "algorithm" to voice.algorithm,
+                                                    "feedback" to voice.feedback,
+                                                    "carrierMask" to voice.carrierMask,
+                                                    "opLevels" to voice.opLevels.toList(),
+                                                    "opRatios" to voice.opRatios.toList(),
+                                                    "opAttack" to voice.opAttack.toList(),
+                                                    "opDecay" to voice.opDecay.toList(),
+                                                    "opSustain" to voice.opSustain.toList(),
+                                                    "opRelease" to voice.opRelease.toList()
+                                                )
+                                            }
+                                            // Apply first voice immediately
+                                            applyImportedFmVoice(voiceMaps[0], trackIndex, nativeLib)
+                                            // Refresh params and store all voices
+                                            val allParams = nativeLib.getAllTrackParameters(trackIndex)
+                                            val paramMap = if (allParams.isNotEmpty()) allParams.mapIndexed { idx, value -> idx to value }.toMap() else state.tracks[trackIndex].parameters
+                                            val existingImports = state.importedFmPresets
+                                            onStateChange(state.copy(
+                                                tracks = state.tracks.mapIndexed { idx, t -> 
+                                                    if (idx == trackIndex) t.copy(selectedFmPreset = 1000, parameters = paramMap) else t 
+                                                },
+                                                importedFmPresets = existingImports + voiceMaps,
+                                                focusedValue = "Imported ${voices.size} DX7 presets"
+                                            ))
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    onStateChange(state.copy(focusedValue = "Import failed: ${e.message}"))
+                                }
+                            }
+                        }
+                        
+                        Button(
+                            onClick = { sysexLauncher.launch("*/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+                        ) {
+                            Text("Import .syx")
+                        }
+                        Button(onClick = { showPresetDrawer = false }) {
+                            Text("Close")
+                        }
                     }
                 }
             }
@@ -2157,7 +2316,8 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
         // Helper contents
         val routingContent: @Composable ColumnScope.() -> Unit = {
              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Knob("ALGO", 0.0f, 150, state, onStateChange, nativeLib, knobSize = 34.dp)
+                Knob("ALGO", 0.0f, 150, state, onStateChange, nativeLib, knobSize = 34.dp,
+                    valueFormatter = { v -> "${((v * 31.99f).toInt() + 1)}" })
                 Knob("FBK", 0.0f, 154, state, onStateChange, nativeLib, knobSize = 34.dp)
                 Knob("DRIVE", 0.0f, 159, state, onStateChange, nativeLib, knobSize = 34.dp)
              }
@@ -2196,12 +2356,12 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
 
         val ampContent: @Composable ColumnScope.() -> Unit = {
              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                 Knob("A", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 34.dp)
-                 Knob("D", 0.1f, 101, state, onStateChange, nativeLib, knobSize = 34.dp)
+                 Knob("Atk", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 34.dp)
+                 Knob("Dec", 0.1f, 101, state, onStateChange, nativeLib, knobSize = 34.dp)
              }
              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                 Knob("S", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 34.dp)
-                 Knob("R", 0.5f, 103, state, onStateChange, nativeLib, knobSize = 34.dp)
+                 Knob("Sus", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 34.dp)
+                 Knob("Rel", 0.5f, 103, state, onStateChange, nativeLib, knobSize = 34.dp)
              }
         }
 
@@ -2303,12 +2463,12 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                     }
                     
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                         Knob("A", 0.0f, baseId + 2, state, onStateChange, nativeLib, knobSize = 24.dp)
-                         Knob("D", 0.0f, baseId + 3, state, onStateChange, nativeLib, knobSize = 24.dp)
+                         Knob("Atk", 0.0f, baseId + 2, state, onStateChange, nativeLib, knobSize = 24.dp)
+                         Knob("Dec", 0.0f, baseId + 3, state, onStateChange, nativeLib, knobSize = 24.dp)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                         Knob("S", 1.0f, baseId + 4, state, onStateChange, nativeLib, knobSize = 24.dp)
-                         Knob("R", 0.0f, baseId + 5, state, onStateChange, nativeLib, knobSize = 24.dp)
+                         Knob("Sus", 1.0f, baseId + 4, state, onStateChange, nativeLib, knobSize = 24.dp)
+                         Knob("Rel", 0.0f, baseId + 5, state, onStateChange, nativeLib, knobSize = 24.dp)
                     }
                 }
             }
@@ -2534,10 +2694,10 @@ fun SoundFontParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ParameterGroup("Amp Envelope", modifier = Modifier.weight(1.5f)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("A", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("D", 0.1f, 101, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("S", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 32.dp)
-                    Knob("R", 0.5f, 103, state, onStateChange, nativeLib, knobSize = 32.dp)
+                    Knob("Atk", 0.01f, 100, state, onStateChange, nativeLib, knobSize = 32.dp)
+                    Knob("Dec", 0.1f, 101, state, onStateChange, nativeLib, knobSize = 32.dp)
+                    Knob("Sus", 0.8f, 102, state, onStateChange, nativeLib, knobSize = 32.dp)
+                    Knob("Rel", 0.5f, 103, state, onStateChange, nativeLib, knobSize = 32.dp)
                 }
             }
             ParameterGroup("Mod", modifier = Modifier.weight(1f)) {
@@ -2775,12 +2935,12 @@ fun SamplerParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
                 // ENVELOPE (Compact 2x2)
                  CompactParameterBox(title = "ENVELOPE", startColor = themeColor, modifier = Modifier.weight(0.8f)) {
                       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                          Knob("A", 0.01f, getPId(310, 4), state, onStateChange, nativeLib, knobSize = 32.dp)
-                          Knob("D", 0.2f, getPId(311, 5), state, onStateChange, nativeLib, knobSize = 32.dp)
+                          Knob("Atk", 0.01f, getPId(310, 4), state, onStateChange, nativeLib, knobSize = 32.dp)
+                          Knob("Dec", 0.2f, getPId(311, 5), state, onStateChange, nativeLib, knobSize = 32.dp)
                       }
                       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                          Knob("S", 1.0f, getPId(312, 6), state, onStateChange, nativeLib, knobSize = 32.dp)
-                          Knob("R", 0.2f, getPId(313, 7), state, onStateChange, nativeLib, knobSize = 32.dp)
+                          Knob("Sus", 1.0f, getPId(312, 6), state, onStateChange, nativeLib, knobSize = 32.dp)
+                          Knob("Rel", 0.2f, getPId(313, 7), state, onStateChange, nativeLib, knobSize = 32.dp)
                           Knob("AMT", 0.5f, 314, state, onStateChange, nativeLib, knobSize = 32.dp, detentValue = 0.5f)
                       }
                  }
@@ -2950,19 +3110,19 @@ fun AudioInParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
         Spacer(modifier = Modifier.height(16.dp))
         Text("AMP ENVELOPE", style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Knob(label = "A", initialValue = 0.1f, parameterId = 100, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
-            Knob(label = "D", initialValue = 0.5f, parameterId = 101, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
-            Knob(label = "S", initialValue = 0.8f, parameterId = 102, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
-            Knob(label = "R", initialValue = 0.2f, parameterId = 103, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "Atk", initialValue = 0.1f, parameterId = 100, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "Dec", initialValue = 0.5f, parameterId = 101, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "Sus", initialValue = 0.8f, parameterId = 102, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "Rel", initialValue = 0.2f, parameterId = 103, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
         Text("FILTER ENVELOPE", style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Knob(label = "A", initialValue = 0.01f, parameterId = 114, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
-            Knob(label = "D", initialValue = 0.1f, parameterId = 115, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
-            Knob(label = "S", initialValue = 0.0f, parameterId = 116, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
-            Knob(label = "R", initialValue = 0.5f, parameterId = 117, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "Atk", initialValue = 0.01f, parameterId = 114, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "Dec", initialValue = 0.1f, parameterId = 115, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "Sus", initialValue = 0.0f, parameterId = 116, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
+            Knob(label = "Rel", initialValue = 0.5f, parameterId = 117, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
         }
     }
 }

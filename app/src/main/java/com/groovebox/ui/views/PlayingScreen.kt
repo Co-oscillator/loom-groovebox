@@ -210,11 +210,22 @@ fun PlayingPad(
                                                             val dx = currentPos.x - startPos.x
                                                             val dy = startPos.y - currentPos.y // Up is positive modulation
                                                             
-                                                            // X-Axis: Pitch Bend (+/- 2 semitones mapped over pad width)
-                                                            val newBend = ((dx / size.width.toFloat() * 4.0f) * (currentState.padXAttenuation ?: 1.0f)).coerceIn(-2f, 2f)
+                                                            // X-Axis: Pitch Bend (range depends on mode)
+                                                            // Slice pads (Chop modes): ±12 semitones for dramatic pitch effects
+                                                            // Note pads (all others): ±2 semitones for subtle vibrato/bend
+                                                            val bendMultiplier = if (isChopMode) 24.0f else 4.0f
+                                                            val bendLimit = if (isChopMode) 12f else 2f
+                                                            val newBend = ((dx / size.width.toFloat() * bendMultiplier) * (currentState.padXAttenuation ?: 1.0f)).coerceIn(-bendLimit, bendLimit)
                                                             if (newBend != currentBend) {
                                                                 currentBend = newBend
                                                                 nativeLib.setPitchBend(currentTIdx, currentBend)
+                                                                
+                                                                // Live record pitch bend as parameter lock
+                                                                if (currentState.isRecording && currentState.isPlaying) {
+                                                                    val liveStep = nativeLib.getCurrentStep(currentTIdx)
+                                                                    val bendNormalized = ((currentBend + bendLimit) / (2f * bendLimit)).coerceIn(0f, 1f)
+                                                                    nativeLib.setParameterLock(currentTIdx, liveStep, 355, bendNormalized)
+                                                                }
                                                             }
                                                             
                                                             // Y-Axis: Modulation (Absolute mapping over pad height)
@@ -227,6 +238,12 @@ fun PlayingPad(
                                                                         nativeLib.setMacroValue(modParamId - 2000, currentModValue)
                                                                     } else {
                                                                         nativeLib.setParameter(currentTIdx, modParamId, currentModValue)
+                                                                    }
+                                                                    
+                                                                    // Live record Y modulation as parameter lock
+                                                                    if (currentState.isRecording && currentState.isPlaying) {
+                                                                        val liveStep = nativeLib.getCurrentStep(currentTIdx)
+                                                                        nativeLib.setParameterLock(currentTIdx, liveStep, modParamId, currentModValue)
                                                                     }
                                                                 }
                                                                 // Always update for Routing Source (v2.2.5 MIDI PADS Source)
@@ -564,7 +581,7 @@ fun TouchStripsPanel(state: GrooveboxState, onStateChange: (GrooveboxState) -> U
     // Sidebar Area (Strips + Transport)
     Row(
         modifier = Modifier
-            .width(if (isWideScreen) 165.dp else 220.dp) 
+            .fillMaxWidth()
             .fillMaxHeight()
             .padding(vertical = if (isWideScreen) 12.dp else 16.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(if (isWideScreen) 4.dp else 12.dp)
@@ -778,7 +795,7 @@ fun AssignableKnobsPanel(state: GrooveboxState, onStateChange: (GrooveboxState) 
     Column(
         modifier = Modifier
             .padding(start = if (isWideScreen) 0.dp else 24.dp) // Force 24dp on Phone
-            .width(if (isWideScreen) 56.dp else 80.dp)
+            .fillMaxWidth()
             .fillMaxHeight()
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.SpaceEvenly,
@@ -1413,10 +1430,14 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
-        TouchStripsPanel(state, onStateChange, nativeLib, engineColor)
-        AssignableKnobsPanel(state, onStateChange, nativeLib, engineColor)
+        Box(modifier = Modifier.weight(0.25f).fillMaxHeight()) {
+            TouchStripsPanel(state, onStateChange, nativeLib, engineColor)
+        }
+        Box(modifier = Modifier.weight(0.09f).fillMaxHeight()) {
+            AssignableKnobsPanel(state, onStateChange, nativeLib, engineColor)
+        }
         
-        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(0.66f).fillMaxHeight()) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                 val screenConfig = LocalConfiguration.current
                 val screenRatio = screenConfig.screenWidthDp.toFloat() / screenConfig.screenHeightDp.toFloat()

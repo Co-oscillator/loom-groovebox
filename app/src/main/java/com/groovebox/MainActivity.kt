@@ -303,7 +303,8 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
             t.arpConfig.isLatched,
             t.arpConfig.isMutated,
             t.arpConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
-            t.arpConfig.randomSequence.toIntArray()
+            t.arpConfig.randomSequence.toIntArray(),
+            t.arpConfig.gateLengths.toFloatArray()
         )
         nativeLib.setArpRate(trackIdx, t.arpConfig.arpRate, t.arpConfig.arpDivisionMode)
         nativeLib.setChordProgConfig(trackIdx, t.arpConfig.isChordProgEnabled, t.arpConfig.chordProgMood, t.arpConfig.chordProgComplexity)
@@ -780,6 +781,8 @@ fun SplashScreen(statusText: String) {
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
+        val config = androidx.compose.ui.platform.LocalConfiguration.current
+        val maxImgSize = (config.screenHeightDp - 180).coerceAtLeast(100).dp
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -788,7 +791,7 @@ fun SplashScreen(statusText: String) {
                 painter = painterResource(id = R.drawable.ic_icon_round),
                 contentDescription = "Loom Icon",
                 modifier = Modifier
-                    .size(400.dp)
+                    .size(if (maxImgSize < 400.dp) maxImgSize else 400.dp)
                     .clip(CircleShape),
                 contentScale = ContentScale.Fit
             )
@@ -1241,12 +1244,14 @@ fun MainScreen(
                 5 -> SettingsScreen(state, onStateChange, nativeLib, midiManager)
             }
             
-            Text(
-                text = "CPU: ${(cpuLoad * 100).toInt()}%", 
-                style = MaterialTheme.typography.labelSmall, 
-                color = Color.White.copy(alpha = 0.5f), 
-                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
-            )
+            if (state.showCpuMonitor) {
+                Text(
+                    text = "CPU: ${(cpuLoad * 100).toInt()}%", 
+                    style = MaterialTheme.typography.labelSmall, 
+                    color = Color.White.copy(alpha = 0.5f), 
+                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
+                )
+            }
 
 
 

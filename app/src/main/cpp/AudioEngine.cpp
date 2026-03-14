@@ -2287,6 +2287,8 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
           while (track.mArpCountdown <= 0 && asafety < 8) {
             asafety++;
             track.mArpCountdown += arpSamplesPerStep;
+
+            float currentGate = track.arpeggiator.getCurrentGate();
             std::vector<int> arpNotes = track.arpeggiator.nextNotes();
 
             float strum = track.arpeggiator.getStrum();
@@ -2298,21 +2300,17 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                 float delay = 0.0f;
                 if (strum > 0.001f && noteCount > 1) {
                   // Spread notes over strum*stepDuration range
-                  // E.g. strum=0.5 -> spread over 1st half of step
                   // Linear spread: 0 to strum*samplesPerStep ?
-                  // User wants "Spread notes over the duration of a step".
-                  // Let's interpret strum=1.0 as full spread (0 to End of
-                  // Step).
-
                   // Use 'arpSamplesPerStep' as reference duration
                   delay = (i / (float)noteCount) * strum * arpSamplesPerStep;
                 }
 
                 if (delay <= 1.0f) {
-                  triggerNoteLocked(t, arpNote, 100, true, 0.5f, false, true);
+                  triggerNoteLocked(t, arpNote, 100, true, currentGate, false,
+                                    true);
                 } else {
                   track.mPendingNotes.push_back(
-                      {arpNote, 100.0f, delay, 0.5f, 1, false});
+                      {arpNote, 100.0f, delay, currentGate, 1, false});
                 }
               }
             }
@@ -2863,7 +2861,8 @@ int AudioEngine::getCurrentStep(int trackIndex, int drumIndex) {
 void AudioEngine::setArpConfig(int trackIndex, int mode, int octaves,
                                int inversion, bool isLatched, bool isMutated,
                                const std::vector<std::vector<bool>> &rhythms,
-                               const std::vector<int> &sequence) {
+                               const std::vector<int> &sequence,
+                               const std::vector<float> &gateLengths) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     ArpMode newMode = static_cast<ArpMode>(mode);
@@ -2895,6 +2894,7 @@ void AudioEngine::setArpConfig(int trackIndex, int mode, int octaves,
     track.arpeggiator.setIsMutated(isMutated);
     track.arpeggiator.setRhythm(rhythms);
     track.arpeggiator.setRandomSequence(sequence);
+    track.arpeggiator.setGateLengths(gateLengths);
   }
 }
 

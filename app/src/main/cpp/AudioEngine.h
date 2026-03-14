@@ -111,7 +111,8 @@ public:
   void setArpConfig(int trackIndex, int mode, int octaves, int inversion,
                     bool isLatched, bool isMutated,
                     const std::vector<std::vector<bool>> &rhythms,
-                    const std::vector<int> &sequence);
+                    const std::vector<int> &sequence,
+                    const std::vector<float> &gateLengths);
   void setChordProgConfig(int trackIndex, bool enabled, int mood,
                           int complexity);
   void setScaleConfig(int rootNote, const std::vector<int> &intervals);

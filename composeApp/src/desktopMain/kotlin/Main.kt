@@ -90,7 +90,7 @@ fun main() = application {
                 viewModel.onStateChange(currentState.copy(rootNote = newRoot))
                 nativeLib.setScaleConfig(newRoot, currentState.scaleIntervals.toIntArray())
                 true
-            } else if ((event.key == Key.Equals || event.key == Key.Plus) && event.type == KeyEventType.KeyDown) {
+            } else if ((event.key == Key.Equals || event.key == Key.NumPadAdd) && event.type == KeyEventType.KeyDown) {
                 val newRoot = (currentState.rootNote + 12).coerceIn(0, 72)
                 viewModel.onStateChange(currentState.copy(rootNote = newRoot))
                 nativeLib.setScaleConfig(newRoot, currentState.scaleIntervals.toIntArray())

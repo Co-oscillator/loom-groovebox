@@ -2,6 +2,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.groovebox.GrooveboxViewModel
 import com.groovebox.NativeLib
+import com.groovebox.GridMode
 import com.groovebox.ui.views.MainScreen
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
@@ -30,20 +31,49 @@ fun main() = application {
         title = "Loom Groovebox",
         icon = painterResource("icon.png"),
         onKeyEvent = { event ->
-            // Map specific keys to the 4x4 pad grid indices (0-15)
-            val keyToPadMap = mapOf(
-                Key.One to 0, Key.Two to 1, Key.Three to 2, Key.Four to 3,
-                Key.Q to 4, Key.W to 5, Key.E to 6, Key.R to 7,
-                Key.A to 8, Key.S to 9, Key.D to 10, Key.F to 11,
-                Key.Z to 12, Key.X to 13, Key.C to 14, Key.V to 15
-            )
+            val currentState = viewModel.state
+            
+            val keyToPadMap = when (currentState.gridMode) {
+                GridMode.GRID_4X4 -> mapOf(
+                    Key.One to 0, Key.Two to 1, Key.Three to 2, Key.Four to 3,
+                    Key.Q to 4, Key.W to 5, Key.E to 6, Key.R to 7,
+                    Key.A to 8, Key.S to 9, Key.D to 10, Key.F to 11,
+                    Key.Z to 12, Key.X to 13, Key.C to 14, Key.V to 15
+                )
+                GridMode.GRID_6X6 -> mapOf(
+                    // Mapping middle 4 rows of 6x6 (starting with index 0? No, let's map to screen layout)
+                    // 6x6 indices: 0-5, 6-11, 12-17, 18-23, 24-29, 30-35
+                    // Middle four rows: 6-11, 12-17, 18-23, 24-29
+                    Key.One to 6, Key.Two to 7, Key.Three to 8, Key.Four to 9, Key.Five to 10, Key.Six to 11,
+                    Key.Q to 12, Key.W to 13, Key.E to 14, Key.R to 15, Key.T to 16, Key.Y to 17,
+                    Key.A to 18, Key.S to 19, Key.D to 20, Key.F to 21, Key.G to 22, Key.H to 23,
+                    Key.Z to 24, Key.X to 25, Key.C to 26, Key.V to 27, Key.B to 28, Key.N to 29
+                )
+                GridMode.MAC_KEYS -> mapOf(
+                    // Numbers
+                    Key.One to 0, Key.Two to 1, Key.Three to 2, Key.Four to 3, Key.Five to 4, 
+                    Key.Six to 5, Key.Seven to 6, Key.Eight to 7, Key.Nine to 8, Key.Zero to 9,
+                    Key.Minus to 10, Key.Equals to 11,
+                    // QWERTY
+                    Key.Q to 12, Key.W to 13, Key.E to 14, Key.R to 15, Key.T to 16, 
+                    Key.Y to 17, Key.U to 18, Key.I to 19, Key.O to 20, Key.P to 21,
+                    Key.LeftBracket to 22, Key.RightBracket to 23, Key.Backslash to 24,
+                    // ASDF
+                    Key.A to 25, Key.S to 26, Key.D to 27, Key.F to 28, Key.G to 29, 
+                    Key.H to 30, Key.J to 31, Key.K to 32, Key.L to 33, Key.Semicolon to 34,
+                    Key.Apostrophe to 35,
+                    // ZXCV
+                    Key.Z to 36, Key.X to 37, Key.C to 38, Key.V to 39, Key.B to 40, 
+                    Key.N to 41, Key.M to 42, Key.Comma to 43, Key.Period to 44, Key.Slash to 45
+                )
+                else -> emptyMap()
+            }
 
             val padIndex = keyToPadMap[event.key]
             
             if (padIndex != null) {
                 when (event.type) {
                     KeyEventType.KeyDown -> {
-                        // Debounce and held-state check
                         if (heldKeys.add(event.key)) {
                             viewModel.triggerPad(padIndex, 100)
                         }
@@ -54,9 +84,25 @@ fun main() = application {
                         }
                     }
                 }
-                true // Consume the matched keys
+                true
+            } else if (event.key == Key.Spacebar && event.type == KeyEventType.KeyDown) {
+                val isShift = event.isShiftPressed
+                if (isShift) {
+                    // Start + Record
+                    val newState = currentState.copy(
+                        isPlaying = true,
+                        isRecording = true
+                    )
+                    viewModel.onStateChange(newState)
+                    // We might need to call nativeLib.setPlaying here too? 
+                    // Let's see how viewModel handles state changes.
+                } else {
+                    // Toggle Start/Stop
+                    viewModel.onStateChange(currentState.copy(isPlaying = !currentState.isPlaying))
+                }
+                true
             } else {
-                false // Ignore unmatched keys
+                false
             }
         }
     ) {

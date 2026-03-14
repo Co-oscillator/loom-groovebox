@@ -85,9 +85,14 @@ compose.desktop {
         mainClass = "MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Pkg, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Pkg)
             packageName = "LoomGroovebox"
             packageVersion = "2.6.14"
+
+            macOS {
+                bundleID = "com.groovebox.loom"
+                iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
+            }
         }
         jvmArgs += "-Djava.library.path=${project.projectDir}/native/build"
     }

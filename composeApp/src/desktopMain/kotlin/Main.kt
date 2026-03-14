@@ -10,6 +10,8 @@ import java.io.File
 
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.window.*
+import androidx.compose.ui.unit.dp
 
 fun main() = application {
     val heldKeys = remember { mutableSetOf<Key>() }
@@ -17,8 +19,14 @@ fun main() = application {
     val viewModel = remember { GrooveboxViewModel(nativeLib) }
     val audioCapture = remember { com.groovebox.DesktopAudioCapture() }
 
+    val windowState = rememberWindowState(
+        width = 1200.dp,
+        height = 800.dp
+    )
+
     Window(
         onCloseRequest = ::exitApplication, 
+        state = windowState,
         title = "Loom Groovebox",
         icon = painterResource("icon.png"),
         onKeyEvent = { event ->

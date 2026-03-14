@@ -1,6 +1,7 @@
 package com.groovebox.ui.views
 
 import com.groovebox.ui.platformShowMessage
+import com.groovebox.ui.LocalPlatformInfo
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -206,7 +207,7 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
                             Text("Performance Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                            Text("Enables visual cues for multitouch", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                            Text("Enables visual cues for pointer interactions", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         }
                         Switch(
                             checked = state.isPerformanceMode,

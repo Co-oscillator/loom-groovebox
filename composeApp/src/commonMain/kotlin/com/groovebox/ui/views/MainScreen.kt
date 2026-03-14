@@ -5,7 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
-import com.groovebox.ui.components.TouchVisualizerOverlay
+import com.groovebox.ui.components.PointerVisualizerOverlay
 import com.groovebox.GrooveboxViewModel
 import com.groovebox.NativeLib
 import com.groovebox.midi.EmpledManager
@@ -58,10 +58,27 @@ fun MainScreen(
         
         CompositionLocalProvider(
             LocalPlatformInfo provides platformInfo,
+            LocalFocusedValue provides null,
             LocalFocusedSetter provides { newValue -> viewModel.onStateChange(viewModel.state.copy(focusedValue = newValue)) }
         ) {
+            // UI Sync Loop (30fps polling)
+            LaunchedEffect(state.isPlaying) {
+                while (true) {
+                    if (state.isPlaying) {
+                        val newStep = nativeLib.getCurrentStep(state.selectedTrackIndex)
+                        if (newStep != state.currentStep) {
+                            viewModel.onStateChange(state.copy(currentStep = newStep))
+                        }
+                    } else {
+                        if (state.currentStep != 0) {
+                             viewModel.onStateChange(state.copy(currentStep = 0))
+                        }
+                    }
+                    kotlinx.coroutines.delay(32)
+                }
+            }
             Surface(color = Color.Black) {
-                TouchVisualizerOverlay(
+                PointerVisualizerOverlay(
                     state = state,
                     enabled = platformInfo.platform == "macos" && state.isPerformanceMode
                 ) {

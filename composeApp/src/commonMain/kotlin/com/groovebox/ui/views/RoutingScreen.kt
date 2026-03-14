@@ -200,8 +200,12 @@ fun LfoModule(
                             if (lfoState.sync) {
                                 listOf("8/1", "6/1", "4/1", "3/1", "2/1", "1/1", "1/2", "1/3", "1/4", "1/6", "1/8", "1/12", "1/16", "1/24", "1/32", "1/48", "1/64", "1/72", "1/96")[(v * 18.99f).toInt().coerceIn(0, 18)]
                             } else {
-                                val hz = 0.1f * Math.pow(10.0, (v * 2.3f).toDouble()).toFloat()
-                                String.format(java.util.Locale.US, "%.1f Hz", hz)
+                                val hz = 0.01f * Math.pow(10.0, (v * 3.47712f).toDouble()).toFloat()
+                                if (hz < 1.0f) {
+                                    String.format(java.util.Locale.US, "%.2f Hz", hz)
+                                } else {
+                                    String.format(java.util.Locale.US, "%.1f Hz", hz)
+                                }
                             }
                         },
                         knobSize = 32.dp)

@@ -85,6 +85,16 @@ fun main() = application {
                     }
                 }
                 true
+            } else if (event.key == Key.Minus && event.type == KeyEventType.KeyDown) {
+                val newRoot = (currentState.rootNote - 12).coerceIn(0, 72)
+                viewModel.onStateChange(currentState.copy(rootNote = newRoot))
+                nativeLib.setScaleConfig(newRoot, currentState.scaleIntervals.toIntArray())
+                true
+            } else if ((event.key == Key.Equals || event.key == Key.Plus) && event.type == KeyEventType.KeyDown) {
+                val newRoot = (currentState.rootNote + 12).coerceIn(0, 72)
+                viewModel.onStateChange(currentState.copy(rootNote = newRoot))
+                nativeLib.setScaleConfig(newRoot, currentState.scaleIntervals.toIntArray())
+                true
             } else if (event.key == Key.Spacebar && event.type == KeyEventType.KeyDown) {
                 val isShift = event.isShiftPressed
                 if (isShift) {
@@ -94,8 +104,6 @@ fun main() = application {
                         isRecording = true
                     )
                     viewModel.onStateChange(newState)
-                    // We might need to call nativeLib.setPlaying here too? 
-                    // Let's see how viewModel handles state changes.
                 } else {
                     // Toggle Start/Stop
                     viewModel.onStateChange(currentState.copy(isPlaying = !currentState.isPlaying))

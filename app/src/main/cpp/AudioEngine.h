@@ -146,7 +146,7 @@ public:
   std::vector<float> getRecordedSampleData(int trackIndex,
                                            float targetSampleRate);
   size_t getSampleLength(int trackIndex);
-  int getActiveNoteMask(int trackIndex);
+  uint64_t getActiveNoteMask(int trackIndex);
   void setPitchBend(int trackIndex, float semitones);
   void setPadMod(int trackIndex, float value);
   void panic();

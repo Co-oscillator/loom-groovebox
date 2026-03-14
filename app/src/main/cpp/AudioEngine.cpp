@@ -104,8 +104,8 @@ AudioEngine::AudioEngine() {
   mPhaserFxR.setMix(1.0f);
   mFlangerFxL.setMix(1.0f);
   mFlangerFxR.setMix(1.0f);
-  mOctaverFxL.setMix(1.0f);
-  mOctaverFxR.setMix(1.0f);
+  mOctaverFxL.setMix(0.0f);
+  mOctaverFxR.setMix(0.0f);
   mTapeEchoFxL.setMix(1.0f);
   mTapeEchoFxR.setMix(1.0f);
 
@@ -966,8 +966,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       break;
     case 7:
       // Cubic Scaling for Synth LFO too
-      track.subtractiveEngine.setLfoRate(0.01f +
-                                         (value * value * value) * 49.99f);
+      track.subtractiveEngine.setLfoRate(0.01f * powf(10.0f, value * 3.69897f));
       track.soundFontEngine.setParameter(7, value);
       break;
     case 8:
@@ -1804,15 +1803,25 @@ void AudioEngine::releaseNoteLocked(int trackIndex, int note,
         }
       }
 
+      // Apply Per-Track Transpose (Match triggerNoteLocked logic)
+      int transposedNote = note;
+      if (track.engineType != 5 && track.engineType != 6) {
+        bool isSliceMode =
+            (track.engineType == 2 && track.parameters[320] > 1.5f);
+        if (!isSliceMode) {
+          transposedNote += track.transpose;
+        }
+      }
+
       // ALWAYS release engine notes for manual interaction,
       // even if Arp is ON, otherwise they get stuck when unlatching or
       // switching.
       for (int i = 0; i < Track::MAX_POLYPHONY; ++i) {
         if (track.mActiveNotes[i].active &&
-            track.mActiveNotes[i].note == note) {
+            track.mActiveNotes[i].note == transposedNote) {
           track.mActiveNotes[i].active = false;
           mGlobalVoiceCount--;
-          break;
+          // Do NOT break, release all voices for this note to be safe
         }
       }
       if (mIsRecording && mIsPlaying && !isSequencerTrigger) {
@@ -3257,19 +3266,29 @@ void AudioEngine::panic() {
   }
 }
 
-int AudioEngine::getActiveNoteMask(int trackIndex) {
+uint64_t AudioEngine::getActiveNoteMask(int trackIndex) {
   if (trackIndex < 0 || trackIndex >= 8)
     return 0;
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  int mask = 0;
+  uint64_t mask = 0;
   auto &track = mTracks[trackIndex];
+
+  // Engine types that ignore transpose (Drums, Slicers)
+  bool ignoresTranspose = (track.engineType == 5 || track.engineType == 6);
+  if (track.engineType == 2 && track.parameters[320] > 1.5f) {
+    ignoresTranspose = true;
+  }
+
   for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
     if (track.mActiveNotes[v].active) {
       int note = track.mActiveNotes[v].note;
-      // We only care about notes 0..31 for simple 4x4 or 6x6 highlights
-      // mapped relative to the view. For now, bitset simple 32 notes.
-      if (note >= 60 && note < 92) {
-        mask |= (1 << (note - 60));
+      
+      // Reverse the transpose to get the "physical" note for UI highlighting
+      // (only for synth engines)
+      int displayNote = ignoresTranspose ? note : (note - track.transpose);
+
+      if (displayNote >= 60 && displayNote < 92) {
+        mask |= (1ULL << (displayNote - 60));
       }
     }
   }
@@ -3289,7 +3308,7 @@ void AudioEngine::setGenericLfoParam(int lfoIndex, int paramId, float value) {
     // Cubic scaling: 0.01Hz to 30Hz
     // Range = 30 - 0.01 = 29.99
     // Val = 0.01 + (v^3 * 29.99)
-    mLfos[lfoIndex].setFrequency(0.01f + (value * value * value) * 29.99f);
+    mLfos[lfoIndex].setFrequency(0.01f * powf(10.0f, value * 3.47712f));
     mLfos[lfoIndex].setUiRate(value);
     break;
   case 1:
@@ -4034,12 +4053,33 @@ void AudioEngine::renderToWav(int numCycles, const std::string &path) {
 
         // Advance sequencers
         for (int t = 0; t < (int)mTracks.size(); ++t) {
-          if (mTracks[t].isActive) {
-            mTracks[t].sequencer.advance();
-            const Step &s = mTracks[t].sequencer.getCurrentStep();
-            if (s.active) {
-              // Trigger logic here... simplified for stability
-              triggerNoteLocked(t, 60, 100, true);
+          Track &track = mTracks[t];
+          if (track.isActive) {
+            bool isDrumTrack = (track.engineType == 5 || track.engineType == 6 ||
+                                (track.engineType == 2 &&
+                                 track.parameters[320] > 1.5f));
+
+            if (isDrumTrack) {
+              for (int d = 0; d < 16; ++d) {
+                track.drumSequencers[d].advance();
+                const Step &s = track.drumSequencers[d].getCurrentStep();
+                if (s.active && !s.notes.empty()) {
+                  // Trigger first note (usually 60+d)
+                  triggerNoteLocked(t, s.notes[0].note,
+                                    static_cast<int>(s.velocity * 127.0f), true,
+                                    s.gate, s.punch);
+                }
+              }
+            } else {
+              track.sequencer.advance();
+              const Step &s = track.sequencer.getCurrentStep();
+              if (s.active) {
+                for (const auto &ni : s.notes) {
+                  triggerNoteLocked(t, ni.note,
+                                    static_cast<int>(s.velocity * 127.0f), true,
+                                    s.gate, s.punch);
+                }
+              }
             }
           }
         }

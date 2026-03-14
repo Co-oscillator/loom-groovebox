@@ -873,11 +873,11 @@ Java_com_groovebox_NativeLib_nSetSoundFontMapping(JNIEnv *env, jobject thiz,
   if (engine)
     engine->setSoundFontMapping(track_index, knob_index, param_id);
 }
-extern "C" JNIEXPORT jint JNICALL
+extern "C" JNIEXPORT jlong JNICALL
 Java_com_groovebox_NativeLib_nGetActiveNoteMask(JNIEnv *env, jobject thiz,
                                                jint track_index) {
   if (engine)
-    return engine->getActiveNoteMask(track_index);
+    return (jlong)engine->getActiveNoteMask(track_index);
   return 0;
 }
 extern "C" JNIEXPORT void JNICALL

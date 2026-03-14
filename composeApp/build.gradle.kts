@@ -92,6 +92,11 @@ compose.desktop {
             macOS {
                 bundleID = "com.groovebox.loom"
                 iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
+                infoPlist {
+                    extraKeys.set(mapOf(
+                        "NSMicrophoneUsageDescription" to "Loom needs microphone access for sampling and granular recording."
+                    ))
+                }
             }
         }
         jvmArgs += "-Djava.library.path=${project.projectDir}/native/build"

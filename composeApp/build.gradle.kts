@@ -93,9 +93,10 @@ compose.desktop {
                 bundleID = "com.groovebox.loom"
                 iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
                 infoPlist {
-                    extraKeys.set(mapOf(
-                        "NSMicrophoneUsageDescription" to "Loom needs microphone access for sampling and granular recording."
-                    ))
+                    extraKeysRawXml = """
+                        <key>NSMicrophoneUsageDescription</key>
+                        <string>Loom needs microphone access for sampling and granular recording.</string>
+                    """.trimIndent()
                 }
             }
         }

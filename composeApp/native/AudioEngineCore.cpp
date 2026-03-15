@@ -1986,7 +1986,9 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
                   if (!s.parameterLocks.empty()) {
                     double firstNoteOffset =
                         s.notes.empty() ? 0.0 : s.notes[0].subStepOffset;
-                    for (auto const &[pid, val] : s.parameterLocks) {
+                    for (auto const &lock : s.parameterLocks) {
+                      int pid = lock.first;
+                      float val = lock.second;
                       track.appliedParameters[pid] = val;
                       if (firstNoteOffset > 0.001) {
                         track.mPendingParams.push_back(
@@ -2094,7 +2096,9 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
                       if (!ds.parameterLocks.empty()) {
                         double firstNoteOffset =
                             ds.notes.empty() ? 0.0 : ds.notes[0].subStepOffset;
-                        for (auto const &[pid, val] : ds.parameterLocks) {
+                        for (auto const &lock : ds.parameterLocks) {
+                          int pid = lock.first;
+                          float val = lock.second;
                           track.appliedParameters[pid] = val;
                           if (firstNoteOffset > 0.001) {
                             track.mPendingParams.push_back(
@@ -2216,13 +2220,13 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
         }
       } else if (mRecordingSource == 2) { // SYSTEM AUDIO
         for (int k = 0; k < framesToDo; ++k) {
-          recBuffer.push_back(mSystemAudioRingBuffer[(mSystemAudioReadPtr + k) % 8192]);
+          recBuffer.push_back(mSystemAudioRingBuffer[(mSystemAudioReadPtr + k) & 8191]);
         }
-        mSystemAudioReadPtr = (mSystemAudioReadPtr + framesToDo) % 8192;
+        mSystemAudioReadPtr = (mSystemAudioReadPtr + framesToDo) & 8191;
       } else { // MIC (DEFAULT)
         // inputSample is usually mono, captured from mInputRingBuffer
         for (int k = 0; k < framesToDo; ++k) {
-            recBuffer.push_back(mInputRingBuffer[(mInputReadPtr - framesToDo + k) % 8192]); // Backtrack to what was just "read"
+            recBuffer.push_back(mInputRingBuffer[(mInputReadPtr - framesToDo + k) & 8191]); // Backtrack to what was just "read"
         }
       }
 
@@ -3374,6 +3378,20 @@ void AudioEngineCore::pushSystemAudioSamples(const float *data, int numSamples) 
   }
 }
 
+void AudioEngineCore::pushInputSamples(const float *data, int numFrames,
+                                       int numChannels) {
+  for (int i = 0; i < numFrames; ++i) {
+    float combined = 0.0f;
+    if (numChannels == 2) {
+      combined = (data[i * 2] + data[i * 2 + 1]) * 0.5f;
+    } else {
+      combined = data[i];
+    }
+    mInputRingBuffer[mInputWritePtr & 8191] = combined;
+    mInputWritePtr++;
+  }
+}
+
 void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   // Lock handled by onAudioReady caller
   // Master volume and safety
@@ -3460,7 +3478,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
     if (distance < 128 || distance > 8000) {
       mInputReadPtr = writePos - 2048; // Resync if definitely out of bounds
     }
-    float inputSample = mInputRingBuffer[mInputReadPtr % 8192];
+    float inputSample = mInputRingBuffer[mInputReadPtr & 8191];
     mInputReadPtr++;
 
     float mixedSampleL = 0.0f;

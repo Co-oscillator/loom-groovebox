@@ -94,7 +94,7 @@ public:
   void resetToDefaults() {
     mAlgorithm = 0;
     mFeedback = 0.0f;
-    mCutoff = 0.5f;
+    mCutoff = 1.0f;
     mResonance = 0.0f;
     mBrightness = 1.0f;
     mDetune = 0.0f;
@@ -125,7 +125,7 @@ public:
     }
   }
 
-  void setAlgorithm(int algo) { mAlgorithm = std::max(0, std::min(4, algo)); }
+  void setAlgorithm(int algo) { mAlgorithm = std::max(0, std::min(31, algo)); }
 
   void setFilter(float v) { mCutoff = v; }
   void setResonance(float v) { mResonance = v; }
@@ -261,7 +261,7 @@ public:
     else if (id == 152)
       mResonance = value;
     else if (id == 150)
-      setAlgorithm((int)(value * 4.99f));
+      setAlgorithm((int)(value * 31.99f));
     else if (id == 153)
       mCarrierMask = (int)value;
     else if (id == 154)
@@ -1174,7 +1174,12 @@ public:
         v.pitchEnv = 0.0f;
 
       float o[6];
-      if (mAlgorithm == 0) { // Serial
+      // DX7 Algorithms 1-32 (0-indexed as 0-31)
+      // Operators numbered 1-6 in DX7 docs, indexed 0-5 here
+      // Op 6 (index 5) receives feedback. Carriers go to output via
+      // mCarrierMask.
+      switch (mAlgorithm) {
+      case 0: // DX7 Alg 1: [6→5→4→3→2→1]
         o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
                mOpLevels[5];
         o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
@@ -1187,36 +1192,424 @@ public:
                velModScale * mOpLevels[1];
         o[0] =
             v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
-      } else if (mAlgorithm == 1) { // 2 Branches
+        break;
+      case 1: // DX7 Alg 2: [2→1], 6→5→4→3→(1) — op2 and stack feed op1
         o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
                mOpLevels[5];
         o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
                velModScale * mOpLevels[4];
         o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
                velModScale * mOpLevels[3];
-        o[2] = v.operators[2].nextSample(fbIn, pitchMod) * velModScale *
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[2];
+        o[1] = v.operators[1].nextSample((o[2] + o[3]) * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 2: // DX7 Alg 3: [6→5→4→(1)], [3→2→1]
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] = v.operators[0].nextSample((o[1] + o[4]) * modScale, pitchMod) *
+               mOpLevels[0];
+        break;
+      case 3: // DX7 Alg 4: [6→5→4→(1)], [3→2→(1)] — both stacks feed 1
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample((o[2] + o[4]) * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 4: // DX7 Alg 5: [6→5→(1)], [4→3→(1)], [2→1] — paired stacks
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 5: // DX7 Alg 6: [6→5→(1)], [4→3], [2→1] — 3 pairs, 3 carriers
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[3] * modScale, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 6: // DX7 Alg 7: [6→5→4→3], [2→1] — carrier 1,3
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[3] * modScale, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 7: // DX7 Alg 8: [6→5→4→3], [2→1] — 3 has feedback from 6, carrier
+              // 1,3
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[3] * modScale, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 8: // DX7 Alg 9: [6→5→4→3], [2→1] — carrier 1,3 (op2 has vibrato-like
+              // routing)
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
                mOpLevels[2];
         o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
                velModScale * mOpLevels[1];
         o[0] =
             v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
-      } else if (mAlgorithm == 2) { // Parallel
-        for (int i = 0; i < 6; ++i)
-          o[i] = v.operators[i].nextSample(fbIn, pitchMod) * velModScale *
-                 mOpLevels[i];
-      } else { // Branching
+        break;
+      case 9: // DX7 Alg 10: [3→2→1], [6→5→4] — carrier 1,4
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[4] * modScale, pitchMod) * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 10: // DX7 Alg 11: [6→5→4], [3→2→1] — carrier 1,4
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[4] * modScale, pitchMod) * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 11: // DX7 Alg 12: [4→3→2→1], [6→5] — carrier 1,5
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 12: // DX7 Alg 13: [4→3→2→1], [6→5] — carrier 1,5 (variant)
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 13: // DX7 Alg 14: [6→5→4→3→(1)], [2→1] — 5 feeds into 1
         o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
                mOpLevels[5];
         o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
                velModScale * mOpLevels[4];
         o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
                velModScale * mOpLevels[3];
-        o[2] = v.operators[2].nextSample(o[5] * modScale, pitchMod) *
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
                velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] = v.operators[0].nextSample((o[1] + o[2]) * modScale, pitchMod) *
+               mOpLevels[0];
+        break;
+      case 14: // DX7 Alg 15: [6→5→4→3→2→1] with branch — carrier 1
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] = v.operators[0].nextSample((o[1] + o[2]) * modScale, pitchMod) *
+               mOpLevels[0];
+        break;
+      case 15: // DX7 Alg 16: [6→5→4→3→2→1] + 5→(1) — multi-mod carrier 1
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] = v.operators[0].nextSample((o[1] + o[4]) * modScale, pitchMod) *
+               mOpLevels[0];
+        break;
+      case 16: // DX7 Alg 17: [6→5→4→3→(1)], [2→1] — 3+2 both mod 1
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] = v.operators[0].nextSample((o[1] + o[3]) * modScale, pitchMod) *
+               mOpLevels[0];
+        break;
+      case 17: // DX7 Alg 18: [6→5→4→3], [3→2], [2→1] — chain with branch at 3
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(o[4] * modScale, pitchMod) *
+               velModScale * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(o[3] * modScale, pitchMod) *
+               velModScale * mOpLevels[2];
+        o[1] =
+            v.operators[1].nextSample(o[2] * modScale, pitchMod) * mOpLevels[1];
+        o[0] = v.operators[0].nextSample(0.0f, pitchMod) * mOpLevels[0];
+        break;
+      case 18: // DX7 Alg 19: [6→5→(4,3,2)], carrier 2,3,4
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[5] * modScale, pitchMod) * mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[5] * modScale, pitchMod) * mOpLevels[2];
+        o[1] =
+            v.operators[1].nextSample(o[4] * modScale, pitchMod) * mOpLevels[1];
+        o[0] = v.operators[0].nextSample(0.0f, pitchMod) * mOpLevels[0];
+        break;
+      case 19: // DX7 Alg 20: [3→2→1], [6→(4,5)] — carrier 1,4,5
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[5] * modScale, pitchMod) * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[2];
         o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
                velModScale * mOpLevels[1];
         o[0] =
             v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 20: // DX7 Alg 21: [6→(5,4,3)], [2→1] — carrier 1,3,4,5
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[5] * modScale, pitchMod) * mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[5] * modScale, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 21: // DX7 Alg 22: [6→(5,4,3,2,1)] — all modulated by 6, 5 carriers
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[5] * modScale, pitchMod) * mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[5] * modScale, pitchMod) * mOpLevels[2];
+        o[1] =
+            v.operators[1].nextSample(o[5] * modScale, pitchMod) * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[5] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 22: // DX7 Alg 23: [6→(5,4)], [3→2→1] — carrier 1,4,5
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[5] * modScale, pitchMod) * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 23: // DX7 Alg 24: [6→5→(4,3)], carrier 1,3,4
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[4] * modScale, pitchMod) * mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[4] * modScale, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 24: // DX7 Alg 25: [6→5→(4,3,2)], carrier 1,2,3,4
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[4] * modScale, pitchMod) * mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[4] * modScale, pitchMod) * mOpLevels[2];
+        o[1] =
+            v.operators[1].nextSample(o[4] * modScale, pitchMod) * mOpLevels[1];
+        o[0] = v.operators[0].nextSample(0.0f, pitchMod) * mOpLevels[0];
+        break;
+      case 25: // DX7 Alg 26: [6→5→(4,3)], [2→1] — carrier 1,3,4
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[4] * modScale, pitchMod) * mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[4] * modScale, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 26: // DX7 Alg 27: [3→2→1], [6→5→4] — carrier 1,4
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[4] * modScale, pitchMod) * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[2];
+        o[1] = v.operators[1].nextSample(o[2] * modScale, pitchMod) *
+               velModScale * mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 27: // DX7 Alg 28: [6→5→4], [3→2], [1] — carrier 1,2,4
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] = v.operators[4].nextSample(o[5] * modScale, pitchMod) *
+               velModScale * mOpLevels[4];
+        o[3] =
+            v.operators[3].nextSample(o[4] * modScale, pitchMod) * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[2];
+        o[1] =
+            v.operators[1].nextSample(o[2] * modScale, pitchMod) * mOpLevels[1];
+        o[0] = v.operators[0].nextSample(0.0f, pitchMod) * mOpLevels[0];
+        break;
+      case 28: // DX7 Alg 29: [6→5], [4→3], [2→1] — 3 pairs, carrier 1,3,5
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[3] * modScale, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[1];
+        o[0] =
+            v.operators[0].nextSample(o[1] * modScale, pitchMod) * mOpLevels[0];
+        break;
+      case 29: // DX7 Alg 30: [6→5], [4→3], [2], [1] — carrier 1,2,3,5
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * velModScale *
+               mOpLevels[3];
+        o[2] =
+            v.operators[2].nextSample(o[3] * modScale, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * mOpLevels[1];
+        o[0] = v.operators[0].nextSample(0.0f, pitchMod) * mOpLevels[0];
+        break;
+      case 30: // DX7 Alg 31: [6→5], [4], [3], [2], [1] — carrier 1,2,3,4,5
+        o[5] = v.operators[5].nextSample(fbIn, pitchMod) * velModScale *
+               mOpLevels[5];
+        o[4] =
+            v.operators[4].nextSample(o[5] * modScale, pitchMod) * mOpLevels[4];
+        o[3] = v.operators[3].nextSample(0.0f, pitchMod) * mOpLevels[3];
+        o[2] = v.operators[2].nextSample(0.0f, pitchMod) * mOpLevels[2];
+        o[1] = v.operators[1].nextSample(0.0f, pitchMod) * mOpLevels[1];
+        o[0] = v.operators[0].nextSample(0.0f, pitchMod) * mOpLevels[0];
+        break;
+      default: // DX7 Alg 32: All parallel, all carriers (additive synthesis)
+        for (int i = 0; i < 6; ++i)
+          o[i] = v.operators[i].nextSample(i == 5 ? fbIn : 0.0f, pitchMod) *
+                 mOpLevels[i];
+        break;
       }
 
       float out = 0.0f;
@@ -1262,7 +1655,7 @@ private:
   std::vector<Voice> mVoices;
   std::vector<float> mOpLevels, mOpRatios, mOpAttack, mOpDecay, mOpSustain,
       mOpRelease;
-  float mCutoff = 0.5f, mResonance = 0.0f, mBrightness = 1.0f, mDetune = 0.0f,
+  float mCutoff = 1.0f, mResonance = 0.0f, mBrightness = 1.0f, mDetune = 0.0f,
         mFeedback = 0.0f, mFeedbackDrive = 0.0f;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 1.0f, mRelease = 0.2f;
   int mAlgorithm = 0, mCarrierMask = 1, mActiveMask = 63, mFilterMode = 0;

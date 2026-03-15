@@ -25,12 +25,12 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
     }
 
     fun processMidiMessage(message: ByteArray, state: com.groovebox.GrooveboxState) {
-        if (message.size < 3) return
+        if (message.isEmpty()) return
         val status = message[0].toInt() and 0xFF
         val msgType = status and 0xF0
         val midiChan = (status and 0x0F) + 1
-        val data1 = message[1].toInt() and 0x7F
-        val data2 = message[2].toInt() and 0x7F
+        val data1 = if (message.size > 1) message[1].toInt() and 0x7F else 0
+        val data2 = if (message.size > 2) message[2].toInt() and 0x7F else 0
         
         // Log all incoming messages at ERROR level for max visibility
         val hex = message.joinToString(" ") { String.format("%02X", it) }
@@ -108,6 +108,22 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
 
         if (msgType == 0xB0) { // Control Change (CC)
             handleCC(data1, data2, state)
+        }
+
+        // --- AFTERTOUCH (Channel Pressure 0xD0) → Y-axis Modulation ---
+        if (msgType == 0xD0) {
+            val pressure = data1 / 127.0f  // 0xD0 is 2-byte: [status, pressure]
+            val trackIdx = state.selectedTrackIndex
+            val track = state.tracks.getOrNull(trackIdx) ?: return
+            val modParamId = track.padModTargetId
+
+            // Route to the same target as pad Y-axis
+            if (modParamId >= 2000) {
+                nativeLib.setMacroValue(modParamId - 2000, pressure)
+            } else {
+                nativeLib.setParameter(trackIdx, modParamId, pressure)
+            }
+            nativeLib.setPadMod(trackIdx, pressure)
         }
     }
 

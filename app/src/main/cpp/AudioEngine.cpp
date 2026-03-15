@@ -104,8 +104,8 @@ AudioEngine::AudioEngine() {
   mPhaserFxR.setMix(1.0f);
   mFlangerFxL.setMix(1.0f);
   mFlangerFxR.setMix(1.0f);
-  mOctaverFxL.setMix(1.0f);
-  mOctaverFxR.setMix(1.0f);
+  mOctaverFxL.setMix(0.0f);
+  mOctaverFxR.setMix(0.0f);
   mTapeEchoFxL.setMix(1.0f);
   mTapeEchoFxR.setMix(1.0f);
 
@@ -496,10 +496,10 @@ bool AudioEngine::start() {
 
   // Fix for startup choppiness:
   // Exclusive mode often defaults to 1 burst, which is too aggressive during
-  // app initialization jitter. We explicitly set it to 4 bursts (Quad
-  // Buffering) for stability.
+  // app initialization jitter. We explicitly set it to 8 bursts
+  // Buffering for stability and to prevent garbled audio on load.
   int burstFrames = mStream->getFramesPerBurst();
-  mStream->setBufferSizeInFrames(burstFrames * 4);
+  mStream->setBufferSizeInFrames(burstFrames * 8);
 
   mReverbFx.setSampleRate(mStream->getSampleRate());
   mSampleRate = mStream->getSampleRate();
@@ -531,7 +531,8 @@ bool AudioEngine::start() {
   oboe::AudioStreamBuilder inBuilder;
   inBuilder.setDirection(oboe::Direction::Input)
       ->setFormat(oboe::AudioFormat::Float)
-      ->setChannelCount(oboe::ChannelCount::Stereo) // Request Stereo
+      ->setChannelCount(oboe::ChannelCount::Mono) // Fallback Fix: Request Mono
+                                                  // instead of Stereo
       ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
       ->setSharingMode(oboe::SharingMode::Exclusive)
       ->setInputPreset(oboe::InputPreset::Camcorder)
@@ -965,8 +966,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       break;
     case 7:
       // Cubic Scaling for Synth LFO too
-      track.subtractiveEngine.setLfoRate(0.01f +
-                                         (value * value * value) * 49.99f);
+      track.subtractiveEngine.setLfoRate(0.01f * powf(10.0f, value * 3.69897f));
       track.soundFontEngine.setParameter(7, value);
       break;
     case 8:
@@ -1803,15 +1803,25 @@ void AudioEngine::releaseNoteLocked(int trackIndex, int note,
         }
       }
 
+      // Apply Per-Track Transpose (Match triggerNoteLocked logic)
+      int transposedNote = note;
+      if (track.engineType != 5 && track.engineType != 6) {
+        bool isSliceMode =
+            (track.engineType == 2 && track.parameters[320] > 1.5f);
+        if (!isSliceMode) {
+          transposedNote += track.transpose;
+        }
+      }
+
       // ALWAYS release engine notes for manual interaction,
       // even if Arp is ON, otherwise they get stuck when unlatching or
       // switching.
       for (int i = 0; i < Track::MAX_POLYPHONY; ++i) {
         if (track.mActiveNotes[i].active &&
-            track.mActiveNotes[i].note == note) {
+            track.mActiveNotes[i].note == transposedNote) {
           track.mActiveNotes[i].active = false;
           mGlobalVoiceCount--;
-          break;
+          // Do NOT break, release all voices for this note to be safe
         }
       }
       if (mIsRecording && mIsPlaying && !isSequencerTrigger) {
@@ -2013,9 +2023,15 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
           int safetyCounter = 0;
           while (track.mStepCountdown <= 0 && safetyCounter < 4) {
             safetyCounter++;
-            track.mStepCountdown += trackSamplesPerStep;
 
             bool looped = track.sequencer.advance();
+
+            // Apply SWING: even steps are longer, odd steps are shorter
+            // mSwing range is -0.23 to +0.23
+            int currentStep = track.sequencer.getCurrentStepIndex();
+            float swingFactor =
+                (currentStep % 2 == 0) ? (1.0f + mSwing) : (1.0f - mSwing);
+            track.mStepCountdown += trackSamplesPerStep * swingFactor;
             if (looped && track.isChainEnabled) {
               // 1. COMMIT EXECUTED STEPS BACK TO SLOT (Required for
               // recording!)
@@ -2280,6 +2296,8 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
           while (track.mArpCountdown <= 0 && asafety < 8) {
             asafety++;
             track.mArpCountdown += arpSamplesPerStep;
+
+            float currentGate = track.arpeggiator.getCurrentGate();
             std::vector<int> arpNotes = track.arpeggiator.nextNotes();
 
             float strum = track.arpeggiator.getStrum();
@@ -2291,21 +2309,17 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                 float delay = 0.0f;
                 if (strum > 0.001f && noteCount > 1) {
                   // Spread notes over strum*stepDuration range
-                  // E.g. strum=0.5 -> spread over 1st half of step
                   // Linear spread: 0 to strum*samplesPerStep ?
-                  // User wants "Spread notes over the duration of a step".
-                  // Let's interpret strum=1.0 as full spread (0 to End of
-                  // Step).
-
                   // Use 'arpSamplesPerStep' as reference duration
                   delay = (i / (float)noteCount) * strum * arpSamplesPerStep;
                 }
 
                 if (delay <= 1.0f) {
-                  triggerNoteLocked(t, arpNote, 100, true, 0.5f, false, true);
+                  triggerNoteLocked(t, arpNote, 100, true, currentGate, false,
+                                    true);
                 } else {
                   track.mPendingNotes.push_back(
-                      {arpNote, 100.0f, delay, 0.5f, 1, false});
+                      {arpNote, 100.0f, delay, currentGate, 1, false});
                 }
               }
             }
@@ -2856,7 +2870,8 @@ int AudioEngine::getCurrentStep(int trackIndex, int drumIndex) {
 void AudioEngine::setArpConfig(int trackIndex, int mode, int octaves,
                                int inversion, bool isLatched, bool isMutated,
                                const std::vector<std::vector<bool>> &rhythms,
-                               const std::vector<int> &sequence) {
+                               const std::vector<int> &sequence,
+                               const std::vector<float> &gateLengths) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     ArpMode newMode = static_cast<ArpMode>(mode);
@@ -2888,6 +2903,7 @@ void AudioEngine::setArpConfig(int trackIndex, int mode, int octaves,
     track.arpeggiator.setIsMutated(isMutated);
     track.arpeggiator.setRhythm(rhythms);
     track.arpeggiator.setRandomSequence(sequence);
+    track.arpeggiator.setGateLengths(gateLengths);
   }
 }
 
@@ -3250,19 +3266,29 @@ void AudioEngine::panic() {
   }
 }
 
-int AudioEngine::getActiveNoteMask(int trackIndex) {
+uint64_t AudioEngine::getActiveNoteMask(int trackIndex) {
   if (trackIndex < 0 || trackIndex >= 8)
     return 0;
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  int mask = 0;
+  uint64_t mask = 0;
   auto &track = mTracks[trackIndex];
+
+  // Engine types that ignore transpose (Drums, Slicers)
+  bool ignoresTranspose = (track.engineType == 5 || track.engineType == 6);
+  if (track.engineType == 2 && track.parameters[320] > 1.5f) {
+    ignoresTranspose = true;
+  }
+
   for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
     if (track.mActiveNotes[v].active) {
       int note = track.mActiveNotes[v].note;
-      // We only care about notes 0..31 for simple 4x4 or 6x6 highlights
-      // mapped relative to the view. For now, bitset simple 32 notes.
-      if (note >= 60 && note < 92) {
-        mask |= (1 << (note - 60));
+      
+      // Reverse the transpose to get the "physical" note for UI highlighting
+      // (only for synth engines)
+      int displayNote = ignoresTranspose ? note : (note - track.transpose);
+
+      if (displayNote >= 60 && displayNote < 92) {
+        mask |= (1ULL << (displayNote - 60));
       }
     }
   }
@@ -3282,7 +3308,7 @@ void AudioEngine::setGenericLfoParam(int lfoIndex, int paramId, float value) {
     // Cubic scaling: 0.01Hz to 30Hz
     // Range = 30 - 0.01 = 29.99
     // Val = 0.01 + (v^3 * 29.99)
-    mLfos[lfoIndex].setFrequency(0.01f + (value * value * value) * 29.99f);
+    mLfos[lfoIndex].setFrequency(0.01f * powf(10.0f, value * 3.47712f));
     mLfos[lfoIndex].setUiRate(value);
     break;
   case 1:
@@ -4027,12 +4053,33 @@ void AudioEngine::renderToWav(int numCycles, const std::string &path) {
 
         // Advance sequencers
         for (int t = 0; t < (int)mTracks.size(); ++t) {
-          if (mTracks[t].isActive) {
-            mTracks[t].sequencer.advance();
-            const Step &s = mTracks[t].sequencer.getCurrentStep();
-            if (s.active) {
-              // Trigger logic here... simplified for stability
-              triggerNoteLocked(t, 60, 100, true);
+          Track &track = mTracks[t];
+          if (track.isActive) {
+            bool isDrumTrack = (track.engineType == 5 || track.engineType == 6 ||
+                                (track.engineType == 2 &&
+                                 track.parameters[320] > 1.5f));
+
+            if (isDrumTrack) {
+              for (int d = 0; d < 16; ++d) {
+                track.drumSequencers[d].advance();
+                const Step &s = track.drumSequencers[d].getCurrentStep();
+                if (s.active && !s.notes.empty()) {
+                  // Trigger first note (usually 60+d)
+                  triggerNoteLocked(t, s.notes[0].note,
+                                    static_cast<int>(s.velocity * 127.0f), true,
+                                    s.gate, s.punch);
+                }
+              }
+            } else {
+              track.sequencer.advance();
+              const Step &s = track.sequencer.getCurrentStep();
+              if (s.active) {
+                for (const auto &ni : s.notes) {
+                  triggerNoteLocked(t, ni.note,
+                                    static_cast<int>(s.velocity * 127.0f), true,
+                                    s.gate, s.punch);
+                }
+              }
             }
           }
         }

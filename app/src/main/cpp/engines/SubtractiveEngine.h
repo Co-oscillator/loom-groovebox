@@ -49,9 +49,9 @@ public:
     mOscVolumes.assign(4, 0.0f);
     mOscVolumes[0] = 0.6f;
     mOscVolumes[1] = 0.4f;
-    mOscWaveforms.assign(4, Waveform::Sine);
-    mOscWaveforms[0] = Waveform::Sawtooth;
-    mOscWaveforms[1] = Waveform::Square;
+    mOscWaveValues.assign(4, 0.0f);
+    mOscWaveValues[0] = 0.666666f;
+    mOscWaveValues[1] = 1.0f;
     resetToDefaults();
   }
 
@@ -83,24 +83,14 @@ public:
     mOscDrive[0] = mOscDrive[1] = mOscDrive[2] = mOscDrive[3] = 1.0f;
     mOscFold[0] = mOscFold[1] = mOscFold[2] = mOscFold[3] = 0.0f;
     mOscPW[0] = mOscPW[1] = mOscPW[2] = mOscPW[3] = 0.5f;
-    mOscWaveforms[0] = Waveform::Sawtooth;
-    mOscWaveforms[1] = Waveform::Square;
-    mOscWaveforms[2] = Waveform::Sine; // Explicitly set Sub to Sine
+    mOscWaveValues[0] = 0.666666f;
+    mOscWaveValues[1] = 1.0f;
+    mOscWaveValues[2] = 0.0f; // Explicitly set Sub to Sine
+    mOscWaveValues[3] = 0.666666f;
 
     // Propagate waveforms to all voices immediately
     for (int i = 0; i < 4; ++i) {
-      setOscWaveform(i, (i == 0)   ? 0.6f
-                        : (i == 1) ? 0.8f
-                        : (i == 2) ? 0.0f
-                                   : 0.6f);
-      // 0.6=Saw, 0.8=Square, 0.0=Sine. Mapping is in setOscWaveform logic.
-      // Or simpler: iterate voices directly:
-    }
-    for (auto &v : mVoices) {
-      v.oscillators[0].setWaveform(mOscWaveforms[0]);
-      v.oscillators[1].setWaveform(mOscWaveforms[1]);
-      v.oscillators[2].setWaveform(mOscWaveforms[2]);
-      v.oscillators[3].setWaveform(mOscWaveforms[3]);
+      setOscWaveform(i, mOscWaveValues[i]);
     }
 
     updateLiveEnvelopes();
@@ -270,20 +260,9 @@ public:
 
   void setOscWaveform(int index, float value) {
     if (index >= 0 && index < 4) {
-      Waveform w = Waveform::Sine;
-      if (value < 0.2f)
-        w = Waveform::Sine;
-      else if (value < 0.4f)
-        w = Waveform::Triangle;
-      else if (value < 0.6f)
-        w = Waveform::Sawtooth;
-      else if (value < 0.8f)
-        w = Waveform::Square;
-      else
-        w = Waveform::Sawtooth;
-      mOscWaveforms[index] = w;
+      mOscWaveValues[index] = value;
       for (auto &v : mVoices)
-        v.oscillators[index].setWaveform(w);
+        v.oscillators[index].setMorphValue(value);
     }
   }
 
@@ -401,7 +380,7 @@ private:
   }
   std::vector<Voice> mVoices;
   std::vector<float> mOscVolumes;
-  std::vector<Waveform> mOscWaveforms;
+  std::vector<float> mOscWaveValues;
   uint32_t mControlCounter = 0;
   float mCutoff = 0.45f, mResonance = 0.0f, mAttack = 0.01f, mDecay = 0.1f,
         mSustain = 0.8f, mRelease = 0.5f, mF_Atk = 0.01f, mF_Dcy = 0.1f,

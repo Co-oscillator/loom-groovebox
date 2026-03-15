@@ -12,7 +12,15 @@ public:
     mPhaseIncrement = frequency / sampleRate;
   }
 
-  void setWaveform(Waveform waveform) { mWaveform = waveform; }
+  void setWaveform(Waveform waveform) {
+    mWaveform = waveform;
+    mMorphActive = false;
+  }
+
+  void setMorphValue(float value) {
+    mMorphValue = value;
+    mMorphActive = true;
+  }
 
   void setWaveShape(float shape) {
     mShape = shape; // 0.0 to 1.0, affects pulse width or morphing
@@ -40,22 +48,14 @@ public:
     return sample / threshold;
   }
 
-  float nextSample(float modulation = 0.0f, float fmFreqMult = 1.0f,
-                   float waveFold = 0.0f) {
-    float sample = 0.0f;
-    float phaseWithMod = mPhase + modulation;
-    // Keep phase in [0, 1]
-    phaseWithMod -= floorf(phaseWithMod);
-
-    switch (mWaveform) {
+  float getShapeSample(Waveform wf, float phaseWithMod) const {
+    switch (wf) {
     case Waveform::Sine:
-      sample = sinf(phaseWithMod * 2.0f * M_PI);
-      break;
+      return sinf(phaseWithMod * 2.0f * M_PI);
     case Waveform::Triangle: {
       float tri =
           2.0f * fabsf(2.0f * (phaseWithMod - floorf(phaseWithMod + 0.5f))) -
           1.0f;
-      // Pulse width on triangle (leaning)
       if (mShape != 0.5f) {
         if (phaseWithMod < mShape) {
           tri = (phaseWithMod / mShape) * 2.0f - 1.0f;
@@ -63,15 +63,52 @@ public:
           tri = 1.0f - ((phaseWithMod - mShape) / (1.0f - mShape)) * 2.0f;
         }
       }
-      sample = tri;
-      break;
+      return tri;
     }
     case Waveform::Square:
-      sample = (phaseWithMod < mShape) ? 1.0f : -1.0f;
-      break;
+      return (phaseWithMod < mShape) ? 1.0f : -1.0f;
     case Waveform::Sawtooth:
-      sample = 2.0f * (phaseWithMod - floorf(phaseWithMod + 0.5f));
-      break;
+      return 2.0f * (phaseWithMod - floorf(phaseWithMod + 0.5f));
+    }
+    return 0.0f;
+  }
+
+  float nextSample(float modulation = 0.0f, float fmFreqMult = 1.0f,
+                   float waveFold = 0.0f) {
+    float phaseWithMod = mPhase + modulation;
+    phaseWithMod -= floorf(phaseWithMod);
+
+    float sample = 0.0f;
+
+    if (!mMorphActive) {
+      sample = getShapeSample(mWaveform, phaseWithMod);
+    } else {
+      float v = mMorphValue;
+      float detent = 0.05f;
+      if (v < detent)
+        v = 0.0f;
+      else if (v > 0.333333f - detent && v < 0.333333f + detent)
+        v = 0.333333f;
+      else if (v > 0.666666f - detent && v < 0.666666f + detent)
+        v = 0.666666f;
+      else if (v > 1.0f - detent)
+        v = 1.0f;
+
+      if (v <= 0.333333f) {
+        float mix = v * 3.0f;
+        sample = getShapeSample(Waveform::Sine, phaseWithMod) * (1.0f - mix) +
+                 getShapeSample(Waveform::Triangle, phaseWithMod) * mix;
+      } else if (v <= 0.666666f) {
+        float mix = (v - 0.333333f) * 3.0f;
+        sample =
+            getShapeSample(Waveform::Triangle, phaseWithMod) * (1.0f - mix) +
+            getShapeSample(Waveform::Sawtooth, phaseWithMod) * mix;
+      } else {
+        float mix = (v - 0.666666f) * 3.0f;
+        sample =
+            getShapeSample(Waveform::Sawtooth, phaseWithMod) * (1.0f - mix) +
+            getShapeSample(Waveform::Square, phaseWithMod) * mix;
+      }
     }
 
     if (waveFold > 0.01f) {
@@ -90,6 +127,8 @@ private:
   float mPhaseIncrement = 0.0f;
   float mShape = 0.5f; // Default square pulse width
   Waveform mWaveform = Waveform::Sine;
+  float mMorphValue = 0.0f;
+  bool mMorphActive = false;
 };
 
 #endif // OSCILLATOR_H

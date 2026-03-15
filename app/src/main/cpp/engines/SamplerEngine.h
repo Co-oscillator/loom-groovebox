@@ -828,7 +828,8 @@ public:
         if (i == 0) {
           // SCRUB MODE: Use mSmoothSpeed as the per-sample advance rate.
           // This ensures smooth, sample-accurate playback without stepping.
-          baseResampleRate = (float)mSmoothSpeed;
+          // Apply pitch bend so X-axis pad gesture still affects pitch in Scrub
+          baseResampleRate = (float)mSmoothSpeed * bendFactor;
           useGranular = false; // FORCE CLASSIC MODE (Fixes Grainy Sound)
           traverseRate = 0;
         }

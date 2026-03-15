@@ -75,3 +75,4 @@ fun PointerVisualizerOverlay(
         }
     }
 }
+}

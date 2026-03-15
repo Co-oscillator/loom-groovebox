@@ -478,6 +478,14 @@ fun PadGrid(
             onStateChange = onStateChange,
             empledManager = empledManager
         )
+    } else if (state.gridMode == GridMode.MAC_KEYS) {
+        MacKeysGrid(
+             state = latestState,
+             nativeLib = nativeLib,
+             engineColor = engineColor,
+             onStateChange = onStateChange,
+             empledManager = empledManager
+        )
     } else {
         var activeNoteMask by remember { mutableStateOf(0L) }
         LaunchedEffect(state.selectedTrackIndex, state.isPlaying) {
@@ -548,6 +556,65 @@ fun PadGrid(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MacKeysGrid(
+    state: GrooveboxState,
+    nativeLib: NativeLib,
+    engineColor: Color,
+    onStateChange: (GrooveboxState) -> Unit,
+    empledManager: EmpledManager? = null
+) {
+    val track = state.tracks[state.selectedTrackIndex]
+    val scaleNotes = remember(state.rootNote, state.scaleType) {
+        ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, 46)
+    }
+
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            val rows = listOf(12, 13, 11, 10) // Number of keys per row (1-0/-/= , Q-[, A-', Z-/)
+            var currentIndex = 0
+            rows.forEachIndexed { rowIndex, colCount ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Indentation logic for keyboard look
+                    val rowPadding = when(rowIndex) {
+                        1 -> 12.dp
+                        2 -> 18.dp
+                        3 -> 24.dp
+                        else -> 0.dp
+                    }
+                    if (rowPadding > 0.dp) Spacer(modifier = Modifier.width(rowPadding))
+
+                    repeat(colCount) { col ->
+                        val padIndex = currentIndex + col
+                        val note = scaleNotes.getOrElse(padIndex) { state.rootNote + padIndex }
+                        val isBlack = isBlackKey(note)
+                        val padColor = if (isBlack) androidx.compose.ui.graphics.lerp(Color.DarkGray, engineColor, 0.4f) else engineColor
+                        
+                        Box(modifier = Modifier.size(38.dp)) {
+                             key(state.selectedTrackIndex, padIndex) {
+                                 PlayingPad(
+                                     padIndex = padIndex,
+                                     note = note,
+                                     padSize = 38.dp,
+                                     padColor = padColor,
+                                     isPlaying = state.isPlaying,
+                                     currentStep = state.currentStep,
+                                     nativeLib = nativeLib,
+                                     latestState = state,
+                                     onStateChange = onStateChange,
+                                     empledManager = empledManager,
+                                     isSolidStyle = false
+                                 )
+                             }
+                        }
+                    }
+                    currentIndex += colCount
                 }
             }
         }
@@ -1485,7 +1552,11 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
     var showArpMenu by remember { mutableStateOf(false) }
     
     val scaleNotes = remember(state.rootNote, state.scaleType, state.gridMode) {
-        val count = if (state.gridMode == GridMode.GRID_6X6) 36 else 16
+        val count = when(state.gridMode) {
+            GridMode.GRID_6X6 -> 36
+            GridMode.MAC_KEYS -> 46
+            else -> 16
+        }
         ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, count)
     }
 
@@ -1509,8 +1580,8 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 val samplerMode = track.parameters[320] ?: 0f
                 val isChopMode = track.engineType == EngineType.SAMPLER && samplerMode >= 0.6f
                 
-                val rows = if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else 4
-                val cols = if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else 4
+                val rows = if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else if (state.gridMode == GridMode.MAC_KEYS) 4 else 4
+                val cols = if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else if (state.gridMode == GridMode.MAC_KEYS) 13 else 4
                 val isWideScreen = screenRatio > 1.8f && platformInfo.screenHeightDp < 500
                 val spacing = 6.dp
                 
@@ -1699,7 +1770,8 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     onClick = { 
                                         val newMode = when(state.gridMode) {
                                             GridMode.GRID_4X4 -> GridMode.GRID_6X6
-                                            GridMode.GRID_6X6 -> GridMode.TONNETZ
+                                            GridMode.GRID_6X6 -> GridMode.MAC_KEYS
+                                            GridMode.MAC_KEYS -> GridMode.TONNETZ
                                             GridMode.TONNETZ -> GridMode.GRID_4X4
                                         }
                                         onStateChange(state.copy(gridMode = newMode)) 
@@ -1712,6 +1784,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                     Text(when(state.gridMode) {
                                         GridMode.GRID_4X4 -> "4x4"
                                         GridMode.GRID_6X6 -> "6x6"
+                                        GridMode.MAC_KEYS -> "Keys"
                                         GridMode.TONNETZ -> "TON"
                                     }, style = MaterialTheme.typography.labelSmall, color = Color.White)
                                 }
@@ -1847,7 +1920,8 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                         onClick = { 
                                             val newMode = when(state.gridMode) {
                                                 GridMode.GRID_4X4 -> GridMode.GRID_6X6
-                                                GridMode.GRID_6X6 -> GridMode.TONNETZ
+                                                GridMode.GRID_6X6 -> GridMode.MAC_KEYS
+                                                GridMode.MAC_KEYS -> GridMode.TONNETZ
                                                 GridMode.TONNETZ -> GridMode.GRID_4X4
                                             }
                                             onStateChange(state.copy(gridMode = newMode)) 
@@ -1860,6 +1934,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                         Text(when(state.gridMode) {
                                             GridMode.GRID_4X4 -> "4x4"
                                             GridMode.GRID_6X6 -> "6x6"
+                                            GridMode.MAC_KEYS -> "Keys"
                                             GridMode.TONNETZ -> "TON"
                                         }, style = MaterialTheme.typography.labelSmall, color = Color.White)
                                     }

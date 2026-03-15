@@ -87,7 +87,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Pkg)
             packageName = "LoomGroovebox"
-            packageVersion = "2.6.14"
+            packageVersion = "2.6.15"
 
             macOS {
                 bundleID = "com.groovebox.loom"

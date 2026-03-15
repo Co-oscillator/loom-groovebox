@@ -88,12 +88,12 @@ fun main() = application {
             } else if (event.key == Key.Minus && event.type == KeyEventType.KeyDown) {
                 val newRoot = (currentState.rootNote - 12).coerceIn(0, 72)
                 viewModel.onStateChange(currentState.copy(rootNote = newRoot))
-                nativeLib.setScaleConfig(newRoot, currentState.scaleIntervals.toIntArray())
+                nativeLib.setScaleConfig(newRoot, currentState.scaleType.intervals.toIntArray())
                 true
             } else if ((event.key == Key.Equals || event.key == Key.NumPadAdd) && event.type == KeyEventType.KeyDown) {
                 val newRoot = (currentState.rootNote + 12).coerceIn(0, 72)
                 viewModel.onStateChange(currentState.copy(rootNote = newRoot))
-                nativeLib.setScaleConfig(newRoot, currentState.scaleIntervals.toIntArray())
+                nativeLib.setScaleConfig(newRoot, currentState.scaleType.intervals.toIntArray())
                 true
             } else if (event.key == Key.Spacebar && event.type == KeyEventType.KeyDown) {
                 val isShift = event.isShiftPressed

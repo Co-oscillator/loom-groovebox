@@ -6,7 +6,7 @@ enum class EngineType {
 
 enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM, BACH, BROWNIAN, CONVERGE, DIVERGE }
 
-enum class GridMode { GRID_4X4, GRID_6X6, TONNETZ }
+enum class GridMode { GRID_4X4, GRID_6X6, TONNETZ, MAC_KEYS }
 
 data class ArpConfig(
     val mode: ArpMode = ArpMode.OFF,

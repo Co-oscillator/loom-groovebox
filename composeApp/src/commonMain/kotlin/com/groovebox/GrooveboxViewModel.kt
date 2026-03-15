@@ -169,14 +169,20 @@ class GrooveboxViewModel(
      */
     fun getNoteForPadIndex(padIndex: Int, state: GrooveboxState): Int {
         val track = state.tracks[state.selectedTrackIndex]
-        if (padIndex !in 0..15) return -1
+        val maxPadIndex = when(state.gridMode) {
+            GridMode.GRID_4X4 -> 15
+            GridMode.GRID_6X6 -> 35
+            GridMode.MAC_KEYS -> 45
+            GridMode.TONNETZ -> 127 // Tonnetz handles itself elsewhere usually but for safety
+        }
+        if (padIndex < 0 || padIndex > maxPadIndex) return -1
         
         val samplerMode = track.parameters[320] ?: 0f
         val isChopMode = track.engineType == EngineType.SAMPLER && samplerMode >= 0.6f
         val numSlices = if (isChopMode) (((track.parameters[340] ?: 0f) * 14f).toInt() + 2) else 0
 
         return if (track.engineType == EngineType.FM_DRUM) {
-            60 + padIndex
+            60 + (padIndex % 16)
         } else if (isChopMode) {
             if (padIndex < numSlices) 60 + padIndex else -1
         } else if (track.engineType == EngineType.ANALOG_DRUM) {
@@ -185,7 +191,7 @@ class GrooveboxViewModel(
                 when(localIdx) {
                     0 -> 60 // Kick
                     1 -> 61 // Snare
-                    2 -> 62 // Cymb -> Rim
+                    2 -> 62 // Rim
                     3 -> 63 // Hat C
                     4 -> 64 // Hat O
                     5 -> 65 // Cymbal
@@ -194,7 +200,8 @@ class GrooveboxViewModel(
             } else -1
         } else {
             // Melodic mapping
-            val scaleNotes = ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, 16)
+            val count = maxOf(16, padIndex + 1)
+            val scaleNotes = ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, count)
             scaleNotes.getOrElse(padIndex) { state.rootNote + padIndex }
         }
     }

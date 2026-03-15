@@ -1,0 +1,38 @@
+<?xml version="1.0" ?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+ <dict>
+  <key>LSMinimumSystemVersion</key>
+  <string>10.13</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>English</string>
+  <key>CFBundleAllowMixedLocalizations</key>
+  <string>true</string>
+  <key>CFBundleExecutable</key>
+  <string>LoomGroovebox</string>
+  <key>CFBundleIconFile</key>
+  <string>LoomGroovebox.icns</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.groovebox.loom</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>LoomGroovebox</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>2.6.14</string>
+  <key>LSApplicationCategoryType</key>
+  <string>Unknown</string>
+  <key>CFBundleVersion</key>
+  <string>2.6.14</string>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright (C) 2026</string>
+  <key>NSSupportsAutomaticGraphicsSwitching</key>
+  <string>true</string>
+  <key>NSHighResolutionCapable</key>
+  <string>true</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Loom needs microphone access for sampling and granular recording.</string>
+ </dict>
+</plist>

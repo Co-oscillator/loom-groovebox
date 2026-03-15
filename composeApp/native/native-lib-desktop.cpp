@@ -251,6 +251,13 @@ Java_com_groovebox_NativeLib_nSetRecordingSource(JNIEnv *env, jobject thiz,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_nSetInputDevice(JNIEnv *env, jobject thiz,
+                                            jint device_id) {
+  // Placeholder for manual device selection. For now, we use default input.
+  LOGD("nSetInputDevice called with ID: %d (not yet implemented in HAL)", device_id);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_groovebox_NativeLib_nPushSystemAudioSamples(JNIEnv *env, jobject thiz,
                                                     jfloatArray data) {
   if (engine && data != nullptr) {

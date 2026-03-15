@@ -85,9 +85,9 @@ compose.desktop {
         mainClass = "MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Pkg)
+            targetFormats(TargetFormat.Dmg)
             packageName = "LoomGroovebox"
-            packageVersion = "2.6.15"
+            packageVersion = "2.6.17"
 
             macOS {
                 bundleID = "com.groovebox.loom"
@@ -98,6 +98,7 @@ compose.desktop {
                         <string>Loom needs microphone access for sampling and granular recording.</string>
                     """.trimIndent()
                 }
+                entitlementsFile.set(project.file("entitlements.plist"))
             }
         }
         jvmArgs += "-Djava.library.path=${project.projectDir}/native/build"

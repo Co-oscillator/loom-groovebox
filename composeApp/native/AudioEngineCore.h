@@ -171,6 +171,7 @@ public:
   void renderStereo(float *outBuffer, int numFrames);
   void pushSystemAudioSamples(const float *data,
                               int numSamples); // New: for System Audio
+  void pushInputSamples(const float *data, int numFrames, int numChannels);
 
   // Track Management
   void initTrack(int i);
@@ -411,7 +412,7 @@ public:
   float mTempo = 120.0f;
   float mSwing = 0.0f;
   long mStartupFrames = 10000; // Wait ~200ms at 48k
-  double mSampleRate = 44100.0;
+  double mSampleRate = 48000.0;
   std::recursive_mutex mLock;
   void triggerNoteLocked(int trackIndex, int note, int velocity,
                          bool isSequencerTrigger = false, float gate = 0.95f,

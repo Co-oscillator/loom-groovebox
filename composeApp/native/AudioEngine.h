@@ -4,6 +4,7 @@
 #include <bitset>
 #include <memory>
 #include <mutex>
+#include <oboe/Oboe.h>
 #include <vector>
 
 #include "Arpeggiator.h"
@@ -92,7 +93,7 @@ public:
   void setParameterPreview(int trackIndex, int parameterId, float value);
   void setSwing(float swing);
   void setTrackHumanize(int trackIndex, float amount);
-  void setPatternLength(int length);
+  void setPatternLength(int trackIndex, int length);
   void setPlaybackDirection(int trackIndex, int direction);
   void setIsRandomOrder(int trackIndex, bool isRandom);
   void setIsJumpMode(int trackIndex, bool isJump);
@@ -111,7 +112,8 @@ public:
                     bool isLatched, bool isMutated,
                     const std::vector<std::vector<bool>> &rhythms,
                     const std::vector<int> &sequence,
-                    const std::vector<float> &gateLengths);
+                    const std::vector<float> &gateLengths,
+                    float probability);
   void setChordProgConfig(int trackIndex, bool enabled, int mood,
                           int complexity);
   void setScaleConfig(int rootNote, const std::vector<int> &intervals);
@@ -145,7 +147,7 @@ public:
   std::vector<float> getRecordedSampleData(int trackIndex,
                                            float targetSampleRate);
   size_t getSampleLength(int trackIndex);
-  int getActiveNoteMask(int trackIndex);
+  uint64_t getActiveNoteMask(int trackIndex);
   void setPitchBend(int trackIndex, float semitones);
   void setPadMod(int trackIndex, float value);
   void panic();

@@ -264,9 +264,9 @@ Java_com_groovebox_NativeLib_nPushSystemAudioSamples(JNIEnv *env, jobject thiz,
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetPatternLength(
-    JNIEnv *env, jobject thiz, jint length) {
+    JNIEnv *env, jobject thiz, jint track_index, jint length) {
   if (engine)
-    engine->setPatternLength(length);
+    engine->setPatternLength(track_index, length);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -294,7 +294,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_groovebox_NativeLib_nGetCurrentStep(
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetArpConfig(
     JNIEnv *env, jobject thiz, jint track_index, jint mode, jint octaves,
     jint inversion, jboolean is_latched, jboolean is_mutated,
-    jobjectArray rhythms, jintArray sequence, jfloatArray gate_lengths) {
+    jobjectArray rhythms, jintArray sequence, jfloatArray gate_lengths, jfloat probability, jfloat weird) {
   if (engine) {
     std::vector<std::vector<bool>> rhythmVecs;
     if (rhythms != nullptr) {
@@ -333,7 +333,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetArpConfig(
     }
 
     engine->setArpConfig(track_index, mode, octaves, inversion, is_latched,
-                         is_mutated, rhythmVecs, seqVec, gateVec);
+                         is_mutated, rhythmVecs, seqVec, gateVec, probability, weird);
   }
 }
 
@@ -399,6 +399,27 @@ Java_com_groovebox_NativeLib_nStopRecordingSample(JNIEnv *env, jobject thiz,
   if (engine) {
     engine->stopRecordingSample(track_index);
   }
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_groovebox_NativeLib_nGetIsPlaying(JNIEnv *env, jobject thiz) {
+  if (engine)
+    return engine->getIsPlaying();
+  return false;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_groovebox_NativeLib_nGetIsRecording(JNIEnv *env, jobject thiz) {
+  if (engine)
+    return engine->getIsRecording();
+  return false;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_groovebox_NativeLib_nGetIsRecordingSample(JNIEnv *env, jobject thiz) {
+  if (engine)
+    return engine->getIsRecordingSample();
+  return false;
 }
 
 extern "C" JNIEXPORT void JNICALL

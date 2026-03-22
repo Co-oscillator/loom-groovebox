@@ -12,12 +12,30 @@ actual class MidiManager(context: Context, private val onMessageReceived: (ByteA
     private val inputPorts = mutableListOf<MidiInputPort>()
     private val outputPorts = mutableListOf<MidiOutputPort>()
     private val pendingMessages = mutableListOf<ByteArray>()
-    actual val midiLog: androidx.compose.runtime.State<String> = androidx.compose.runtime.mutableStateOf("MIDI: Init...")
-    actual val deviceName: androidx.compose.runtime.State<String> = androidx.compose.runtime.mutableStateOf("Searching...")
+    
+    // --- LOOPBACK FILTERING ---
+    // Store last 50 sent messages with timestamp to ignore reflected echoes
+    private data class SentMessage(val data: ByteArray, val timestamp: Long) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is SentMessage) return false
+            return data.contentEquals(other.data)
+        }
+        override fun hashCode(): Int = data.contentHashCode()
+    }
+    private val recentSentMessages = mutableListOf<SentMessage>()
+    private val MAX_SENT_CACHE = 512
+    private val LOOPBACK_THRESHOLD_MS = 200L
+
+    private val _midiLog = androidx.compose.runtime.mutableStateOf("MIDI: Init...")
+    private val _deviceName = androidx.compose.runtime.mutableStateOf("Searching...")
+    actual val midiLog: androidx.compose.runtime.State<String> = _midiLog
+    actual val deviceName: androidx.compose.runtime.State<String> = _deviceName
+    
     private fun logToUi(msg: String) {
-        val current = midiLog.value.split("\n").takeLast(14).toMutableList()
+        val current = _midiLog.value.split("\n").takeLast(14).toMutableList()
         current.add(msg)
-        midiLog.value = current.joinToString("\n")
+        _midiLog.value = current.joinToString("\n")
     }
 
     init {
@@ -43,7 +61,7 @@ actual class MidiManager(context: Context, private val onMessageReceived: (ByteA
         midiManager.openDevice(deviceInfo, { device ->
             connectedDevices.add(device)
             val name = deviceInfo.properties.getString(MidiDeviceInfo.PROPERTY_NAME) ?: "Unknown"
-            deviceName.value = name
+            _deviceName.value = name
             Log.e("MidiManager", "@@@ CONNECTED TO DEVICE: $name")
             logToUi("Connected: $name")
             
@@ -57,6 +75,25 @@ actual class MidiManager(context: Context, private val onMessageReceived: (ByteA
                         outPort.connect(object : MidiReceiver() {
                             override fun onSend(data: ByteArray, offset: Int, count: Int, timestamp: Long) {
                                 val message = data.copyOfRange(offset, offset + count)
+                                
+                                // Loopback Filter Check
+                                val now = System.currentTimeMillis()
+                                synchronized(recentSentMessages) {
+                                    val it = recentSentMessages.iterator()
+                                    while (it.hasNext()) {
+                                        val sent = it.next()
+                                        if (now - sent.timestamp > LOOPBACK_THRESHOLD_MS * 2) {
+                                            it.remove() // Cleanup old cache
+                                            continue
+                                        }
+                                        if (sent.data.contentEquals(message) && (now - sent.timestamp) < LOOPBACK_THRESHOLD_MS) {
+                                            // MATCH FOUND: This is likely an echo of our own LED feedback
+                                            Log.i("MidiManager", "@@@ IGNORED ECHO: ${message.joinToString(" ") { String.format("%02X", it) }}")
+                                            return 
+                                        }
+                                    }
+                                }
+
                                 val hex = message.joinToString(" ") { String.format("%02X", it) }
                                 Log.e("MidiManager", "@@@ RAW MIDI IN (Port $i): $hex")
                                 onMessageReceived(message)
@@ -101,7 +138,15 @@ actual class MidiManager(context: Context, private val onMessageReceived: (ByteA
         }, Handler(Looper.getMainLooper()))
     }
 
-    fun sendMidi(data: ByteArray) {
+    actual fun sendMidi(data: ByteArray) {
+        // Record in cache BEFORE sending to avoid race where device is faster than we can cache
+        synchronized(recentSentMessages) {
+            recentSentMessages.add(SentMessage(data.copyOf(), System.currentTimeMillis()))
+            if (recentSentMessages.size > MAX_SENT_CACHE) {
+                recentSentMessages.removeAt(0)
+            }
+        }
+
         if (inputPorts.isEmpty()) {
             val hex = data.joinToString(" ") { String.format("%02X", it) }
             Log.e("MidiManager", "@@@ Buffering message (No ports open): $hex")
@@ -122,7 +167,7 @@ actual class MidiManager(context: Context, private val onMessageReceived: (ByteA
         }
     }
 
-    fun close() {
+    actual fun close() {
         inputPorts.forEach { it.close() }
         outputPorts.forEach { it.close() }
         connectedDevices.forEach { it.close() }

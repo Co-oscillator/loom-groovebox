@@ -52,6 +52,7 @@ static inline float softLimit(float x) {
 AudioEngineCore::AudioEngineCore() {
   mSampleRate = 48000.0; // Default to common Android rate
   mBpm = 120.0f;
+  mPatternLength = 64;
   setupTracks();
   for (int i = 0; i < 18; ++i)
     mFxChainDest[i] = -1;
@@ -517,6 +518,9 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
     if (!isSequencerTrigger) {
       track.mPhysicallyHeldNoteCount++;
       if (track.arpeggiator.getMode() != ArpMode::OFF) {
+        if (track.mPhysicallyHeldNoteCount == 1) {
+          track.mArpCountdown = 0; // Immediate trigger for new gesture
+        }
         track.arpeggiator.addNote(note);
         return;
       }
@@ -1233,15 +1237,13 @@ void AudioEngineCore::processCommands() {
       }
       break;
     case AudioCommand::SET_PATTERN_LENGTH:
-      mPatternLength = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
-      // Propagate to all track sequencers
-      {
-        int pages = (mPatternLength + 15) / 16;
-        for (int i = 0; i < (int)mTracks.size(); ++i) {
-          mTracks[i].sequencer.setConfiguration(pages, 16);
-          for (int d = 0; d < 16; ++d)
-            mTracks[i].drumSequencers[d].setConfiguration(pages, 16);
-        }
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        int length = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
+        mTracks[cmd.trackIndex].patternLength = length;
+        int pages = (length + 15) / 16;
+        mTracks[cmd.trackIndex].sequencer.setConfiguration(pages, 16);
+        for (int d = 0; d < 16; ++d)
+          mTracks[cmd.trackIndex].drumSequencers[d].setConfiguration(pages, 16);
       }
       break;
     case AudioCommand::SET_STEP:
@@ -2123,6 +2125,10 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
         if (track.arpeggiator.getMode() != ArpMode::OFF) {
           float arpSamplesPerStep =
               samplesPerStep * std::max(0.125f, track.mArpRate);
+          
+          arpSamplesPerStep /= track.arpeggiator.getRateMultiplier();
+          arpSamplesPerStep /= track.arpeggiator.getSpeedMultiplier();
+
           if (track.mArpDivisionMode == 1)
             arpSamplesPerStep *= 1.5f;
           else if (track.mArpDivisionMode == 2)
@@ -2510,9 +2516,10 @@ void AudioEngineCore::setTrackHumanize(int trackIndex, float amount) {
   mCommandQueue.push_back(cmd);
 }
 
-void AudioEngineCore::setPatternLength(int length) {
+void AudioEngineCore::setPatternLength(int trackIndex, int length) {
   AudioCommand cmd;
   cmd.type = AudioCommand::SET_PATTERN_LENGTH;
+  cmd.trackIndex = trackIndex;
   cmd.data1 = length;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
@@ -2715,11 +2722,15 @@ void AudioEngineCore::setArpConfig(int trackIndex, int mode, int octaves,
                                int inversion, bool isLatched, bool isMutated,
                                const std::vector<std::vector<bool>> &rhythms,
                                const std::vector<int> &sequence,
-                               const std::vector<float> &gateLengths) {
+                               const std::vector<float> &gateLengths,
+                               float probability, float weird) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     ArpMode newMode = static_cast<ArpMode>(mode);
     Track &track = mTracks[trackIndex];
+
+    track.arpeggiator.setProbability(probability);
+    track.arpeggiator.setWeird(weird);
 
     bool wasLatched = track.arpeggiator.isLatched();
     if (wasLatched && !isLatched && track.mPhysicallyHeldNoteCount == 0) {
@@ -3031,6 +3042,64 @@ std::vector<float> AudioEngineCore::getSamplerWaveform(int trackIndex,
       return mTracks[trackIndex].granularEngine.getAmplitudeWaveform(numPoints);
   }
   return {};
+}
+
+std::vector<int> AudioEngineCore::getStepNotes(int trackIndex, int stepIndex,
+                                              int drumIndex) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (trackIndex < 0 || trackIndex >= (int)mTracks.size())
+    return {};
+
+  const auto &steps = (drumIndex >= 0 && drumIndex < 16)
+                          ? mTracks[trackIndex].drumSequencers[drumIndex].getSteps()
+                          : mTracks[trackIndex].sequencer.getSteps();
+
+  if (stepIndex < 0 || stepIndex >= (int)steps.size())
+    return {};
+
+  const Step &s = steps[stepIndex];
+  std::vector<int> notes;
+  for (const auto &ni : s.notes)
+    notes.push_back(ni.note);
+  return notes;
+}
+
+float AudioEngineCore::getStepVelocity(int trackIndex, int stepIndex,
+                                       int drumIndex) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (trackIndex < 0 || trackIndex >= (int)mTracks.size())
+    return 0.0f;
+
+  const auto &steps = (drumIndex >= 0 && drumIndex < 16)
+                          ? mTracks[trackIndex].drumSequencers[drumIndex].getSteps()
+                          : mTracks[trackIndex].sequencer.getSteps();
+
+  if (stepIndex < 0 || stepIndex >= (int)steps.size())
+    return 0.0f;
+
+  const Step &s = steps[stepIndex];
+  if (s.notes.empty())
+    return 0.0f;
+  return s.notes[0].velocity;
+}
+
+float AudioEngineCore::getStepSubStep(int trackIndex, int stepIndex,
+                                      int drumIndex) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (trackIndex < 0 || trackIndex >= (int)mTracks.size())
+    return 0.0f;
+
+  const auto &steps = (drumIndex >= 0 && drumIndex < 16)
+                          ? mTracks[trackIndex].drumSequencers[drumIndex].getSteps()
+                          : mTracks[trackIndex].sequencer.getSteps();
+
+  if (stepIndex < 0 || stepIndex >= (int)steps.size())
+    return 0.0f;
+
+  const Step &s = steps[stepIndex];
+  if (s.notes.empty())
+    return 0.0f;
+  return s.notes[0].subStepOffset;
 }
 
 bool AudioEngineCore::getStepActive(int trackIndex, int stepIndex, int drumIndex) {

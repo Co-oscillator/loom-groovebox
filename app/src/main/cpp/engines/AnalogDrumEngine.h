@@ -172,7 +172,8 @@ private:
         }
         float noise = rng.next();
         filterState += (noise - filterState) * (0.4f + tone * 0.4f);
-        return (noise - filterState) * clapEnv * velocity * 0.8f;
+        out = (noise - filterState) * clapEnv * 0.8f;
+        break;
       }
 
       case DrumType::HiHatClosed:
@@ -183,7 +184,6 @@ private:
           return 0.0f;
         }
         float spread = 1.0f + (paramB * 0.3f);
-        // Tuned Base from v.baseFreq
         float freqs[6] = {baseFreq,
                           baseFreq * 1.5f * spread,
                           baseFreq * 1.63f,
@@ -199,7 +199,8 @@ private:
         }
         float hpFreq = 0.25f + (tone * 0.7f);
         filterState += (cluster - filterState) * hpFreq;
-        return (cluster - filterState) * env * 0.3f * velocity;
+        out = (cluster - filterState) * env * 0.3f;
+        break;
       }
 
       case DrumType::Cymbal: {
@@ -218,7 +219,6 @@ private:
           return 0.0f;
         }
         float spread = 1.0f + (paramB * 0.4f);
-        // Tuned Base from v.baseFreq
         float freqs[6] = {baseFreq,
                           baseFreq * 1.5f * spread,
                           baseFreq * 1.63f,
@@ -234,7 +234,8 @@ private:
         }
         float hpFreq = 0.05f + (tone * 0.4f);
         filterState += (cluster - filterState) * hpFreq;
-        return (cluster - filterState) * env * 0.4f * velocity;
+        out = (cluster - filterState) * env * 0.4f;
+        break;
       }
 
       case DrumType::Perc: {
@@ -245,7 +246,8 @@ private:
         }
         phase += baseFreq * dt;
         float sine = std::sin(phase * 6.28318f);
-        return sine * env * 0.8f * velocity;
+        out = sine * env * 0.8f;
+        break;
       }
 
       case DrumType::Noise: {
@@ -257,7 +259,8 @@ private:
         float noise = rng.next();
         float lpFreq = 0.1f + (tone * 0.8f);
         filterState += (noise - filterState) * lpFreq;
-        return filterState * env * 0.7f * velocity;
+        out = filterState * env * 0.7f;
+        break;
       }
       } // Switch
       return out * velocity * gain;

@@ -10,6 +10,8 @@ import com.groovebox.GrooveboxViewModel
 import com.groovebox.NativeLib
 import com.groovebox.midi.EmpledManager
 import com.groovebox.midi.MidiManager
+import com.groovebox.EngineType
+import com.groovebox.GridMode
 import com.groovebox.ui.LocalPlatformInfo
 import com.groovebox.ui.PlatformInfo
 import androidx.compose.ui.geometry.Offset
@@ -62,18 +64,36 @@ fun MainScreen(
             LocalFocusedSetter provides { newValue -> viewModel.onStateChange(viewModel.state.copy(focusedValue = newValue)) }
         ) {
             // UI Sync Loop (30fps polling)
-            LaunchedEffect(state.isPlaying) {
+            LaunchedEffect(Unit) {
                 while (true) {
-                    if (state.isPlaying) {
-                        val newStep = nativeLib.getCurrentStep(state.selectedTrackIndex)
-                        if (newStep != state.currentStep) {
-                            viewModel.onStateChange(state.copy(currentStep = newStep))
-                        }
+                    // 1. Pull core engine state (CPU, Transport, Parameters)
+                    viewModel.pollEngineState() 
+                    
+                    val selectedTrackIdx = viewModel.state.selectedTrackIndex
+                    val currentTrack = viewModel.state.tracks[selectedTrackIdx]
+                    
+                    // 2. Update Playhead
+                    if (viewModel.state.isPlaying) {
+                        val newStep = nativeLib.getCurrentStep(selectedTrackIdx)
+                        viewModel.updateCurrentStep(newStep)
                     } else {
-                        if (state.currentStep != 0) {
-                             viewModel.onStateChange(state.copy(currentStep = 0))
-                        }
+                        viewModel.updateCurrentStep(0)
                     }
+                    
+                    // 3. Sync Sequencer Highlights
+                    // Pull if recording (live input) OR if it's a drum engine (which often has dynamic updates)
+                    if (viewModel.state.isRecording || 
+                        currentTrack.engineType == com.groovebox.EngineType.FM_DRUM || 
+                        currentTrack.engineType == com.groovebox.EngineType.ANALOG_DRUM) {
+                        viewModel.pullRecordedSteps(selectedTrackIdx)
+                    }
+                    
+                    // 4. Waveform Updates for Sampler/Granular
+                    if (currentTrack.engineType == com.groovebox.EngineType.SAMPLER || 
+                        currentTrack.engineType == com.groovebox.EngineType.GRANULAR) {
+                        viewModel.pullWaveform(selectedTrackIdx)
+                    }
+                    
                     kotlinx.coroutines.delay(32)
                 }
             }
@@ -101,14 +121,12 @@ fun MainScreen(
                                 midiManager = midiManager
                             )
                             1 -> ParametersScreen(
-                                state = state,
+                                viewModel = viewModel,
                                 trackIndex = state.selectedTrackIndex,
-                                onStateChange = viewModel::onStateChange,
                                 nativeLib = nativeLib
                             )
                             2 -> SequencerView(
-                                state = state,
-                                onStateChange = viewModel::onStateChange,
+                                viewModel = viewModel,
                                 nativeLib = nativeLib,
                                 empledManager = empledManager
                             )
@@ -129,6 +147,66 @@ fun MainScreen(
                                 midiManager = midiManager
                             )
                         }
+
+                        // Top Info Bar (CPU & Parameter Display)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(20.dp)
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Focused Parameter Value
+                                Text(
+                                    text = state.focusedValue ?: "",
+                                    color = Color.Cyan,
+                                    fontSize = 11.sp,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                
+                                // CPU Monitor
+                                if (state.showCpuMonitor) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "CPU",
+                                            color = Color.Gray,
+                                            fontSize = 9.sp,
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        )
+                                        val cpuPerc = (state.cpuLoad * 100).coerceIn(0f, 100f)
+                                        Box(
+                                            modifier = Modifier
+                                                .width(40.dp)
+                                                .height(4.dp)
+                                                .background(Color.DarkGray, androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(cpuPerc / 100f)
+                                                    .fillMaxHeight()
+                                                    .background(
+                                                        if (cpuPerc > 80f) Color.Red else if (cpuPerc > 50f) Color.Yellow else Color.Green,
+                                                        androidx.compose.foundation.shape.RoundedCornerShape(2.dp)
+                                                    )
+                                            )
+                                        }
+                                        Text(
+                                            text = "${cpuPerc.toInt()}%",
+                                            color = if (cpuPerc > 80f) Color.Red else Color.White,
+                                            fontSize = 9.sp,
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Right Sidebars
@@ -138,12 +216,12 @@ fun MainScreen(
                     ) {
                         // Transport Column
                         Box(modifier = Modifier.width(80.dp).fillMaxHeight().background(Color.Black.copy(alpha = 0.2f))) {
-                            TransportControls(state, viewModel::onStateChange, nativeLib)
+                            TransportControls(viewModel, nativeLib)
                         }
                         
                         // Vertical Navigation Tabs
                         VerticalNavigationTabs(state.selectedTab, state.isRecording) { 
-                            viewModel.onStateChange(state.copy(selectedTab = it)) 
+                            viewModel.setSelectedTab(it) 
                         }
                     }
                 }
@@ -213,7 +291,9 @@ fun VerticalNavigationTabs(selectedTab: Int, isRecording: Boolean, onTabSelected
 }
 
 @Composable
-fun TransportControls(state: com.groovebox.GrooveboxState, onStateChange: (com.groovebox.GrooveboxState) -> Unit, nativeLib: NativeLib) {
+fun TransportControls(viewModel: com.groovebox.GrooveboxViewModel, nativeLib: NativeLib) {
+    val state = viewModel.state
+    val onStateChange = viewModel::onStateChange
     val platformInfo = LocalPlatformInfo.current
     val isWideScreen = (platformInfo.screenWidthDp.toFloat() / platformInfo.screenHeightDp.toFloat()) > 1.7f
     val spacing = if (isWideScreen) 4.dp else 4.dp
@@ -278,7 +358,7 @@ fun TransportControls(state: com.groovebox.GrooveboxState, onStateChange: (com.g
                     .border(2.dp, Color.Red, androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
                     .clickable {
                         val newRec = !state.isRecording
-                        onStateChange(state.copy(isRecording = newRec, isPlaying = if (newRec) true else state.isPlaying))
+                        viewModel.setPlaybackState(isPlaying = if (newRec) true else state.isPlaying, isRecording = newRec)
                         nativeLib.setIsRecording(newRec)
                         if (newRec) nativeLib.setPlaying(true)
                     },
@@ -295,7 +375,7 @@ fun TransportControls(state: com.groovebox.GrooveboxState, onStateChange: (com.g
             IconButton(
                 onClick = { 
                     val newPlaying = !state.isPlaying
-                    onStateChange(state.copy(isPlaying = newPlaying))
+                    viewModel.setPlaybackState(isPlaying = newPlaying, isRecording = state.isRecording)
                     nativeLib.setPlaying(newPlaying)
                 },
                 modifier = Modifier.size(if (isWideScreen) 34.dp else 44.dp).background(if (state.isPlaying) Color.Green.copy(alpha = 0.2f) else Color.DarkGray, androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
@@ -319,7 +399,7 @@ fun TransportControls(state: com.groovebox.GrooveboxState, onStateChange: (com.g
                         awaitEachGesture {
                             awaitFirstDown()
                             stopFlash = true
-                            onStateChange(state.copy(isPlaying = false, isRecording = false))
+                            viewModel.setPlaybackState(isPlaying = false, isRecording = false)
                             nativeLib.setPlaying(false)
                             nativeLib.setIsRecording(false)
                             nativeLib.panic()

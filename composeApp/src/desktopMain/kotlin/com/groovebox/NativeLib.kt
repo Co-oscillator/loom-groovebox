@@ -7,7 +7,7 @@ actual class NativeLib {
     actual fun setTrackVolume(trackIndex: Int, volume: Float) = nSetTrackVolume(trackIndex, volume)
     actual fun setEngineType(trackIndex: Int, type: Int) = nSetEngineType(trackIndex, type)
     actual fun setTempo(bpm: Float) = nSetTempo(bpm)
-    actual fun setPatternLength(length: Int) = nSetPatternLength(length)
+    actual fun setPatternLength(trackIndex: Int, length: Int) = nSetPatternLength(trackIndex, length)
     actual fun setPlaying(playing: Boolean) = nSetPlaying(playing)
     actual fun triggerNote(trackIndex: Int, note: Int, velocity: Int) = nTriggerNote(trackIndex, note, velocity)
     actual fun releaseNote(trackIndex: Int, note: Int) = nReleaseNote(trackIndex, note)
@@ -49,8 +49,8 @@ actual class NativeLib {
     actual fun getStepNotes(trackIndex: Int, stepIndex: Int, drumIndex: Int): IntArray = nGetStepNotes(trackIndex, stepIndex, drumIndex)
     actual fun getStepVelocity(trackIndex: Int, stepIndex: Int, drumIndex: Int): Float = nGetStepVelocity(trackIndex, stepIndex, drumIndex)
     actual fun getStepSubStep(trackIndex: Int, stepIndex: Int, drumIndex: Int): Float = nGetStepSubStep(trackIndex, stepIndex, drumIndex)
-    actual fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray) = 
-        nSetArpConfig(trackIndex, mode, octaves, inversion, isLatched, isMutated, rhythms, sequence, gateLengths)
+    actual fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray, probability: Float, weird: Float) = 
+        nSetArpConfig(trackIndex, mode, octaves, inversion, isLatched, isMutated, rhythms, sequence, gateLengths, probability, weird)
     actual fun setChordProgConfig(trackIndex: Int, enabled: Boolean, mood: Int, complexity: Int) = nSetChordProgConfig(trackIndex, enabled, mood, complexity)
     actual fun setScaleConfig(rootNote: Int, intervals: IntArray) = nSetScaleConfig(rootNote, intervals)
     actual fun getGranularPlayheads(trackIndex: Int): FloatArray = nGetGranularPlayheads(trackIndex)
@@ -101,6 +101,9 @@ actual class NativeLib {
     actual fun setChainEnabled(trackIndex: Int, enabled: Boolean) = nSetChainEnabled(trackIndex, enabled)
     actual fun setChainLength(trackIndex: Int, length: Int) = nSetChainLength(trackIndex, length)
     actual fun setChainSlot(trackIndex: Int, slotIndex: Int, laneIndex: Int, steps: Array<StepState>) = nSetChainSlot(trackIndex, slotIndex, laneIndex, steps)
+    actual fun getIsPlaying(): Boolean = nGetIsPlaying()
+    actual fun getIsRecording(): Boolean = nGetIsRecording()
+    actual fun getIsRecordingSample(): Boolean = nGetIsRecordingSample()
 
     private external fun nInit()
     private external fun nStart()
@@ -108,7 +111,7 @@ actual class NativeLib {
     private external fun nSetTrackVolume(trackIndex: Int, volume: Float)
     private external fun nSetEngineType(trackIndex: Int, type: Int)
     private external fun nSetTempo(bpm: Float)
-    private external fun nSetPatternLength(length: Int)
+    private external fun nSetPatternLength(trackIndex: Int, length: Int)
     private external fun nSetPlaying(playing: Boolean)
     private external fun nTriggerNote(trackIndex: Int, note: Int, velocity: Int)
     private external fun nReleaseNote(trackIndex: Int, note: Int)
@@ -149,7 +152,7 @@ actual class NativeLib {
     private external fun nGetStepNotes(trackIndex: Int, stepIndex: Int, drumIndex: Int): IntArray
     private external fun nGetStepVelocity(trackIndex: Int, stepIndex: Int, drumIndex: Int): Float
     private external fun nGetStepSubStep(trackIndex: Int, stepIndex: Int, drumIndex: Int): Float
-    private external fun nSetArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray)
+    private external fun nSetArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray, probability: Float, weird: Float)
     private external fun nSetChordProgConfig(trackIndex: Int, enabled: Boolean, mood: Int, complexity: Int)
     private external fun nSetScaleConfig(rootNote: Int, intervals: IntArray)
     private external fun nGetGranularPlayheads(trackIndex: Int): FloatArray
@@ -200,10 +203,47 @@ actual class NativeLib {
     private external fun nSetChainEnabled(trackIndex: Int, enabled: Boolean)
     private external fun nSetChainLength(trackIndex: Int, length: Int)
     private external fun nSetChainSlot(trackIndex: Int, slotIndex: Int, laneIndex: Int, steps: Array<StepState>)
+    private external fun nGetIsPlaying(): Boolean
+    private external fun nGetIsRecording(): Boolean
+    private external fun nGetIsRecordingSample(): Boolean
 
     companion object {
         init {
-            System.loadLibrary("native-lib")
+            try {
+                val libName = "libloom-native-core.dylib"
+                val tempDir = java.io.File(System.getProperty("java.io.tmpdir"), "loom_native")
+                if (!tempDir.exists()) tempDir.mkdirs()
+                
+                val tempFile = java.io.File(tempDir, libName)
+                
+                // Always extract to ensure we have the latest version in this session
+                val inputStream = NativeLib::class.java.getResourceAsStream("/$libName")
+                if (inputStream != null) {
+                    val outputStream = java.io.FileOutputStream(tempFile)
+                    inputStream.copyTo(outputStream)
+                    outputStream.close()
+                    inputStream.close()
+                    
+                    if (tempFile.exists()) {
+                        System.load(tempFile.absolutePath)
+                        println("Successfully loaded native library from JAR extraction: ${tempFile.absolutePath}")
+                    } else {
+                        throw Exception("Failed to extract native library")
+                    }
+                } else {
+                    // Fallback to searching on disk if not in resources
+                    System.loadLibrary("loom-native-core")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Final fallback for development environments
+                try {
+                    System.loadLibrary("loom-native-core")
+                } catch (e2: Exception) {
+                    System.err.println("CRITICAL: Failed to load native library loom-native-core")
+                    e2.printStackTrace()
+                }
+            }
         }
     }
 }

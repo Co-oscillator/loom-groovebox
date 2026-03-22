@@ -15,10 +15,13 @@ import androidx.compose.ui.window.*
 import androidx.compose.ui.unit.dp
 
 fun main() = application {
-    val heldKeys = remember { mutableSetOf<Key>() }
-    val nativeLib = remember { NativeLib() }
-    val viewModel = remember { GrooveboxViewModel(nativeLib) }
-    val audioCapture = remember { com.groovebox.DesktopAudioCapture() }
+    val heldKeys = mutableSetOf<Key>()
+    val nativeLib = NativeLib()
+    val viewModel = GrooveboxViewModel(nativeLib)
+    val midiManager = com.groovebox.midi.MidiManager { data ->
+        viewModel.processMidiMessage(data)
+    }
+    val audioCapture = com.groovebox.DesktopAudioCapture()
 
     val windowState = rememberWindowState(
         width = 1200.dp,
@@ -53,7 +56,6 @@ fun main() = application {
                     // Numbers
                     Key.One to 0, Key.Two to 1, Key.Three to 2, Key.Four to 3, Key.Five to 4, 
                     Key.Six to 5, Key.Seven to 6, Key.Eight to 7, Key.Nine to 8, Key.Zero to 9,
-                    Key.Minus to 10, Key.Equals to 11,
                     // QWERTY
                     Key.Q to 12, Key.W to 13, Key.E to 14, Key.R to 15, Key.T to 16, 
                     Key.Y to 17, Key.U to 18, Key.I to 19, Key.O to 20, Key.P to 21,
@@ -69,23 +71,7 @@ fun main() = application {
                 else -> emptyMap()
             }
 
-            val padIndex = keyToPadMap[event.key]
-            
-            if (padIndex != null) {
-                when (event.type) {
-                    KeyEventType.KeyDown -> {
-                        if (heldKeys.add(event.key)) {
-                            viewModel.triggerPad(padIndex, 100)
-                        }
-                    }
-                    KeyEventType.KeyUp -> {
-                        if (heldKeys.remove(event.key)) {
-                            viewModel.releasePad(padIndex)
-                        }
-                    }
-                }
-                true
-            } else if (event.key == Key.Minus && event.type == KeyEventType.KeyDown) {
+            if (event.key == Key.Minus && event.type == KeyEventType.KeyDown) {
                 val newRoot = (currentState.rootNote - 12).coerceIn(0, 72)
                 viewModel.onStateChange(currentState.copy(rootNote = newRoot))
                 nativeLib.setScaleConfig(newRoot, currentState.scaleType.intervals.toIntArray())
@@ -104,13 +90,66 @@ fun main() = application {
                         isRecording = true
                     )
                     viewModel.onStateChange(newState)
+                    nativeLib.setPlaying(true)
+                    nativeLib.setIsRecording(true)
                 } else {
                     // Toggle Start/Stop
-                    viewModel.onStateChange(currentState.copy(isPlaying = !currentState.isPlaying))
+                    val newPlaying = !currentState.isPlaying
+                    viewModel.onStateChange(currentState.copy(isPlaying = newPlaying))
+                    nativeLib.setPlaying(newPlaying)
                 }
                 true
+            } else if (event.isMetaPressed || event.isCtrlPressed) {
+                when (event.key) {
+                    Key.DirectionUp -> {
+                        if (event.type == KeyEventType.KeyDown) {
+                            val nextTab = (currentState.selectedTab - 1 + 6) % 6
+                            viewModel.onStateChange(currentState.copy(selectedTab = nextTab))
+                        }
+                        true
+                    }
+                    Key.DirectionDown -> {
+                        if (event.type == KeyEventType.KeyDown) {
+                            val nextTab = (currentState.selectedTab + 1) % 6
+                            viewModel.onStateChange(currentState.copy(selectedTab = nextTab))
+                        }
+                        true
+                    }
+                    Key.DirectionLeft -> {
+                        if (event.type == KeyEventType.KeyDown) {
+                            val nextTrack = (currentState.selectedTrackIndex - 1 + 8) % 8
+                            viewModel.onStateChange(currentState.copy(selectedTrackIndex = nextTrack))
+                        }
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        if (event.type == KeyEventType.KeyDown) {
+                            val nextTrack = (currentState.selectedTrackIndex + 1) % 8
+                            viewModel.onStateChange(currentState.copy(selectedTrackIndex = nextTrack))
+                        }
+                        true
+                    }
+                    else -> false
+                }
             } else {
-                false
+                val padIndex = keyToPadMap[event.key]
+                if (padIndex != null) {
+                    when (event.type) {
+                        KeyEventType.KeyDown -> {
+                            if (heldKeys.add(event.key)) {
+                                viewModel.triggerPad(padIndex, 100)
+                            }
+                        }
+                        KeyEventType.KeyUp -> {
+                            if (heldKeys.remove(event.key)) {
+                                viewModel.releasePad(padIndex)
+                            }
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
             }
         }
     ) {
@@ -133,13 +172,15 @@ fun main() = application {
         DisposableEffect(Unit) {
             onDispose {
                 audioCapture.stopCapture()
+                midiManager.close()
                 nativeLib.stop()
             }
         }
 
         MainScreen(
             viewModel = viewModel,
-            nativeLib = nativeLib
+            nativeLib = nativeLib,
+            midiManager = midiManager
         )
     }
 }

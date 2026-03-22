@@ -416,11 +416,11 @@ fun Knob(
                 else -> "${(value * 100).toInt()}"
             }
             if (showValue) {
-                Text(text = displayText, style = MaterialTheme.typography.labelSmall, fontSize = if (displayText.length > 4) 8.sp else 10.sp, maxLines = 1, softWrap = false, color = if (isHeld) Color.White else Color.White.copy(alpha = 0.5f))
+                Text(text = displayText, style = MaterialTheme.typography.labelSmall, fontSize = if (displayText.length > 4) 8.sp else 10.sp, maxLines = 1, softWrap = false, color = if (isHeld) Color.White else Color(0xFFEEEEEE).copy(alpha = 0.6f))
             }
         }
         val isTablet = LocalPlatformInfo.current.isTablet
         val baseFontSize = labelFontSize ?: (if (isTablet) 8.sp else 10.sp)
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = if (isHeld) Color.White else if (isTablet) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.8f), fontSize = baseFontSize.let { base -> if (label.length > 5) (base.value - 1).sp else base }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = if (isHeld) Color.White else Color(0xFFEEEEEE), fontSize = baseFontSize.let { base -> if (label.length > 5) (base.value - 1).sp else base }, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

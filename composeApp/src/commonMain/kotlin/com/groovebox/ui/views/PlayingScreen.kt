@@ -198,9 +198,9 @@ fun PlayingPad(
                                                         if (event.changes.any { it.pressed }) {
                                                             val currentPos = event.changes.first().position
                                                             val dx = currentPos.x - startPos.x
-                                                            val dy = startPos.y - currentPos.y // Up is positive modulation
                                                             
                                                             // X-Axis: Pitch Bend (range depends on mode)
+
                                                             // Slice pads (Chop modes): ±12 semitones for dramatic pitch effects
                                                             // Note pads (all others): ±2 semitones for subtle vibrato/bend
                                                             val bendMultiplier = if (isChopMode) 24.0f else 4.0f
@@ -219,6 +219,9 @@ fun PlayingPad(
                                                             }
                                                             
                                                             // Y-Axis: Modulation (Absolute mapping over pad height)
+                                                            val dyRaw = startPos.y - currentPos.y // Standard: Up is positive
+                                                            val dy = if (currentState.invertPadY) -dyRaw else dyRaw
+                                                            
                                                             val modDelta = (dy / size.height.toFloat()) * (currentState.padYAttenuation ?: 1.0f)
                                                             val newMod = (initialModValue + modDelta).coerceIn(0f, 1f)
                                                             if (newMod != currentModValue) {
@@ -592,26 +595,41 @@ fun MacKeysGrid(
 
                     repeat(colCount) { col ->
                         val padIndex = currentIndex + col
-                        val note = scaleNotes.getOrElse(padIndex) { state.rootNote + padIndex }
-                        val isBlack = isBlackKey(note)
-                        val padColor = if (isBlack) androidx.compose.ui.graphics.lerp(Color.DarkGray, engineColor, 0.4f) else engineColor
+                        val isOctaveKey = rowIndex == 0 && col >= 10
                         
                         Box(modifier = Modifier.size(38.dp)) {
-                             key(state.selectedTrackIndex, padIndex) {
-                                 PlayingPad(
-                                     padIndex = padIndex,
-                                     note = note,
-                                     padSize = 38.dp,
-                                     padColor = padColor,
-                                     isPlaying = state.isPlaying,
-                                     currentStep = state.currentStep,
-                                     nativeLib = nativeLib,
-                                     latestState = state,
-                                     onStateChange = onStateChange,
-                                     empledManager = empledManager,
-                                     isSolidStyle = false
-                                 )
-                             }
+                            if (isOctaveKey) {
+                                // Draw an octave indicator or just a grayed out key
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.DarkGray.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                        .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(4.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(if (col == 10) "-" else "+", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                }
+                            } else {
+                                key(state.selectedTrackIndex, padIndex) {
+                                    val note = scaleNotes.getOrElse(padIndex) { state.rootNote + padIndex }
+                                    val isBlack = isBlackKey(note)
+                                    val padColor = if (isBlack) androidx.compose.ui.graphics.lerp(Color.DarkGray, engineColor, 0.4f) else engineColor
+                                    
+                                    PlayingPad(
+                                        padIndex = padIndex,
+                                        note = note,
+                                        padSize = 38.dp,
+                                        padColor = padColor,
+                                        isPlaying = state.isPlaying,
+                                        currentStep = state.currentStep,
+                                        nativeLib = nativeLib,
+                                        latestState = state,
+                                        onStateChange = onStateChange,
+                                        empledManager = empledManager,
+                                        isSolidStyle = false
+                                    )
+                                }
+                            }
                         }
                     }
                     currentIndex += colCount
@@ -1020,7 +1038,7 @@ fun EngineSideSheet(
                                     verticalArrangement = Arrangement.Center,
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    EngineIcon(engine, tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    EngineIcon(type = engine, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(
                                         engine.name.replace("_", " "),
                                         style = MaterialTheme.typography.labelSmall,
@@ -1096,6 +1114,7 @@ fun ArpSettingsSheet(
                 tonalElevation = 16.dp
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp).verticalScroll(rememberScrollState())) {
+                    val maxSteps = if (config.isLatched) 16 else 8
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("ARPEGGIATOR", style = MaterialTheme.typography.titleLarge, color = Color.White)
                         IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White) }
@@ -1125,7 +1144,9 @@ fun ArpSettingsSheet(
                                             newConfig.isMutated,
                                             newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
                                             newConfig.randomSequence.toIntArray(),
-                                            newConfig.gateLengths.toFloatArray()
+                                            newConfig.gateLengths.toFloatArray(),
+                                            newConfig.probability,
+                                            newConfig.weird
                                         )
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp), // Compact padding
@@ -1159,7 +1180,9 @@ fun ArpSettingsSheet(
                                             newConfig.isMutated,
                                             newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
                                             newConfig.randomSequence.toIntArray(),
-                                            newConfig.gateLengths.toFloatArray()
+                                            newConfig.gateLengths.toFloatArray(),
+                                            newConfig.probability,
+                                            newConfig.weird
                                         )
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp),
@@ -1238,10 +1261,10 @@ fun ArpSettingsSheet(
                                     Knob(
                                         label = "STRUM",
                                         initialValue = config.strum,
-                                        parameterId = -98, // Custom
+                                        parameterId = -102, // Custom
                                         state = state,
                                         onStateChange = { newState ->
-                                            val v = newState.tracks[state.selectedTrackIndex].parameters[-98] ?: config.strum
+                                            val v = newState.tracks[state.selectedTrackIndex].parameters[-102] ?: config.strum
                                             val newConfig = config.copy(strum = v)
                                             val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
                                             onStateChange(state.copy(tracks = newTracks))
@@ -1272,7 +1295,7 @@ fun ArpSettingsSheet(
                                                     val newConfig = config.copy(octaves = oct)
                                                     val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
                                                     onStateChange(state.copy(tracks = newTracks))
-                                                    nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, oct, newConfig.inversion, newConfig.isLatched, newConfig.isMutated, newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newConfig.randomSequence.toIntArray(), newConfig.gateLengths.toFloatArray())
+                                                    nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, oct, newConfig.inversion, newConfig.isLatched, newConfig.isMutated, newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newConfig.randomSequence.toIntArray(), newConfig.gateLengths.toFloatArray(), newConfig.probability, newConfig.weird)
                                                 },
                                             contentAlignment = Alignment.Center
                                         ) { Text("$oct", color = if (isSelected) Color.Black else Color.White, fontSize = 10.sp) }
@@ -1294,7 +1317,7 @@ fun ArpSettingsSheet(
                                                     val newConfig = config.copy(inversion = inv)
                                                     val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
                                                     onStateChange(state.copy(tracks = newTracks))
-                                                    nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, config.octaves, inv, newConfig.isLatched, newConfig.isMutated, newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newConfig.randomSequence.toIntArray(), newConfig.gateLengths.toFloatArray())
+                                                    nativeLib.setArpConfig(state.selectedTrackIndex, config.mode.ordinal, config.octaves, inv, newConfig.isLatched, newConfig.isMutated, newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newConfig.randomSequence.toIntArray(), newConfig.gateLengths.toFloatArray(), newConfig.probability, newConfig.weird)
                                                 },
                                             contentAlignment = Alignment.Center
                                         ) { Text("$inv", color = if (isSelected) Color.Black else Color.White, fontSize = 10.sp) }
@@ -1387,7 +1410,9 @@ fun ArpSettingsSheet(
                                             updatedConfig.isMutated,
                                             newRhythms.map { it.toBooleanArray() }.toTypedArray(),
                                             updatedConfig.randomSequence.toIntArray(),
-                                            updatedConfig.gateLengths.toFloatArray()
+                                            updatedConfig.gateLengths.toFloatArray(),
+                                            updatedConfig.probability,
+                                            updatedConfig.weird
                                         )
                                     },
                                     modifier = Modifier.height(36.dp).widthIn(min = 64.dp).padding(start = 8.dp), // Increased height to 36dp
@@ -1401,134 +1426,228 @@ fun ArpSettingsSheet(
                         }
                     }
                     
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("RHYTHM PATTERNS ($maxSteps STEPS)", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                Text("(Bottom=Root, Upper=Polyphonic Cycle)", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = Color.DarkGray)
+                            }
+                            // Probability Knob for Arp
+                            if (!config.isLatched) {
+                                Knob(
+                                    label = "PROB",
+                                    initialValue = config.probability,
+                                    parameterId = -101, // Custom
+                                    state = state,
+                                    onStateChange = { newState ->
+                                        val v = newState.tracks[state.selectedTrackIndex].parameters[-101] ?: config.probability
+                                        val newConfig = config.copy(probability = v)
+                                        val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                        onStateChange(state.copy(tracks = newTracks))
+                                        nativeLib.setArpConfig(
+                                            state.selectedTrackIndex,
+                                            newConfig.mode.ordinal,
+                                            newConfig.octaves,
+                                            newConfig.inversion,
+                                            newConfig.isLatched,
+                                            newConfig.isMutated,
+                                            newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
+                                            newConfig.randomSequence.toIntArray(),
+                                            newConfig.gateLengths.toFloatArray(),
+                                            v,
+                                            newConfig.weird
+                                        )
+                                    },
+                                    nativeLib = nativeLib,
+                                    knobSize = 48.dp,
+                                    valueFormatter = { v -> "${(v * 100).toInt()}%" }
+                                )
+                            }
+                            
+                            if (!config.isLatched) {
+                                Spacer(modifier = Modifier.width(16.dp))
 
-                        // Rhythm Editor (3 Lanes)
-                        Text("RHYTHM PATTERNS (16 STEPS)", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                        Text("(Bottom=Root, Upper=Polyphonic Cycle)", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = Color.DarkGray)
+                                // Weird Knob for Arp
+                                Knob(
+                                    label = "WEIRD",
+                                    initialValue = config.weird,
+                                    parameterId = -102, // Custom
+                                    state = state,
+                                    onStateChange = { newState ->
+                                        val v = newState.tracks[state.selectedTrackIndex].parameters[-102] ?: config.weird
+                                        val newConfig = config.copy(weird = v)
+                                        val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                        onStateChange(state.copy(tracks = newTracks))
+                                        nativeLib.setArpConfig(
+                                            state.selectedTrackIndex,
+                                            newConfig.mode.ordinal,
+                                            newConfig.octaves,
+                                            newConfig.inversion,
+                                            newConfig.isLatched,
+                                            newConfig.isMutated,
+                                            newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(),
+                                            newConfig.randomSequence.toIntArray(),
+                                            newConfig.gateLengths.toFloatArray(),
+                                            newConfig.probability,
+                                            v
+                                        )
+                                    },
+                                    nativeLib = nativeLib,
+                                    knobSize = 48.dp,
+                                    valueFormatter = { v -> "${(v * 100).toInt()}%" }
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         
-                        // 4 Lanes (Reverse order: Lane 3 (Top) -> Lane 0 (Bottom/Root))
-                        // Lane 3=Top, Lane 0=Bottom. The loop iterates 3 downTo 0. 
-                        val laneLabels = listOf("ROOT", "UP 1", "UP 2", "UP 3") // Indices 0,1,2,3.
-                        val laneColors = listOf(Color(0xFF43A047), Color(0xFF1E88E5), Color(0xFF8E24AA), Color(0xFFE91E63)) 
+                        val laneLabels = listOf("ROOT", "UP 1", "UP 2", "UP 3")
+                        val laneColors = listOf(Color(0xFF43A047), Color(0xFF1E88E5), Color(0xFF8E24AA), Color(0xFFE91E63))
+                        
+                        // Step Numbers header row
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        ) {
+                            Spacer(modifier = Modifier.width(40.dp))
+                            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                (1..maxSteps).forEach { stepLabel ->
+                                    Text(
+                                        stepLabel.toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.DarkGray,
+                                        fontSize = 8.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                if (!config.isLatched) Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+
                         (3 downTo 0).forEach { laneIdx ->
                              Row(
                                  verticalAlignment = Alignment.CenterVertically, 
                                  modifier = Modifier
                                      .fillMaxWidth()
-                                     .padding(vertical = 2.dp) // Reduced vertical padding
+                                     .padding(vertical = 2.dp)
                              ) {
-                                 Text(laneLabels[laneIdx], style = MaterialTheme.typography.labelSmall, color = laneColors[laneIdx], modifier = Modifier.width(40.dp))
-                                 
-                                 val lanePattern = config.rhythms.getOrElse(laneIdx) { List(16) { false } }
-                                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                     // Force 16 steps display
-                                     val displaySteps = if (lanePattern.size < 16) lanePattern + List(16 - lanePattern.size) { false } else lanePattern
-                                     displaySteps.take(16).forEachIndexed { step, isActive ->
-                                         Box(
-                                             modifier = Modifier
-                                                 .weight(1f) // Distribute equally
-                                                 .aspectRatio(1.2f) 
-                                                 .background(
-                                                     if (isActive) laneColors[laneIdx] else Color.DarkGray,
-                                                     RoundedCornerShape(2.dp)
-                                                 )
-                                                 .clickable {
-                                                     val newLane = lanePattern.toMutableList()
-                                                     while (newLane.size <= step) newLane.add(false)
-                                                     if (step < newLane.size) {
+                               Text(laneLabels[laneIdx], style = MaterialTheme.typography.labelSmall, color = laneColors[laneIdx], modifier = Modifier.width(40.dp))
+                               val lanePattern = config.rhythms.getOrElse(laneIdx) { List(maxSteps) { false } }
+                               Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                   val displaySteps = if (lanePattern.size < maxSteps) lanePattern + List(maxSteps - lanePattern.size) { false } else lanePattern
+                                   displaySteps.take(maxSteps).forEachIndexed { step, isActive ->
+                                       Box(
+                                           modifier = Modifier
+                                               .weight(1f)
+                                               .aspectRatio(1.2f) 
+                                               .background(
+                                                   if (isActive) laneColors[laneIdx] else Color.DarkGray,
+                                                   RoundedCornerShape(2.dp)
+                                               )
+                                               .clickable {
+                                                   val newLane = lanePattern.toMutableList()
+                                                   while (newLane.size <= step) newLane.add(false)
+                                                   if (step < newLane.size) {
                                                         newLane[step] = !newLane[step]
-                                                        val newRhythms = config.rhythms.toMutableList()
-                                                        while(newRhythms.size <= laneIdx) newRhythms.add(List(16) { false })
-                                                        newRhythms[laneIdx] = newLane.take(16)
+                                                         val newRhythms = config.rhythms.toMutableList()
+                                                         while(newRhythms.size <= laneIdx) newRhythms.add(List(16) { false })
+                                                         newRhythms[laneIdx] = newLane.take(16)
                                                         
-                                                        val newConfig = config.copy(rhythms = newRhythms)
-                                                        val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
-                                                        onStateChange(state.copy(tracks = newTracks))
-                                                        nativeLib.setArpConfig(
-                                                            state.selectedTrackIndex, 
-                                                            newConfig.mode.ordinal, 
-                                                            newConfig.octaves, 
-                                                            newConfig.inversion, 
-                                                            newConfig.isLatched, 
-                                                            newConfig.isMutated,
-                                                            newRhythms.map { it.toBooleanArray() }.toTypedArray(), 
-                                                            newConfig.randomSequence.toIntArray(),
-                                                            newConfig.gateLengths.toFloatArray()
-                                                        )
-                                                     }
-                                                 }
-                                         )
-                                     }
-                                 }
-                             }
-                             // No Divider here - clean spacing only
-                          }
-                          
-                        // GATE Row
-                        Row(
-                             verticalAlignment = Alignment.CenterVertically, 
-                             modifier = Modifier
-                                 .fillMaxWidth()
-                                 .padding(vertical = 2.dp)
-                        ) {
-                             Text("GATE", style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.width(40.dp))
-                             
-                             Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                 val gateLengths = config.gateLengths
-                                 (0 until 16).forEach { step ->
-                                     Box(
-                                         modifier = Modifier
-                                             .weight(1f)
-                                             .aspectRatio(1.2f),
-                                         contentAlignment = Alignment.Center
-                                     ) {
-                                         val currentGate = gateLengths.getOrElse(step) { 0.5f }
-                                         Knob(
-                                             label = "",
-                                             overrideValue = currentGate,
-                                             initialValue = currentGate,
-                                             parameterId = -200 - step,
-                                             state = state,
-                                             onStateChange = { newState ->
-                                                 val v = newState.tracks[state.selectedTrackIndex].parameters[-200 - step] ?: currentGate
-                                                 val newGates = config.gateLengths.toMutableList()
-                                                 while(newGates.size <= step) newGates.add(0.5f)
-                                                 newGates[step] = v
-                                                 val newConfig = config.copy(gateLengths = newGates)
-                                                 val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
-                                                 onStateChange(state.copy(tracks = newTracks))
-                                                 nativeLib.setArpConfig(
-                                                     state.selectedTrackIndex, 
-                                                     newConfig.mode.ordinal, 
-                                                     newConfig.octaves, 
-                                                     newConfig.inversion, 
-                                                     newConfig.isLatched, 
-                                                     newConfig.isMutated,
-                                                     newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), 
-                                                     newConfig.randomSequence.toIntArray(),
-                                                     newGates.toFloatArray()
-                                                 )
-                                             },
-                                             nativeLib = nativeLib,
-                                             knobSize = 24.dp,
-                                             showValue = false,
-                                             detentValue = 0.5f,
-                                             valueFormatter = { v -> 
-                                                 if (v in 0.48f..0.52f) "ENV"
-                                                 else if (v < 0.5f) {
-                                                     val steps = 0.0625f + (v / 0.5f) * (1f - 0.0625f)
-                                                     String.format("%.2f", steps)
-                                                 } else {
-                                                     val steps = 1f + ((v - 0.5f) / 0.5f) * 3f
-                                                     String.format("%.2f", steps)
-                                                 }
-                                             }
-                                         )
-                                     }
-                                 }
-                             }
+                                                         val newConfig = config.copy(rhythms = newRhythms)
+                                                         val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                                         onStateChange(state.copy(tracks = newTracks))
+                                                         nativeLib.setArpConfig(
+                                                             state.selectedTrackIndex, 
+                                                             newConfig.mode.ordinal, 
+                                                             newConfig.octaves, 
+                                                             newConfig.inversion, 
+                                                             newConfig.isLatched, 
+                                                             newConfig.isMutated,
+                                                             newRhythms.map { it.toBooleanArray() }.toTypedArray(), 
+                                                             newConfig.randomSequence.toIntArray(),
+                                                             newConfig.gateLengths.toFloatArray(),
+                                                             newConfig.probability,
+                                                             newConfig.weird
+                                                         )
+                                                   }
+                                               }
+                                       )
+                                   }
+                                   if (!config.isLatched) {
+                                       Spacer(modifier = Modifier.weight(1f))
+                                   }
+                               }
+                           }
                         }
+                        
+                      // GATE Row
+                      Row(
+                           verticalAlignment = Alignment.CenterVertically, 
+                           modifier = Modifier
+                               .fillMaxWidth()
+                               .padding(vertical = 2.dp)
+                      ) {
+                           Text("GATE", style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.width(40.dp))
+                           
+                           Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                               val gateLengths = config.gateLengths
+                               (0 until maxSteps).forEach { step ->
+                                   Box(
+                                       modifier = Modifier
+                                           .weight(1f)
+                                           .aspectRatio(1.2f),
+                                       contentAlignment = Alignment.Center
+                                   ) {
+                                       val currentGate = gateLengths.getOrElse(step) { 0.5f }
+                                       Knob(
+                                           label = "",
+                                           overrideValue = currentGate,
+                                           initialValue = currentGate,
+                                           parameterId = -200 - step,
+                                           state = state,
+                                           onStateChange = { newState ->
+                                               val v = newState.tracks[state.selectedTrackIndex].parameters[-200 - step] ?: currentGate
+                                               val newGates = config.gateLengths.toMutableList()
+                                               while(newGates.size <= step) newGates.add(0.5f)
+                                               newGates[step] = v
+                                               val newConfig = config.copy(gateLengths = newGates)
+                                               val newTracks = state.tracks.mapIndexed { i, t -> if (i == state.selectedTrackIndex) t.copy(arpConfig = newConfig) else t }
+                                               onStateChange(state.copy(tracks = newTracks))
+                                               nativeLib.setArpConfig(
+                                                   state.selectedTrackIndex, 
+                                                   newConfig.mode.ordinal, 
+                                                   newConfig.octaves, 
+                                                   newConfig.inversion, 
+                                                   newConfig.isLatched, 
+                                                   newConfig.isMutated,
+                                                   newConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), 
+                                                   newConfig.randomSequence.toIntArray(),
+                                                   newGates.toFloatArray(),
+                                                   newConfig.probability,
+                                                   newConfig.weird
+                                               )
+                                           },
+                                           nativeLib = nativeLib,
+                                           knobSize = 24.dp,
+                                           showValue = false,
+                                           detentValue = 0.5f,
+                                           valueFormatter = { v -> 
+                                               if (v in 0.48f..0.52f) "ENV"
+                                               else if (v < 0.5f) {
+                                                   val steps = 0.0625f + (v / 0.5f) * (1f - 0.0625f)
+                                                   String.format("%.2f", steps)
+                                               } else {
+                                                   val steps = 1f + ((v - 0.5f) / 0.5f) * 3f
+                                                   String.format("%.2f", steps)
+                                               }
+                                           }
+                                       )
+                                   }
+                               }
+                               if (!config.isLatched) {
+                                   Spacer(modifier = Modifier.weight(1f))
+                               }
+                           }
+                      }
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
@@ -1589,403 +1708,181 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                     // Spacer(modifier = Modifier.height(8.dp))
                     
                     Box(modifier = Modifier.weight(1f)) {
-                        if (isWideScreen) {
-                    // --- PHONE LAYOUT (Side Column) ---
-                    val controlsWidth = 90.dp
-                    val padSize = minOf(
-                        (currentMaxWidth - controlsWidth - (spacing * (cols - 1))) / cols,
-                        (currentMaxHeight - (spacing * (rows - 1))) / rows,
-                        120.dp
-                    ).coerceAtLeast(40.dp)
-                    val gridWidth = (padSize * cols) + (spacing * (cols - 1))
-
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // --- Consistent Top Row Controls ---
+                    val isTablet = platformInfo.screenWidthDp >= 600
+                    val controlHeight = if (isTablet) 45.dp else 38.dp
+                    val controlWidth = 52.dp
+                    
                     Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), 
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // --- Main Pad Area (Center) ---
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .padding(horizontal = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val padSize = minOf(
-                                (currentMaxWidth - controlsWidth - (spacing * (cols + 1))) / cols,
-                                (currentMaxHeight - (spacing * (rows + 1))) / rows,
-                                120.dp
-                            ).coerceAtLeast(40.dp)
-                            
-                            val is64 = latestState.is64StepView
-                            val columns = if (is64) 8 else if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else 4
-                            val gridSpacing = if (is64) 4.dp else spacing
-
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(columns),
-                                modifier = Modifier.size(padSize * columns + (gridSpacing * (columns - 1))),
-                                verticalArrangement = Arrangement.spacedBy(gridSpacing),
-                                horizontalArrangement = Arrangement.spacedBy(gridSpacing),
-                                userScrollEnabled = false
+                        // PAD MOD LEARN
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Button(
+                                onClick = { onStateChange(state.copy(isPadModLearnActive = !state.isPadModLearnActive)) },
+                                modifier = Modifier.height(controlHeight).width(controlWidth),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.isPadModLearnActive) Color.Cyan else Color.DarkGray
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(0.dp)
                             ) {
-                                // Pad items logic... (rest remains similar, just ensuring it's centered)
-                                items(if (is64) 64 else if (isChopMode) 16 else if (state.gridMode == GridMode.GRID_6X6) 36 else 16) { i ->
-                                    // chop mode already extracted
-                                    val numSlices = if (isChopMode) (((track.parameters[340] ?: 0f) * 14f).toInt() + 2) else 0
-
-                                    val note = if (track.engineType == EngineType.FM_DRUM) {
-                                        60 + (i % 16)
-                                    } else if (isChopMode) {
-                                        if (i < numSlices) 60 + i else -1
-                                    } else if (track.engineType == EngineType.ANALOG_DRUM) {
-                                        val localIdx = if (i >= 8) i - 8 else i
-                                        if (localIdx < 6) {
-                                            when(localIdx) {
-                                                0 -> 60 // Kick
-                                                1 -> 61 // Snare
-                                                2 -> 62 // Rim
-                                                3 -> 63 // Hat Closed
-                                                4 -> 64 // Hat Open
-                                                5 -> 65 // Cymbal
-                                                else -> -1
-                                            }
-                                        } else -1
-                                    } else {
-                                        scaleNotes.getOrElse(i) { state.rootNote + i }
-                                    }
-
-                                    if (note != -1) {
-                                        val isInactiveDrumPad = (track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM) && i >= 16
-                                        if (!isInactiveDrumPad) {
-                                            val isBlack = if (track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM || isChopMode) false else isBlackKey(note)
-                                            val padColor = if (isBlack) androidx.compose.ui.graphics.lerp(Color.DarkGray, engineColor, 0.4f) else engineColor
-
-                                            key(state.selectedTrackIndex, i) {
-                                                PlayingPad(
-                                                    padIndex = i,
-                                                    note = note,
-                                                    padSize = padSize,
-                                                    padColor = padColor,
-                                                    isPlaying = state.isPlaying,
-                                                    currentStep = state.currentStep,
-                                                    nativeLib = nativeLib,
-                                                    latestState = latestState,
-                                                    onStateChange = onStateChange,
-                                                    isChopMode = isChopMode
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        Spacer(modifier = Modifier.size(padSize))
-                                    }
-                                }
+                                Text("BND\nLRN", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, lineHeight = 10.sp, textAlign = TextAlign.Center, color = if (state.isPadModLearnActive) Color.Black else Color.White)
                             }
+                            Text("PAD", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
                         }
 
-                        // --- Vertical Control Column (Right Side on Phone) ---
-                        Column(
-                            modifier = Modifier.width(controlsWidth).fillMaxHeight(),
-                            verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            // PAD MOD LEARN
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Button(
-                                    onClick = { onStateChange(state.copy(isPadModLearnActive = !state.isPadModLearnActive)) },
-                                    modifier = Modifier.height(36.dp).width(52.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (state.isPadModLearnActive) Color.Cyan else Color.DarkGray
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text("BND\nLRN", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, lineHeight = 10.sp, textAlign = TextAlign.Center, color = if (state.isPadModLearnActive) Color.Black else Color.White)
-                                }
-                                Text("PAD MOD", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
+                        // ROOT
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Button(
+                                onClick = { showTransposeMenu = true },
+                                modifier = Modifier.height(controlHeight).width(controlWidth),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(getNoteLabel(state.rootNote).filter { !it.isDigit() }, style = MaterialTheme.typography.titleMedium, color = Color.White)
                             }
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            // ROOT
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("ROOT", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+
+                        // SCALE
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Button(
+                                onClick = { showScaleMenu = true },
+                                enabled = state.gridMode != GridMode.TONNETZ,
+                                modifier = Modifier.height(controlHeight).width(controlWidth),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.gridMode == GridMode.TONNETZ) Color.DarkGray.copy(alpha=0.3f) else Color.DarkGray
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(state.scaleType.displayName.uppercase(), style = MaterialTheme.typography.labelSmall, maxLines = 1, 
+                                     color = if (state.gridMode == GridMode.TONNETZ) Color.Gray else Color.White)
+                            }
+                            Text("SCALE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+
+                        // OCTAVE
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Button(
-                                    onClick = { showTransposeMenu = true },
-                                    modifier = Modifier.height(36.dp).width(52.dp),
+                                    onClick = { 
+                                        val newRoot = (state.rootNote - 12).coerceAtLeast(0)
+                                        onStateChange(state.copy(rootNote = newRoot))
+                                        nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
+                                    },
+                                    modifier = Modifier.size(controlHeight),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(getNoteLabel(state.rootNote).filter { !it.isDigit() }, style = MaterialTheme.typography.titleMedium, fontSize = 14.sp, color = Color.White)
-                                }
-                                Text("ROOT", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
-                            }
-                            // SCALE
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Button(
-                                    onClick = { showScaleMenu = true },
-                                    enabled = state.gridMode != GridMode.TONNETZ,
-                                    modifier = Modifier.height(36.dp).width(52.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (state.gridMode == GridMode.TONNETZ) Color.DarkGray.copy(alpha=0.3f) else Color.DarkGray
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(state.scaleType.displayName.uppercase(), style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, maxLines = 1, 
-                                         color = if (state.gridMode == GridMode.TONNETZ) Color.Gray else Color.White)
-                                }
-                                Text("SCALE", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
-                            }
-                            // OCTAVE
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Button(
-                                        onClick = { 
-                                            val newRoot = (state.rootNote - 12).coerceAtLeast(0)
-                                            onStateChange(state.copy(rootNote = newRoot))
-                                            nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
-                                        },
-                                        modifier = Modifier.size(32.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                        shape = RoundedCornerShape(6.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Text("-", style = MaterialTheme.typography.titleMedium, color = Color.White) }
-                                    Button(
-                                        onClick = { 
-                                            val newRoot = (state.rootNote + 12).coerceAtMost(110)
-                                            onStateChange(state.copy(rootNote = newRoot))
-                                            nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
-                                        },
-                                        modifier = Modifier.size(32.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                        shape = RoundedCornerShape(6.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) { Text("+", style = MaterialTheme.typography.titleMedium, color = Color.White) }
-                                }
-                                Text("OCTAVE", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
-                            }
-                            // GRID
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                ) { Text("-", style = MaterialTheme.typography.titleMedium, color = Color.White) }
                                 Button(
                                     onClick = { 
-                                        val newMode = when(state.gridMode) {
-                                            GridMode.GRID_4X4 -> GridMode.GRID_6X6
-                                            GridMode.GRID_6X6 -> GridMode.MAC_KEYS
-                                            GridMode.MAC_KEYS -> GridMode.TONNETZ
-                                            GridMode.TONNETZ -> GridMode.GRID_4X4
-                                        }
-                                        onStateChange(state.copy(gridMode = newMode)) 
+                                        val newRoot = (state.rootNote + 12).coerceAtMost(110)
+                                        onStateChange(state.copy(rootNote = newRoot))
+                                        nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
                                     },
-                                    modifier = Modifier.height(36.dp).width(52.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE) else Color.DarkGray),
+                                    modifier = Modifier.size(controlHeight),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(when(state.gridMode) {
-                                        GridMode.GRID_4X4 -> "4x4"
-                                        GridMode.GRID_6X6 -> "6x6"
-                                        GridMode.MAC_KEYS -> "Keys"
-                                        GridMode.TONNETZ -> "TON"
-                                    }, style = MaterialTheme.typography.labelSmall, color = Color.White)
-                                }
-                                Text("GRID", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
+                                ) { Text("+", style = MaterialTheme.typography.titleMedium, color = Color.White) }
                             }
-                            // ARP
-                            val currentState by rememberUpdatedState(latestState)
-                            if (track.engineType != EngineType.FM_DRUM && track.engineType != EngineType.ANALOG_DRUM) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    val isArpOn = track.arpConfig.mode != ArpMode.OFF
-                                    val isLatched = track.arpConfig.isLatched
-                                    Box(
-                                        modifier = Modifier
-                                            .width(52.dp).height(36.dp)
-                                            .background(if (isLatched) Color.Yellow else if (isArpOn) Color.Yellow.copy(alpha = 0.3f) else Color.DarkGray, RoundedCornerShape(8.dp))
-                                            .border(1.dp, if (isArpOn) Color.Yellow else Color.Transparent, RoundedCornerShape(8.dp))
-                                            .combinedClickable(
-                                                onClick = {
-                                                    val t = currentState.tracks[currentState.selectedTrackIndex]
-                                                    val isOn = t.arpConfig.mode != ArpMode.OFF
-                                                    val isL = t.arpConfig.isLatched
-                                                    val (newMode, newLatched) = if (!isOn) Pair(ArpMode.UP, false) else if (!isL) Pair(t.arpConfig.mode, true) else Pair(ArpMode.OFF, false)
-                                                    val newArpConfig = t.arpConfig.copy(mode = newMode, isLatched = newLatched)
-                                                    val newTracks = currentState.tracks.mapIndexed { idx, tr -> if (idx == currentState.selectedTrackIndex) tr.copy(arpConfig = newArpConfig) else tr }
-                                                    latestOnStateChange(currentState.copy(tracks = newTracks))
-                                                    nativeLib.setArpConfig(currentState.selectedTrackIndex, newMode.ordinal, newArpConfig.octaves, newArpConfig.inversion, newLatched, newArpConfig.isMutated, newArpConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newArpConfig.randomSequence.toIntArray(), newArpConfig.gateLengths.toFloatArray())
-                                                },
-                                                onLongClick = { showArpMenu = true }
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("ARP", color = if (isLatched) Color.Black else if (isArpOn) Color.Yellow else Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("OCTAVE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+
+                        // GRID
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val isDrum = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM
+                            Button(
+                                onClick = { 
+                                    val newMode = when(state.gridMode) {
+                                        GridMode.GRID_4X4 -> GridMode.GRID_6X6
+                                        GridMode.GRID_6X6 -> if (platformInfo.platform == "macos" || state.isKeyboardModeEnabled) GridMode.MAC_KEYS else GridMode.TONNETZ
+                                        GridMode.MAC_KEYS -> GridMode.TONNETZ
+                                        GridMode.TONNETZ -> GridMode.GRID_4X4
                                     }
-                                    Text("ARP", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
+                                    onStateChange(state.copy(gridMode = newMode)) 
+                                },
+                                enabled = !isDrum,
+                                modifier = Modifier.height(controlHeight).width(controlWidth),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isDrum) Color.DarkGray.copy(alpha = 0.4f)
+                                                     else if (state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE) 
+                                                     else Color.DarkGray,
+                                    disabledContainerColor = Color.DarkGray.copy(alpha = 0.4f),
+                                    disabledContentColor = Color.Gray
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(when(state.gridMode) {
+                                    GridMode.GRID_4X4 -> "4x4"
+                                    GridMode.GRID_6X6 -> "6x6"
+                                    GridMode.MAC_KEYS -> "Keys"
+                                    GridMode.TONNETZ -> "TON"
+                                }, style = MaterialTheme.typography.labelSmall, color = if (isDrum) Color.Gray else Color.White)
+                            }
+                            Text("GRID", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+
+                        // ARP
+                        val currentState by rememberUpdatedState(latestState)
+                        if (track.engineType != EngineType.FM_DRUM && track.engineType != EngineType.ANALOG_DRUM) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                val isArpOn = track.arpConfig.mode != ArpMode.OFF
+                                val isLatched = track.arpConfig.isLatched
+                                Box(
+                                    modifier = Modifier
+                                        .width(controlWidth).height(controlHeight)
+                                        .background(if (isLatched) Color.Yellow else if (isArpOn) Color.Yellow.copy(alpha = 0.3f) else Color.DarkGray, RoundedCornerShape(8.dp))
+                                        .border(1.dp, if (isArpOn) Color.Yellow else Color.Transparent, RoundedCornerShape(8.dp))
+                                        .combinedClickable(
+                                            onClick = {
+                                                val t = currentState.tracks[currentState.selectedTrackIndex]
+                                                val isOn = t.arpConfig.mode != ArpMode.OFF
+                                                val isL = t.arpConfig.isLatched
+                                                val (newMode, newLatched) = if (!isOn) Pair(ArpMode.UP, false) else if (!isL) Pair(t.arpConfig.mode, true) else Pair(ArpMode.OFF, false)
+                                                val newArpConfig = t.arpConfig.copy(mode = newMode, isLatched = newLatched)
+                                                val newTracks = currentState.tracks.mapIndexed { idx, tr -> if (idx == currentState.selectedTrackIndex) tr.copy(arpConfig = newArpConfig) else tr }
+                                                latestOnStateChange(currentState.copy(tracks = newTracks))
+                                                nativeLib.setArpConfig(currentState.selectedTrackIndex, newMode.ordinal, newArpConfig.octaves, newArpConfig.inversion, newLatched, newArpConfig.isMutated, newArpConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newArpConfig.randomSequence.toIntArray(), newArpConfig.gateLengths.toFloatArray(), newArpConfig.probability, newArpConfig.weird)
+                                            },
+                                            onLongClick = { showArpMenu = true }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("ARP", color = if (isLatched) Color.Black else if (isArpOn) Color.Yellow else Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                 }
+                                Text("ARP", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             }
                         }
                     }
-                } else {
-                    // --- TABLET LAYOUT (Top Row Controls) ---
-                    val padSize = minOf(
-                        (currentMaxWidth - (spacing * (cols - 1))) / cols,
-                        (currentMaxHeight - (spacing * (rows - 1)) - 65.dp) / rows,
-                        135.dp
-                    ).coerceAtLeast(40.dp)
-                    val gridWidth = (padSize * cols) + (spacing * (cols - 1))
 
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // Top Row Controls
-                        val isTablet = platformInfo.screenWidthDp >= 600
-                        val rowModifier = if (isTablet) Modifier.width(gridWidth) else Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                        val rowArrangement = if (isTablet) Arrangement.SpaceBetween else Arrangement.spacedBy(8.dp)
-
-                        Row(modifier = rowModifier, horizontalArrangement = rowArrangement, verticalAlignment = Alignment.CenterVertically) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                // PAD MOD LEARN
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Button(
-                                        onClick = { onStateChange(state.copy(isPadModLearnActive = !state.isPadModLearnActive)) },
-                                        modifier = Modifier.height(40.dp).width(52.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (state.isPadModLearnActive) Color.Cyan else Color.DarkGray
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text("BND\nLRN", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, lineHeight = 10.sp, textAlign = TextAlign.Center, color = if (state.isPadModLearnActive) Color.Black else Color.White)
-                                    }
-                                    Text("PAD", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = Color.Gray)
-                                }
-
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Button(
-                                        onClick = { showTransposeMenu = true },
-                                        modifier = Modifier.height(40.dp).width(52.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text(getNoteLabel(state.rootNote).filter { !it.isDigit() }, style = MaterialTheme.typography.titleMedium, color = Color.White)
-                                    }
-                                    Text("ROOT", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Button(
-                                        onClick = { showScaleMenu = true },
-                                        enabled = state.gridMode != GridMode.TONNETZ,
-                                        modifier = Modifier.height(40.dp).width(52.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (state.gridMode == GridMode.TONNETZ) Color.DarkGray.copy(alpha=0.3f) else Color.DarkGray
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text(state.scaleType.displayName.uppercase(), style = MaterialTheme.typography.labelSmall, maxLines = 1, 
-                                             color = if (state.gridMode == GridMode.TONNETZ) Color.Gray else Color.White)
-                                    }
-                                    Text("SCALE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Button(
-                                            onClick = { 
-                                                val newRoot = (state.rootNote - 12).coerceAtLeast(0)
-                                                onStateChange(state.copy(rootNote = newRoot))
-                                                nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
-                                            },
-                                            modifier = Modifier.size(40.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(0.dp)
-                                        ) { Text("-", style = MaterialTheme.typography.titleMedium, color = Color.White) }
-                                        Button(
-                                            onClick = { 
-                                                val newRoot = (state.rootNote + 12).coerceAtMost(110)
-                                                onStateChange(state.copy(rootNote = newRoot))
-                                                nativeLib.setScaleConfig(newRoot, state.scaleType.intervals.toIntArray())
-                                            },
-                                            modifier = Modifier.size(40.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(0.dp)
-                                        ) { Text("+", style = MaterialTheme.typography.titleMedium, color = Color.White) }
-                                    }
-                                    Text("OCTAVE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Button(
-                                        onClick = { 
-                                            val newMode = when(state.gridMode) {
-                                                GridMode.GRID_4X4 -> GridMode.GRID_6X6
-                                                GridMode.GRID_6X6 -> GridMode.MAC_KEYS
-                                                GridMode.MAC_KEYS -> GridMode.TONNETZ
-                                                GridMode.TONNETZ -> GridMode.GRID_4X4
-                                            }
-                                            onStateChange(state.copy(gridMode = newMode)) 
-                                        },
-                                        modifier = Modifier.height(40.dp).width(52.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = if (state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE) else Color.DarkGray),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text(when(state.gridMode) {
-                                            GridMode.GRID_4X4 -> "4x4"
-                                            GridMode.GRID_6X6 -> "6x6"
-                                            GridMode.MAC_KEYS -> "Keys"
-                                            GridMode.TONNETZ -> "TON"
-                                        }, style = MaterialTheme.typography.labelSmall, color = Color.White)
-                                    }
-                                    Text("GRID", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                                }
-                            }
-
-                            val currentState by rememberUpdatedState(latestState)
-                            if (track.engineType != EngineType.FM_DRUM && track.engineType != EngineType.ANALOG_DRUM) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    val isArpOn = track.arpConfig.mode != ArpMode.OFF
-                                    val isLatched = track.arpConfig.isLatched
-                                    Box(
-                                        modifier = Modifier
-                                            .width(52.dp).height(40.dp)
-                                            .background(if (isLatched) Color.Yellow else if (isArpOn) Color.Yellow.copy(alpha = 0.3f) else Color.DarkGray, RoundedCornerShape(8.dp))
-                                            .border(1.dp, if (isArpOn) Color.Yellow else Color.Transparent, RoundedCornerShape(8.dp))
-                                            .combinedClickable(
-                                                onClick = {
-                                                    val t = currentState.tracks[currentState.selectedTrackIndex]
-                                                    val isOn = t.arpConfig.mode != ArpMode.OFF
-                                                    val isL = t.arpConfig.isLatched
-                                                    val (newMode, newLatched) = if (!isOn) Pair(ArpMode.UP, false) else if (!isL) Pair(t.arpConfig.mode, true) else Pair(ArpMode.OFF, false)
-                                                    val newArpConfig = t.arpConfig.copy(mode = newMode, isLatched = newLatched)
-                                                    val newTracks = currentState.tracks.mapIndexed { idx, tr -> if (idx == currentState.selectedTrackIndex) tr.copy(arpConfig = newArpConfig) else tr }
-                                                    latestOnStateChange(currentState.copy(tracks = newTracks))
-                                                    nativeLib.setArpConfig(currentState.selectedTrackIndex, newMode.ordinal, newArpConfig.octaves, newArpConfig.inversion, newLatched, newArpConfig.isMutated, newArpConfig.rhythms.map { it.toBooleanArray() }.toTypedArray(), newArpConfig.randomSequence.toIntArray(), newArpConfig.gateLengths.toFloatArray())
-                                                },
-                                                onLongClick = { showArpMenu = true }
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("ARP", color = if (isLatched) Color.Black else if (isArpOn) Color.Yellow else Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                    }
-                                    Text("ARP", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                                }
-                            }
-
-                        }
-
-
-                        // The Pad Grid
+                    // --- Pad Grid ---
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        val padSize = minOf(
+                            (currentMaxWidth - (spacing * (cols - 1))) / cols.coerceAtLeast(1),
+                            (currentMaxHeight - (spacing * (rows - 1)) - controlHeight - 20.dp) / rows.coerceAtLeast(1),
+                            135.dp
+                        ).coerceAtLeast(40.dp)
+                        
                         PadGrid(rows, cols, padSize, spacing, track, state, scaleNotes, engineColor, nativeLib, latestState, onStateChange, latestOnStateChange, empledManager)
-                        Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
-            } // End of weighted Box
-            } // End of Column (PlayheadStrip wrapper)
             }
         }
     }
+}
+}
 
     // Scale Selection Bottom Sheet
     val sheetState = rememberModalBottomSheetState()

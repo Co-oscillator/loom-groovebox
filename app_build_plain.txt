@@ -1,0 +1,112 @@
+
+> Task :app:incrementVersion
+Auto-incremented to: 2.6.65 (Build 194)
+
+> Task :app:checkVersion
+Target Version: 2.6.65 (Build 194)
+Version verification passed.
+
+> Task :app:preBuild
+> Task :app:preReleaseBuild
+> Task :composeApp:preBuild UP-TO-DATE
+> Task :composeApp:preReleaseBuild UP-TO-DATE
+> Task :composeApp:writeReleaseAarMetadata UP-TO-DATE
+> Task :app:checkReleaseAarMetadata UP-TO-DATE
+> Task :composeApp:processReleaseNavigationResources UP-TO-DATE
+> Task :app:processReleaseNavigationResources UP-TO-DATE
+> Task :app:compileReleaseNavigationResources UP-TO-DATE
+> Task :app:generateReleaseResValues UP-TO-DATE
+> Task :composeApp:generateReleaseResValues UP-TO-DATE
+> Task :composeApp:generateReleaseResources UP-TO-DATE
+> Task :composeApp:packageReleaseResources UP-TO-DATE
+> Task :app:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :app:generateReleaseResources UP-TO-DATE
+> Task :app:mergeReleaseResources UP-TO-DATE
+> Task :app:packageReleaseResources UP-TO-DATE
+> Task :app:parseReleaseLocalResources UP-TO-DATE
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+> Task :composeApp:extractDeepLinksRelease UP-TO-DATE
+> Task :composeApp:processReleaseManifest UP-TO-DATE
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :composeApp:parseReleaseLocalResources UP-TO-DATE
+> Task :composeApp:generateReleaseRFile UP-TO-DATE
+> Task :composeApp:compileReleaseKotlinAndroid UP-TO-DATE
+> Task :composeApp:javaPreCompileRelease UP-TO-DATE
+> Task :composeApp:compileReleaseJavaWithJavac NO-SOURCE
+> Task :composeApp:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :app:processReleaseManifestForPackage
+> Task :app:processReleaseResources
+
+> Task :app:compileReleaseKotlin FAILED
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1519:1 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1865:2 Expecting '}'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:735:17 Unresolved reference: GrooveboxTheme
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:736:21 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1386:5 Modifier 'override' is not applicable to 'top level function'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1387:14 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1387:59 No supertypes are accessible in this context
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1394:35 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1395:20 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1395:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1399:35 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1400:20 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1400:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1404:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1405:20 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1405:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1409:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1410:20 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1410:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1417:28 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1418:13 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1418:30 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1419:13 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1419:47 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1422:28 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1423:13 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1423:30 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1424:13 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1424:47 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1429:32 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1430:17 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1431:17 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1432:17 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1434:35 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1435:17 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1435:34 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1436:17 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1443:17 Unresolved reference: heldKeys
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1444:17 Unresolved reference: viewModel
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1449:16 No supertypes are accessible in this context
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1452:5 Modifier 'override' is not applicable to 'top level function'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1453:14 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1453:59 No supertypes are accessible in this context
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1457:17 Unresolved reference: heldKeys
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1458:17 Unresolved reference: viewModel
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1462:16 No supertypes are accessible in this context
+
+[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileReleaseKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 1s
+30 actionable tasks: 8 executed, 22 up-to-date

@@ -48,11 +48,58 @@ import com.groovebox.persistence.PersistenceManager
 import java.io.File
 import com.groovebox.ui.theme.getEngineColor
 
+private fun syncTrackToEngine(
+    selectedTrackIndex: Int,
+    newTrackState: com.groovebox.TrackState,
+    nativeLib: com.groovebox.NativeLib,
+    latestState: com.groovebox.GrooveboxState
+) {
+    val engineType = newTrackState.engineType
+
+    // Set Config First
+    nativeLib.clearSequencer(selectedTrackIndex)
+    nativeLib.setSequencerConfig(selectedTrackIndex, newTrackState.numPages, newTrackState.stepsPerPage)
+    if (selectedTrackIndex == latestState.selectedTrackIndex) {
+        nativeLib.setPatternLength(selectedTrackIndex, newTrackState.numPages * newTrackState.stepsPerPage)
+    }
+
+    if (engineType == EngineType.FM_DRUM || engineType == EngineType.ANALOG_DRUM) {
+        for (instIdx in 0 until 16) {
+            val voiceSteps = newTrackState.drumSteps.getOrNull(instIdx) ?: emptyList()
+            voiceSteps.forEachIndexed { stepIdx, s ->
+                nativeLib.setStep(
+                    selectedTrackIndex, stepIdx, s.active, intArrayOf(60 + instIdx),
+                    s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped,
+                    s.subStepOffset, s.noteOffsets.toFloatArray(), s.noteVelocities.toFloatArray()
+                )
+                s.parameterLocks.forEach { (pid, valAmt) ->
+                    nativeLib.setParameterLock(selectedTrackIndex, stepIdx, pid, valAmt)
+                }
+            }
+        }
+    } else {
+        newTrackState.steps.forEachIndexed { stepIdx, s ->
+            val isActiveWithNotes = s.active && s.notes.isNotEmpty()
+            nativeLib.setStep(
+                selectedTrackIndex, stepIdx, isActiveWithNotes, s.notes.toIntArray(),
+                s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped,
+                s.subStepOffset, s.noteOffsets.toFloatArray(), s.noteVelocities.toFloatArray()
+            )
+            s.parameterLocks.forEach { (pid, valAmt) ->
+                nativeLib.setParameterLock(selectedTrackIndex, stepIdx, pid, valAmt)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, empledManager: EmpledManager? = null) {
-    val latestState by rememberUpdatedState(state)
-    val latestOnStateChange by rememberUpdatedState(onStateChange)
+fun SequencerView(viewModel: com.groovebox.GrooveboxViewModel, nativeLib: NativeLib, empledManager: EmpledManager? = null) {
+
+    val state = viewModel.state
+    val onStateChange = viewModel::onStateChange
+    val latestState = state 
+    val latestOnStateChange = onStateChange
     
     // Ensure we have a valid selection
     val selectedTrackIndex = state.selectedTrackIndex.coerceIn(0, state.tracks.lastIndex)
@@ -177,53 +224,32 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                             onDismiss = { showSeqLoad = false },
                             state = state,
                             onFileSelected = { path ->
-                                val name = File(path).name.removeSuffix(".gbs")
-                                val newTrackState = PersistenceManager.loadSequence(track, name)
+                                val file = File(path)
+                                val isMidi = path.endsWith(".mid", ignoreCase = true) || path.endsWith(".midi", ignoreCase = true)
+                                
+                                val newTrackState = if (isMidi) {
+                                    PersistenceManager.loadMidiSequence(track, path)
+                                } else {
+                                    val name = file.name.removeSuffix(".gbs")
+                                    PersistenceManager.loadSequence(track, name)
+                                }
+                                
                                 if (newTrackState != null) {
                                     val newTracks = state.tracks.toMutableList()
                                     newTracks[selectedTrackIndex] = newTrackState.copy(id = track.id)
                                     onStateChange(state.copy(tracks = newTracks))
                                     
-                                    // SYNC TO ENGINE - CRITICAL FIX
-                                    val engineType = newTrackState.engineType
-                                    
-                                    // Set Config First
-                                    nativeLib.setSequencerConfig(selectedTrackIndex, newTrackState.numPages, newTrackState.stepsPerPage)
-                                    if (selectedTrackIndex == state.selectedTrackIndex) {
-                                        nativeLib.setPatternLength(newTrackState.numPages * newTrackState.stepsPerPage)
-                                    }
-
-                                    if (engineType == EngineType.FM_DRUM || engineType == EngineType.ANALOG_DRUM) {
-                                         for (instIdx in 0 until 16) {
-                                             val voiceSteps = newTrackState.drumSteps.getOrNull(instIdx) ?: emptyList()
-                                             voiceSteps.forEachIndexed { stepIdx, s ->
-                                                 nativeLib.setStep(
-                                                    selectedTrackIndex, stepIdx, s.active, intArrayOf(60 + instIdx), 
-                                                    s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped, 
-                                                    s.subStepOffset, s.noteOffsets.toFloatArray(), s.noteVelocities.toFloatArray()
-                                                 )
-                                                 s.parameterLocks.forEach { (pid, valAmt) -> nativeLib.setParameterLock(selectedTrackIndex, stepIdx, pid, valAmt) }
-                                             }
-                                         }
-                                    } else {
-                                         newTrackState.steps.forEachIndexed { stepIdx, s ->
-                                             val isActiveWithNotes = s.active && s.notes.isNotEmpty()
-                                             nativeLib.setStep(
-                                                selectedTrackIndex, stepIdx, isActiveWithNotes, s.notes.toIntArray(), 
-                                                s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped, 
-                                                s.subStepOffset, s.noteOffsets.toFloatArray(), s.noteVelocities.toFloatArray()
-                                             )
-                                             s.parameterLocks.forEach { (pid, valAmt) -> nativeLib.setParameterLock(selectedTrackIndex, stepIdx, pid, valAmt) }
-                                         }
-                                    }
+                                    // SYNC TO ENGINE
+                                    syncTrackToEngine(selectedTrackIndex, newTrackState, nativeLib, state)
                                 }
                             },
                             isSave = false,
                             trackIndex = selectedTrackIndex,
-                            extensions = listOf("gbs"),
+                            extensions = listOf("gbs", "mid", "midi"),
                             title = "LOAD SEQ"
                          )
                      }
+
 
                      // Bank Select (1, 2, 3, 4 + 64)
                      Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -255,7 +281,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                  if (new64) {
                                      // We need to update the engine state. 
                                      nativeLib.setSequencerConfig(selectedTrackIndex, 4, 16)
-                                     nativeLib.setPatternLength(64) // CRITICAL: Ensure engine progresses through 64 steps
+                                     nativeLib.setPatternLength(selectedTrackIndex, 64) // CRITICAL: Ensure engine progresses through 64 steps
                                      
                                      // Update Kotlin State
                                      val newTrack = track.copy(numPages = 4, stepsPerPage = 16, patternLength = 64)
@@ -263,7 +289,7 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                  } else {
                                      // Revert to 16 steps
                                      nativeLib.setSequencerConfig(selectedTrackIndex, 1, 16)
-                                     nativeLib.setPatternLength(16)
+                                     nativeLib.setPatternLength(selectedTrackIndex, 16)
                                      val newTrack = track.copy(numPages = 1, stepsPerPage = 16, patternLength = 16)
                                      latestOnStateChange(latestState.copy(is64StepView = false, tracks = latestState.tracks.mapIndexed { i, t -> if (i == selectedTrackIndex) newTrack else t }))
                                  }
@@ -717,8 +743,9 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                             if (isBeyondLength) return@pointerInput
                                             detectTapGestures(
                                                 onTap = {
+                                                    val currentState = viewModel.state
                                                     if (step.isSkipped) return@detectTapGestures
-                                                    val currentTrack = latestState.tracks[latestState.selectedTrackIndex]
+                                                    val currentTrack = currentState.tracks[currentState.selectedTrackIndex]
                                                     val currentStep = if (isMultiTrack) currentTrack.drumSteps[currentTrack.selectedFmDrumInstrument][stepIndex] else currentTrack.steps[stepIndex]
                                                     val newActive = !currentStep.active
                                                     
@@ -730,35 +757,36 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                                             if (di == instIdx) dsteps.mapIndexed { si, s -> if (si == stepIndex) s.copy(active = newActive, notes = finalNotes) else s }
                                                             else dsteps
                                                         }
-                                                        latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
-                                                        nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, newActive, finalNotes.toIntArray(), currentStep.velocity, currentStep.ratchet, currentStep.punch, currentStep.probability, currentStep.gate, currentStep.isSkipped)
+                                                        viewModel.onStateChange(currentState.copy(tracks = currentState.tracks.mapIndexed { idx, t -> if (idx == currentState.selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
+                                                        nativeLib.setStep(currentState.selectedTrackIndex, stepIndex, newActive, finalNotes.toIntArray(), currentStep.velocity, currentStep.ratchet, currentStep.punch, currentStep.probability, currentStep.gate, currentStep.isSkipped)
                                                     } else {
                                                         val rootNote = 60
                                                         val finalNotes = if (newActive && currentStep.notes.isEmpty()) listOf(rootNote) else currentStep.notes
                                                         val newSteps = currentTrack.steps.mapIndexed { si, s -> if (si == stepIndex) s.copy(active = newActive, notes = finalNotes) else s }
-                                                        latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(steps = newSteps) else t }))
+                                                        viewModel.onStateChange(currentState.copy(tracks = currentState.tracks.mapIndexed { idx, t -> if (idx == currentState.selectedTrackIndex) t.copy(steps = newSteps) else t }))
                                                         val isActiveWithNotes = newActive && finalNotes.isNotEmpty()
-                                                        nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, isActiveWithNotes, finalNotes.toIntArray(), currentStep.velocity, currentStep.ratchet, currentStep.punch, currentStep.probability, currentStep.gate, currentStep.isSkipped)
+                                                        nativeLib.setStep(currentState.selectedTrackIndex, stepIndex, isActiveWithNotes, finalNotes.toIntArray(), currentStep.velocity, currentStep.ratchet, currentStep.punch, currentStep.probability, currentStep.gate, currentStep.isSkipped)
                                                     }
                                                 },
                                                 onLongPress = { 
+                                                    val currentState = viewModel.state
                                                     if (step.isSkipped) {
                                                         // RESTORE STEP
-                                                        val currentTrack = latestState.tracks[latestState.selectedTrackIndex]
+                                                        val currentTrack = currentState.tracks[currentState.selectedTrackIndex]
                                                         if (isMultiTrack) {
                                                             val instIdx = currentTrack.selectedFmDrumInstrument
                                                             val newDrumSteps = currentTrack.drumSteps.mapIndexed { di, dsteps ->
                                                                 if (di == instIdx) dsteps.mapIndexed { si, s -> if (si == stepIndex) s.copy(isSkipped = false) else s }
                                                                 else dsteps
                                                             }
-                                                            latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
+                                                            viewModel.onStateChange(currentState.copy(tracks = currentState.tracks.mapIndexed { idx, t -> if (idx == currentState.selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
                                                             val s = newDrumSteps[instIdx][stepIndex]
-                                                            nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, s.active, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate, false)
+                                                            nativeLib.setStep(currentState.selectedTrackIndex, stepIndex, s.active, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate, false)
                                                         } else {
                                                             val newSteps = currentTrack.steps.mapIndexed { si, s -> if (si == stepIndex) s.copy(isSkipped = false) else s }
-                                                            latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(steps = newSteps) else t }))
+                                                            viewModel.onStateChange(currentState.copy(tracks = currentState.tracks.mapIndexed { idx, t -> if (idx == currentState.selectedTrackIndex) t.copy(steps = newSteps) else t }))
                                                             val s = newSteps[stepIndex]
-                                                            nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, s.active, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate, false)
+                                                            nativeLib.setStep(currentState.selectedTrackIndex, stepIndex, s.active, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate, false)
                                                         }
                                                     } else {
                                                         showStepPopup = true 
@@ -780,7 +808,8 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                             onDismiss = { showStepPopup = false },
                                             stepState = liveStep,
                                              onApply = { ratchet: Int, punch: Boolean, probability: Float, gate: Float, notes: List<Int>, velocity: Float, isSkipped: Boolean, parameterLocks: Map<Int, Float>, subStepOffset: Float ->
-                                                val currentTrack = latestState.tracks[latestState.selectedTrackIndex]
+                                                val currentState = viewModel.state
+                                                val currentTrack = currentState.tracks[currentState.selectedTrackIndex]
                                                 val currentStep = if (isMultiTrack) currentTrack.drumSteps[currentTrack.selectedFmDrumInstrument][stepIndex] else currentTrack.steps[stepIndex]
                                                 if (isMultiTrack) {
                                                     val instIdx = currentTrack.selectedFmDrumInstrument
@@ -788,16 +817,17 @@ fun SequencerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                                         if (di == instIdx) dsteps.mapIndexed { si, s -> if (si == stepIndex) s.copy(ratchet = ratchet, punch = punch, probability = probability, gate = gate, velocity = velocity, notes = notes, isSkipped = isSkipped, parameterLocks = parameterLocks, subStepOffset = subStepOffset) else s }
                                                         else dsteps
                                                     }
-                                                    latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
-                                                    nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, currentStep.active, notes.toIntArray(), velocity, ratchet, punch, probability, gate, isSkipped, subStepOffset)
+                                                    viewModel.onStateChange(currentState.copy(tracks = currentState.tracks.mapIndexed { idx, t -> if (idx == currentState.selectedTrackIndex) t.copy(drumSteps = newDrumSteps) else t }))
+                                                    nativeLib.setStep(currentState.selectedTrackIndex, stepIndex, currentStep.active, notes.toIntArray(), velocity, ratchet, punch, probability, gate, isSkipped, subStepOffset)
                                                 } else {
                                                     val newSteps = currentTrack.steps.mapIndexed { si, s -> if (si == stepIndex) s.copy(ratchet = ratchet, punch = punch, probability = probability, gate = gate, notes = notes, velocity = velocity, isSkipped = isSkipped, parameterLocks = parameterLocks, subStepOffset = subStepOffset) else s }
-                                                    latestOnStateChange(latestState.copy(tracks = latestState.tracks.mapIndexed { idx, t -> if (idx == latestState.selectedTrackIndex) t.copy(steps = newSteps) else t }))
-                                                    nativeLib.setStep(latestState.selectedTrackIndex, stepIndex, currentStep.active, notes.toIntArray(), velocity, ratchet, punch, probability, gate, isSkipped, subStepOffset)
+                                                    viewModel.onStateChange(currentState.copy(tracks = currentState.tracks.mapIndexed { idx, t -> if (idx == currentState.selectedTrackIndex) t.copy(steps = newSteps) else t }))
+                                                    nativeLib.setStep(currentState.selectedTrackIndex, stepIndex, currentStep.active, notes.toIntArray(), velocity, ratchet, punch, probability, gate, isSkipped, subStepOffset)
                                                 }
                                             },
                                             onParamLock = {
-                                                latestOnStateChange(latestState.copy(isParameterLocking = true, lockingTarget = latestState.selectedTrackIndex to stepIndex))
+                                                val currentState = viewModel.state
+                                                viewModel.onStateChange(currentState.copy(isParameterLocking = true, lockingTarget = currentState.selectedTrackIndex to stepIndex))
                                                 showStepPopup = false
                                             }
                                         )

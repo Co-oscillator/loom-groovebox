@@ -117,24 +117,24 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named native-lib
+# Target rules for targets named loom-native-core
 
 # Build rule for target.
-native-lib: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 native-lib
-.PHONY : native-lib
+loom-native-core: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 loom-native-core
+.PHONY : loom-native-core
 
 # fast build rule for target.
-native-lib/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/build
-.PHONY : native-lib/fast
+loom-native-core/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/build
+.PHONY : loom-native-core/fast
 
 AudioEngineCore.o: AudioEngineCore.cpp.o
 .PHONY : AudioEngineCore.o
 
 # target to build an object file
 AudioEngineCore.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/AudioEngineCore.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/AudioEngineCore.cpp.o
 .PHONY : AudioEngineCore.cpp.o
 
 AudioEngineCore.i: AudioEngineCore.cpp.i
@@ -142,7 +142,7 @@ AudioEngineCore.i: AudioEngineCore.cpp.i
 
 # target to preprocess a source file
 AudioEngineCore.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/AudioEngineCore.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/AudioEngineCore.cpp.i
 .PHONY : AudioEngineCore.cpp.i
 
 AudioEngineCore.s: AudioEngineCore.cpp.s
@@ -150,7 +150,7 @@ AudioEngineCore.s: AudioEngineCore.cpp.s
 
 # target to generate assembly for a file
 AudioEngineCore.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/AudioEngineCore.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/AudioEngineCore.cpp.s
 .PHONY : AudioEngineCore.cpp.s
 
 MacAudioEngine.o: MacAudioEngine.cpp.o
@@ -158,7 +158,7 @@ MacAudioEngine.o: MacAudioEngine.cpp.o
 
 # target to build an object file
 MacAudioEngine.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/MacAudioEngine.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/MacAudioEngine.cpp.o
 .PHONY : MacAudioEngine.cpp.o
 
 MacAudioEngine.i: MacAudioEngine.cpp.i
@@ -166,7 +166,7 @@ MacAudioEngine.i: MacAudioEngine.cpp.i
 
 # target to preprocess a source file
 MacAudioEngine.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/MacAudioEngine.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/MacAudioEngine.cpp.i
 .PHONY : MacAudioEngine.cpp.i
 
 MacAudioEngine.s: MacAudioEngine.cpp.s
@@ -174,7 +174,7 @@ MacAudioEngine.s: MacAudioEngine.cpp.s
 
 # target to generate assembly for a file
 MacAudioEngine.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/MacAudioEngine.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/MacAudioEngine.cpp.s
 .PHONY : MacAudioEngine.cpp.s
 
 native-lib-desktop.o: native-lib-desktop.cpp.o
@@ -182,7 +182,7 @@ native-lib-desktop.o: native-lib-desktop.cpp.o
 
 # target to build an object file
 native-lib-desktop.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/native-lib-desktop.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/native-lib-desktop.cpp.o
 .PHONY : native-lib-desktop.cpp.o
 
 native-lib-desktop.i: native-lib-desktop.cpp.i
@@ -190,7 +190,7 @@ native-lib-desktop.i: native-lib-desktop.cpp.i
 
 # target to preprocess a source file
 native-lib-desktop.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/native-lib-desktop.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/native-lib-desktop.cpp.i
 .PHONY : native-lib-desktop.cpp.i
 
 native-lib-desktop.s: native-lib-desktop.cpp.s
@@ -198,7 +198,7 @@ native-lib-desktop.s: native-lib-desktop.cpp.s
 
 # target to generate assembly for a file
 native-lib-desktop.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/native-lib.dir/build.make CMakeFiles/native-lib.dir/native-lib-desktop.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/loom-native-core.dir/build.make CMakeFiles/loom-native-core.dir/native-lib-desktop.cpp.s
 .PHONY : native-lib-desktop.cpp.s
 
 # Help Target
@@ -209,7 +209,7 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... native-lib"
+	@echo "... loom-native-core"
 	@echo "... AudioEngineCore.o"
 	@echo "... AudioEngineCore.i"
 	@echo "... AudioEngineCore.s"

@@ -13,5 +13,6 @@ expect fun NativeFileDialog(
     isSave: Boolean = false,
     trackIndex: Int = -1,
     extensions: List<String> = emptyList(),
-    title: String = "Select File"
+    title: String = "Select File",
+    onExport: ((Int, String, String) -> Unit)? = null
 )

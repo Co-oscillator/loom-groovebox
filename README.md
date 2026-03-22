@@ -60,6 +60,10 @@ Create and edit patterns with the 16-pad grid.
 - **Length in Steps**: Use the Len Step knob to define the length of the sequence pattern in steps.  This is non-destructive and will not delete any steps from the sequence.  Each track can have a different number of steps in the sequence (between 16 and 64 steps).
 - **Copy/Paste**: Copy the entire sequence to paste into another track.  If you select a shorter pattern (eg 16 steps) and paste into a longer sequence (eg 64 steps) the pattern will be pasted into the first available steps.
 - **Save/Load**: Save your sequence to a local file, or load a saved sequence.
+- **MIDI File Import**: Loom supports importing standard **.mid** files. 
+    - Tap **LOAD** and select a MIDI file to import it into the current track.
+    - **Melodic**: Notes are mapped to the 64-step sequencer at their relative pitch and gates.
+    - **Drums**: General MIDI percussion notes (35-51) are mapped to Loom's 16 drum voices.
 - **Humanize**: Adds variation in the microtiming and velocity for each step in the current sequence.
 - **Order**: In the bottom of the Transport bar, you can change the order of the steps played in the sequence.  Plays forward, backward, ping-pong, or random.
 

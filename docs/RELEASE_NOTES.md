@@ -1,5 +1,12 @@
 # Loom Groovebox Release Notes
 
+## v2.8.5 (Build 289)
+- **Audio Quality**: Replaced harsh master limiter with smooth `softLimit` and reduced "Punch" intensity (1.3x) to eliminate clipping.
+- **Stability**: Expanded MIDI isolation to 0-127 and improved loopback filtering to prevent ghost triggers from LED refreshes.
+- **Visual Feedback**: Added real-time track activity "glow" to engine icons in the mixer.
+- **Features**: Implemented Standard MIDI File (.mid) import for all engines.
+- **Infrastructure**: Verified 2.8.5 versioning across all build scripts.
+
 ## v1.14.6 (Build 26)
 - **Emergency Fix**: Verified and corrected versioning system.
 - **Safety**: Added build safety shield in `check_version.py` to prevent stale builds.

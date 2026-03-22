@@ -46,24 +46,24 @@ if(APPLE)
     endif()
     
     # MacOS implementation
-    add_library(native-lib SHARED
+    add_library(loom-native-core SHARED
                 ${CORE_SOURCES}
                 MacAudioEngine.cpp
                 native-lib-desktop.cpp) # New entry point for Desktop
     
-    target_include_directories(native-lib PRIVATE ${JNI_INCLUDE_DIRS})
+    target_include_directories(loom-native-core PRIVATE ${JNI_INCLUDE_DIRS})
     
-    target_link_libraries(native-lib
+    target_link_libraries(loom-native-core
                           "-framework AudioUnit"
                           "-framework AudioToolbox"
                           "-framework CoreAudio"
                           "-framework CoreFoundation")
                           
-    target_compile_definitions(native-lib PRIVATE OS_MACOS)
+    target_compile_definitions(loom-native-core PRIVATE OS_MACOS)
 
 elseif(ANDROID)
     # Android implementation
-    add_library(native-lib SHARED
+    add_library(loom-native-core SHARED
                 ${CORE_SOURCES}
                 AudioEngine.cpp
                 native-lib.cpp)
@@ -72,10 +72,10 @@ elseif(ANDROID)
     find_library(android-lib android)
     find_package(oboe REQUIRED CONFIG)
     
-    target_link_libraries(native-lib
+    target_link_libraries(loom-native-core
                           ${log-lib}
                           ${android-lib}
                           oboe::oboe)
                           
-    target_compile_definitions(native-lib PRIVATE OS_ANDROID)
+    target_compile_definitions(loom-native-core PRIVATE OS_ANDROID)
 endif()

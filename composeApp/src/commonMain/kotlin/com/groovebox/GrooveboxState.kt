@@ -26,6 +26,8 @@ data class ArpConfig(
     val isChordProgEnabled: Boolean = false,
     val chordProgMood: Int = 0,
     val chordProgComplexity: Int = 0,
+    val probability: Float = 0.0f,
+    val weird: Float = 0.0f,
     val gateLengths: List<Float> = List(16) { 0.5f } // 0.5 is detent for Envelope default. Min 0.0=1/16, Max 1.0=4 steps
 ) : java.io.Serializable {
     companion object {
@@ -46,6 +48,7 @@ data class TrackState(
     val steps: List<StepState> = List(64) { StepState() },
     val drumSteps: List<List<StepState>> = List(16) { List(64) { StepState() } },
     val patternLength: Int = 16,
+    val isAudiblyActive: Boolean = false,
     val numPages: Int = 1,
     val stepsPerPage: Int = 16,
     val selectedFmDrumInstrument: Int = 0,
@@ -99,9 +102,24 @@ data class TrackState(
         406 to 0.2f,  // Granular Grain Size
         407 to 0.5f,  // Granular Density
         429 to 0.5f,  // Granular Gain
-        // FM Drum Gains
-        205 to 0.7f, 215 to 0.7f, 225 to 0.7f, 235 to 0.7f, 
-        245 to 0.7f, 255 to 0.7f, 265 to 0.7f, 275 to 0.7f
+        // FM Drum Defaults (Level 0.7, other params 0.5)
+        200 to 0.5f, 201 to 0.5f, 202 to 0.5f, 203 to 0.5f, 204 to 0.5f, 205 to 0.7f,
+        210 to 0.5f, 211 to 0.5f, 212 to 0.5f, 213 to 0.5f, 214 to 0.5f, 215 to 0.7f,
+        220 to 0.5f, 221 to 0.5f, 222 to 0.5f, 223 to 0.5f, 224 to 0.5f, 225 to 0.7f,
+        230 to 0.5f, 231 to 0.5f, 232 to 0.5f, 233 to 0.5f, 234 to 0.5f, 235 to 0.7f,
+        240 to 0.5f, 241 to 0.5f, 242 to 0.5f, 243 to 0.5f, 244 to 0.5f, 245 to 0.7f,
+        250 to 0.5f, 251 to 0.5f, 252 to 0.5f, 253 to 0.5f, 254 to 0.5f, 255 to 0.7f,
+        260 to 0.5f, 261 to 0.5f, 262 to 0.5f, 263 to 0.5f, 264 to 0.5f, 265 to 0.7f,
+        270 to 0.5f, 271 to 0.5f, 272 to 0.5f, 273 to 0.5f, 274 to 0.5f, 275 to 0.7f,
+        // Analog Drum Defaults
+        600 to 0.5f, 601 to 0.8f, 602 to 0.25f, 603 to 0.5f, 604 to 0.5f, 605 to 0.8f, // Kick
+        610 to 0.2f, 611 to 0.5f, 612 to 0.33f, 613 to 0.4f, 614 to 0.5f, 615 to 0.8f, // Snare
+        620 to 0.3f, 621 to 0.5f, 622 to 0.5f, 623 to 0.5f, 624 to 0.5f, 625 to 0.8f, // Clap
+        630 to 0.1f, 631 to 0.8f, 632 to 0.5f, 633 to 0.0f, 634 to 0.5f, 635 to 0.8f, // CH
+        640 to 0.4f, 641 to 0.8f, 642 to 0.5f, 643 to 0.0f, 644 to 0.5f, 645 to 0.8f, // OH
+        650 to 0.6f, 651 to 0.7f, 652 to 0.5f, 653 to 0.0f, 654 to 0.6f, 655 to 0.8f, // Cymbal
+        660 to 0.1f, 661 to 0.5f, 662 to 0.8f, 663 to 0.5f, 664 to 0.0f, 665 to 0.8f, // Perc
+        670 to 0.3f, 671 to 0.9f, 672 to 0.5f, 673 to 0.2f, 674 to 0.8f, 675 to 0.8f  // Noise
     ),
     val sequenceProbability: Float = 1.0f,
     val isChainEnabled: Boolean = false,
@@ -260,6 +278,7 @@ data class GrooveboxState(
     val sendMidiStartStop: Boolean = false,
     val padXAttenuation: Float? = null,
     val padYAttenuation: Float? = null,
+    val invertPadY: Boolean = false,
     val patternLength: Int = 16,
 
     // Parameter Locking & Recording State
@@ -314,7 +333,10 @@ data class GrooveboxState(
     val uiLayoutMode: Int = 0, // 0=Auto, 1=Phone, 2=Tablet
     val showCpuMonitor: Boolean = true, // Toggles performance overlay
     val isPerformanceMode: Boolean = false, // Toggles visual touch cues
-    val importedFmPresets: List<Map<String, Any>> = emptyList() // Imported DX7 voice data
+    val isKeyboardModeEnabled: Boolean = false, // Toggle for Android physical keyboard
+    val cpuLoad: Float = 0f,
+    val importedFmPresets: List<Map<String, Any>> = emptyList(), // Imported DX7 voice data
+    val appVersion: String = com.groovebox.utils.Version.APP_VERSION
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L

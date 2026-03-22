@@ -1,0 +1,496 @@
+Initialized native services in: /Users/danielmiller/.gradle/native
+Initialized jansi services in: /Users/danielmiller/.gradle/native
+The client will now receive all logging from the daemon (pid: 96861). The daemon log file: /Users/danielmiller/.gradle/daemon/8.13/daemon-96861.out.log
+Starting 16th build in daemon [uptime: 1 hrs 2 mins 17.478 secs, performance: 100%, GC rate: 0.00/s, heap usage: 0% of 512 MiB, non-heap usage: 35% of 384 MiB]
+Using 10 worker leases.
+Now considering [/Users/danielmiller/Documents/Code Projects/Loom Groovebox] as hierarchies to watch
+Watching the file system is configured to be enabled if available
+File system watching is active
+Starting Build
+Settings evaluated using settings file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/settings.gradle'.
+Projects loaded. Root project using build file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/build.gradle'.
+Included projects: [root project 'Groovebox', project ':app', project ':composeApp']
+
+> Configure project :
+Evaluating root project 'Groovebox' using build file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/build.gradle'.
+Resolved plugin [id: 'com.android.application', version: '8.13.2', apply: false]
+Resolved plugin [id: 'com.android.library', version: '8.13.2', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.android', version: '1.9.0', apply: false]
+Resolved plugin [id: 'org.jetbrains.compose', version: '1.5.11', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.multiplatform', version: '1.9.0', apply: false]
+
+> Configure project :app
+Evaluating project ':app' using build file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build.gradle'.
+Resolved plugin [id: 'com.android.application']
+Resolved plugin [id: 'org.jetbrains.kotlin.android']
+Using default execution profile
+Using Kotlin Gradle Plugin gradle81 variant
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+
+> Configure project :composeApp
+Evaluating project ':composeApp' using build file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.multiplatform', version: '1.9.0']
+Resolved plugin [id: 'com.android.application', version: '8.13.2']
+Resolved plugin [id: 'org.jetbrains.compose', version: '1.5.11']
+Using Kotlin Gradle Plugin gradle81 variant
+Using default execution profile
+kotlin scripting plugin: created the scripting discovery configuration: kotlinScriptDef
+kotlin scripting plugin: created the scripting discovery configuration: testKotlinScriptDef
+All projects evaluated.
+Task name matched 'clean'
+Task path ':composeApp:packageReleaseDistributionForCurrentOS' matched project ':composeApp'
+Task name matched 'packageReleaseDistributionForCurrentOS'
+Task path ':app:bundleRelease' matched project ':app'
+Task name matched 'bundleRelease'
+Selected primary task 'clean' from project :
+Selected primary task 'packageReleaseDistributionForCurrentOS' from project :composeApp
+Selected primary task 'bundleRelease' from project :app
+Tasks to be executed: [task ':app:externalNativeBuildCleanDebug', task ':app:externalNativeBuildCleanRelease', task ':app:clean', task ':composeApp:cleanDesktopTest', task ':composeApp:cleanAllTests', task ':composeApp:clean', task ':composeApp:checkRuntime', task ':composeApp:createRuntimeImage', task ':composeApp:prepareAppResources', task ':composeApp:compileKotlinDesktop', task ':composeApp:desktopProcessResources', task ':composeApp:desktopMainClasses', task ':composeApp:desktopJar', task ':composeApp:unpackDefaultComposeDesktopJvmApplicationResources', task ':composeApp:proguardReleaseJars', task ':composeApp:createReleaseDistributable', task ':composeApp:packageReleaseDmg', task ':composeApp:packageReleaseDistributionForCurrentOS', task ':app:incrementVersion', task ':app:checkVersion', task ':app:preBuild', task ':app:preReleaseBuild', task ':app:extractReleaseVersionControlInfo', task ':app:mergeReleaseShaders', task ':app:compileReleaseShaders', task ':app:generateReleaseAssets', task ':app:mergeReleaseAssets', task ':app:buildKotlinToolingMetadata', task ':app:checkReleaseDuplicateClasses', task ':app:checkReleaseAarMetadata', task ':app:processReleaseNavigationResources', task ':app:compileReleaseNavigationResources', task ':app:generateReleaseResValues', task ':app:mapReleaseSourceSetPaths', task ':app:generateReleaseResources', task ':app:mergeReleaseResources', task ':app:packageReleaseResources', task ':app:parseReleaseLocalResources', task ':app:createReleaseCompatibleScreenManifests', task ':app:extractDeepLinksRelease', task ':composeApp:preBuild', task ':composeApp:preReleaseBuild', task ':composeApp:generateReleaseResValues', task ':composeApp:extractDeepLinksRelease', task ':app:processReleaseMainManifest', task ':app:processReleaseManifest', task ':app:processReleaseManifestForPackage', task ':composeApp:checkReleaseAarMetadata', task ':composeApp:processReleaseNavigationResources', task ':composeApp:compileReleaseNavigationResources', task ':composeApp:mapReleaseSourceSetPaths', task ':composeApp:generateReleaseResources', task ':composeApp:mergeReleaseResources', task ':composeApp:packageReleaseResources', task ':composeApp:parseReleaseLocalResources', task ':composeApp:createReleaseCompatibleScreenManifests', task ':composeApp:processReleaseMainManifest', task ':composeApp:processReleaseManifest', task ':composeApp:processReleaseManifestForPackage', task ':composeApp:processReleaseResources', task ':app:processReleaseResources', task ':composeApp:buildKotlinToolingMetadata', task ':composeApp:compileReleaseKotlinAndroid', task ':composeApp:javaPreCompileRelease', task ':composeApp:compileReleaseJavaWithJavac', task ':composeApp:bundleReleaseClassesToCompileJar', task ':app:compileReleaseKotlin', task ':app:javaPreCompileRelease', task ':app:compileReleaseJavaWithJavac', task ':app:mergeReleaseArtProfile', task ':composeApp:bundleReleaseClassesToRuntimeJar', task ':app:expandReleaseArtProfileWildcards', task ':app:extractProguardFiles', task ':app:mergeReleaseGeneratedProguardFiles', task ':app:processReleaseJavaRes', task ':composeApp:processReleaseJavaRes', task ':app:mergeReleaseJavaResource', task ':app:mergeReleaseStartupProfile', task ':app:minifyReleaseWithR8', task ':app:configureCMakeRelWithDebInfo[arm64-v8a]', task ':app:buildCMakeRelWithDebInfo[arm64-v8a]', task ':app:configureCMakeRelWithDebInfo[armeabi-v7a]', task ':app:buildCMakeRelWithDebInfo[armeabi-v7a]', task ':app:configureCMakeRelWithDebInfo[x86]', task ':app:buildCMakeRelWithDebInfo[x86]', task ':app:configureCMakeRelWithDebInfo[x86_64]', task ':app:buildCMakeRelWithDebInfo[x86_64]', task ':app:mergeReleaseJniLibFolders', task ':app:mergeReleaseNativeLibs', task ':app:stripReleaseDebugSymbols', task ':app:writeReleaseAppMetadata', task ':app:buildReleasePreBundle', task ':app:compileReleaseArtProfile', task ':app:collectReleaseDependencies', task ':app:configureReleaseDependencies', task ':app:extractReleaseNativeSymbolTables', task ':composeApp:extractProguardFiles', task ':composeApp:generateReleaseLintModel', task ':app:generateReleaseLintVitalReportModel', task ':app:lintVitalAnalyzeRelease', task ':app:lintVitalReportRelease', task ':app:lintVitalRelease', task ':app:parseReleaseIntegrityConfig', task ':app:packageReleaseBundle', task ':app:signReleaseBundle', task ':app:produceReleaseBundleIdeListingFile', task ':app:createReleaseBundleListingFileRedirect', task ':app:bundleRelease']
+Tasks that were excluded: []
+Resolve mutations for :app:externalNativeBuildCleanDebug (Thread[Execution worker,5,main]) started.
+:app:externalNativeBuildCleanDebug (Thread[Execution worker,5,main]) started.
+
+> Task :app:externalNativeBuildCleanDebug
+Caching disabled for task ':app:externalNativeBuildCleanDebug' because:
+  Build cache is disabled
+Task ':app:externalNativeBuildCleanDebug' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+C/C++: starting clean
+C/C++: finding existing JSONs
+C/C++: Json file not found so contents couldn't be cleaned /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/riscv64/android_gradle_build.json
+C/C++: about to execute 4 clean command batches
+Clean native-lib-armeabi-v7a
+C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/armeabi-v7a" \
+  clean
+
+Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/armeabi-v7a clean
+Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
+C/C++: Received process result: 0
+Clean native-lib-arm64-v8a
+C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/arm64-v8a" \
+  clean
+
+Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/arm64-v8a clean
+Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
+C/C++: Received process result: 0
+Clean native-lib-x86
+C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/x86" \
+  clean
+
+Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/x86 clean
+Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
+C/C++: Received process result: 0
+Clean native-lib-x86_64
+C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/x86_64" \
+  clean
+
+Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/x86_64 clean
+Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
+C/C++: Received process result: 0
+C/C++: clean complete
+Resolve mutations for :app:externalNativeBuildCleanRelease (Thread[Execution worker,5,main]) started.
+:app:externalNativeBuildCleanRelease (Thread[Execution worker,5,main]) started.
+
+> Task :app:externalNativeBuildCleanRelease
+Caching disabled for task ':app:externalNativeBuildCleanRelease' because:
+  Build cache is disabled
+Task ':app:externalNativeBuildCleanRelease' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+C/C++: starting clean
+C/C++: finding existing JSONs
+C/C++: Json file not found so contents couldn't be cleaned /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/riscv64/android_gradle_build.json
+C/C++: about to execute 4 clean command batches
+Clean native-lib-armeabi-v7a
+C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/armeabi-v7a" \
+  clean
+
+Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/armeabi-v7a clean
+Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
+C/C++: Received process result: 0
+Clean native-lib-arm64-v8a
+C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/arm64-v8a" \
+  clean
+
+Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/arm64-v8a clean
+Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
+C/C++: Received process result: 0
+Clean native-lib-x86
+C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/x86" \
+  clean
+
+Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/x86 clean
+Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
+C/C++: Received process result: 0
+Clean native-lib-x86_64
+C/C++: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/x86_64" \
+  clean
+
+Starting process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app Command: /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja -C /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/RelWithDebInfo/e6p6t6f4/x86_64 clean
+Successfully started process 'command '/Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja''
+C/C++: Received process result: 0
+C/C++: clean complete
+Resolve mutations for :app:clean (Thread[Execution worker,5,main]) started.
+:app:clean (Thread[Execution worker,5,main]) started.
+
+> Task :app:clean
+Caching disabled for task ':app:clean' because:
+  Build cache is disabled
+Task ':app:clean' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Resolve mutations for :composeApp:cleanDesktopTest (Thread[Execution worker,5,main]) started.
+:composeApp:cleanDesktopTest (Thread[Execution worker,5,main]) started.
+
+> Task :composeApp:cleanDesktopTest UP-TO-DATE
+Caching disabled for task ':composeApp:cleanDesktopTest' because:
+  Build cache is disabled
+Task ':composeApp:cleanDesktopTest' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Resolve mutations for :composeApp:cleanAllTests (Thread[Execution worker,5,main]) started.
+:composeApp:cleanAllTests (Thread[Execution worker,5,main]) started.
+
+> Task :composeApp:cleanAllTests UP-TO-DATE
+Skipping task ':composeApp:cleanAllTests' as it has no actions.
+Resolve mutations for :composeApp:clean (Thread[Execution worker,5,main]) started.
+:composeApp:clean (Thread[Execution worker,5,main]) started.
+destroyer locations for task group 0 (Thread[included builds,5,main]) started.
+destroyer locations for task group 1 (Thread[included builds,5,main]) started.
+
+> Task :composeApp:clean
+Caching disabled for task ':composeApp:clean' because:
+  Build cache is disabled
+Task ':composeApp:clean' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Resolve mutations for :composeApp:checkRuntime (Thread[Execution worker,5,main]) started.
+:composeApp:checkRuntime (Thread[Execution worker,5,main]) started.
+
+> Task :composeApp:checkRuntime
+Caching disabled for task ':composeApp:checkRuntime' because:
+  Build cache is disabled
+Task ':composeApp:checkRuntime' is not up-to-date because:
+  Output property 'javaRuntimePropertiesFile' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/compose/tmp/checkRuntime/properties.bin has been removed.
+Starting process 'command '/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/java''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp Command: /opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/java -jar /Users/danielmiller/.gradle/caches/modules-2/files-2.1/org.jetbrains.compose/gradle-plugin-internal-jdk-version-probe/1.5.11/7dcc1248909febeacf34c3f803caedb53323c68e/gradle-plugin-internal-jdk-version-probe-1.5.11.jar
+Successfully started process 'command '/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/java''
+Starting process 'command '/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/java''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp Command: /opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/java --list-modules
+Successfully started process 'command '/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/java''
+Resolve mutations for :composeApp:createRuntimeImage (Thread[Execution worker,5,main]) started.
+:composeApp:createRuntimeImage (Thread[Execution worker,5,main]) started.
+
+> Task :composeApp:createRuntimeImage
+Caching disabled for task ':composeApp:createRuntimeImage' because:
+  Build cache is disabled
+  Caching has not been enabled for the task
+Task ':composeApp:createRuntimeImage' is not up-to-date because:
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/compose/tmp/main/runtime has been removed.
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/compose/tmp/main/runtime/conf has been removed.
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/compose/tmp/main/runtime/conf/logging.properties has been removed.
+  and more...
+The input changes require a full rebuild for incremental task ':composeApp:createRuntimeImage'.
+Starting process 'command '/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/jlink''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp Command: /opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/jlink @/Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/compose/tmp/createRuntimeImage.args.txt
+Successfully started process 'command '/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home/bin/jlink''
+Resolve mutations for :composeApp:prepareAppResources (Thread[Execution worker,5,main]) started.
+:composeApp:prepareAppResources (Thread[Execution worker,5,main]) started.
+
+> Task :composeApp:prepareAppResources NO-SOURCE
+Skipping task ':composeApp:prepareAppResources' as it has no source files and no previous output files.
+Resolve mutations for :composeApp:compileKotlinDesktop (Thread[Execution worker,5,main]) started.
+:composeApp:compileKotlinDesktop (Thread[Execution worker,5,main]) started.
+Resolve mutations for :composeApp:desktopProcessResources (Thread[Execution worker Thread 5,5,main]) started.
+:composeApp:desktopProcessResources (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :composeApp:desktopProcessResources
+Caching disabled for task ':composeApp:desktopProcessResources' because:
+  Build cache is disabled
+  Not worth caching
+Task ':composeApp:desktopProcessResources' is not up-to-date because:
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/processedResources/desktop/main has been removed.
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/processedResources/desktop/main/icon.icns has been removed.
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/processedResources/desktop/main/icon.png has been removed.
+  and more...
+Resolve mutations for :composeApp:unpackDefaultComposeDesktopJvmApplicationResources (Thread[Execution worker Thread 5,5,main]) started.
+:composeApp:unpackDefaultComposeDesktopJvmApplicationResources (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :composeApp:unpackDefaultComposeDesktopJvmApplicationResources
+Caching disabled for task ':composeApp:unpackDefaultComposeDesktopJvmApplicationResources' because:
+  Build cache is disabled
+  Caching has not been enabled for the task
+Task ':composeApp:unpackDefaultComposeDesktopJvmApplicationResources' is not up-to-date because:
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/compose/default-resources/1.5.11 has been removed.
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/compose/default-resources/1.5.11/default-compose-desktop-rules.pro has been removed.
+  Output property 'destinationDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/compose/default-resources/1.5.11/default-entitlements.plist has been removed.
+  and more...
+Resolve mutations for :app:incrementVersion (Thread[Execution worker Thread 5,5,main]) started.
+:app:incrementVersion (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:incrementVersion
+Caching disabled for task ':app:incrementVersion' because:
+  Build cache is disabled
+Task ':app:incrementVersion' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Starting process 'command 'python3''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox Command: python3 check_version.py --increment
+Successfully started process 'command 'python3''
+Auto-incremented to: 2.6.25 (Build 154)
+Resolve mutations for :app:checkVersion (Thread[Execution worker Thread 5,5,main]) started.
+:app:checkVersion (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:checkVersion
+Caching disabled for task ':app:checkVersion' because:
+  Build cache is disabled
+Task ':app:checkVersion' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Starting process 'command 'python3''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox Command: python3 check_version.py
+Successfully started process 'command 'python3''
+Target Version: 2.6.25 (Build 154)
+Version verification passed.
+Resolve mutations for :app:preBuild (Thread[Execution worker Thread 5,5,main]) started.
+:app:preBuild (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:preBuild
+Skipping task ':app:preBuild' as it has no actions.
+Resolve mutations for :app:preReleaseBuild (Thread[Execution worker Thread 5,5,main]) started.
+:app:preReleaseBuild (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:preReleaseBuild
+Skipping task ':app:preReleaseBuild' as it has no actions.
+Resolve mutations for :app:extractReleaseVersionControlInfo (Thread[Execution worker Thread 5,5,main]) started.
+:app:extractReleaseVersionControlInfo (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:extractReleaseVersionControlInfo
+Caching disabled for task ':app:extractReleaseVersionControlInfo' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Task ':app:extractReleaseVersionControlInfo' is not up-to-date because:
+  Output property 'vcInfoFile' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/intermediates/version_control_info_file/release/extractReleaseVersionControlInfo/version-control-info.textproto has been removed.
+Resolve mutations for :app:mergeReleaseShaders (Thread[Execution worker Thread 5,5,main]) started.
+:app:mergeReleaseShaders (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:mergeReleaseShaders
+Caching disabled for task ':app:mergeReleaseShaders' because:
+  Build cache is disabled
+  Simple merging task
+Task ':app:mergeReleaseShaders' is not up-to-date because:
+  Output property 'outputDir' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/intermediates/merged_shaders/release/mergeReleaseShaders/out has been removed.
+The input changes require a full rebuild for incremental task ':app:mergeReleaseShaders'.
+Resolve mutations for :app:compileReleaseShaders (Thread[Execution worker Thread 5,5,main]) started.
+:app:compileReleaseShaders (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:compileReleaseShaders NO-SOURCE
+Skipping task ':app:compileReleaseShaders' as it has no source files and no previous output files.
+Resolve mutations for :app:generateReleaseAssets (Thread[Execution worker Thread 5,5,main]) started.
+:app:generateReleaseAssets (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:generateReleaseAssets UP-TO-DATE
+Skipping task ':app:generateReleaseAssets' as it has no actions.
+Resolve mutations for :app:mergeReleaseAssets (Thread[Execution worker Thread 5,5,main]) started.
+:app:mergeReleaseAssets (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:mergeReleaseAssets FAILED
+
+> Task :composeApp:compileKotlinDesktop
+Caching disabled for task ':composeApp:compileKotlinDesktop' because:
+  Build cache is disabled
+Task ':composeApp:compileKotlinDesktop' is not up-to-date because:
+  Task has failed previously.
+The input changes require a full rebuild for incremental task ':composeApp:compileKotlinDesktop'.
+Kotlin source files: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/Main.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/com/groovebox/ui/components/NativeFileDialog.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/com/groovebox/ui/DesktopViews.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/com/groovebox/DesktopAudioCapture.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/com/groovebox/midi/MidiManager.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/com/groovebox/midi/EmpledManager.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/com/groovebox/utils/AudioExporter.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/com/groovebox/persistence/PersistenceManager.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/desktopMain/kotlin/com/groovebox/NativeLib.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/Views.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/components/Knob.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/components/VerticalSlider.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/components/EngineIcon.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/components/CompactParameterBox.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/components/NativeFileDialog.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/components/PointerVisualizerOverlay.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/theme/Theme.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/MixerView.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/SoundFontCreditsDialog.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/MidiEngineParameters.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/RoutingScreen.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/SettingsScreen.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/SequencerView.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/GlobalEffectsView.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/MainScreen.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/PlayingScreen.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ScaleLogic.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/midi/MidiManager.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/midi/EmpledManager.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/GrooveboxViewModel.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/utils/StateUtils.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/utils/SysexParser.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/utils/AudioExporter.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/persistence/PersistenceManager.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/GrooveboxState.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ToggleIcon.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/NativeLib.kt
+Java source files: 
+Script source files: 
+Script file extensions: 
+Using Kotlin/JVM incremental compilation
+[KOTLIN] Kotlin compilation 'jdkHome' argument: /opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home
+i: found daemon on port 17063 (3734900 ms old), trying to connect
+i: connected to the daemon
+Options for KOTLIN DAEMON: IncrementalCompilationOptions(super=CompilationOptions(compilerMode=INCREMENTAL_COMPILER, targetPlatform=JVM, reportCategories=[0, 3], reportSeverity=2, requestedCompilationResults=[0], kotlinScriptExtensions=[]), areFileChangesKnown=false, modifiedFiles=null, deletedFiles=null, classpathChanges=NotAvailableForNonIncrementalRun, workingDir=/Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/kotlin/compileKotlinDesktop/cacheable, multiModuleICSettings=MultiModuleICSettings(buildHistoryFile=/Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/kotlin/compileKotlinDesktop/local-state/build-history.bin, useModuleDetection=false), usePreciseJavaTracking=true, outputFiles=[/Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/classes/kotlin/desktop/main, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/kotlin/compileKotlinDesktop/cacheable, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/kotlin/compileKotlinDesktop/local-state])
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/PlayingScreen.kt:1407:25 Conflicting declarations: val maxSteps: Int, val maxSteps: Int
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/PlayingScreen.kt:1446:29 Conflicting declarations: val maxSteps: Int, val maxSteps: Int
+
+> Task :composeApp:compileKotlinDesktop FAILED
+
+[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/build/reports/problems/problems-report.html
+
+FAILURE: Build completed with 2 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':app:mergeReleaseAssets'.
+> Configuration `:app:releaseRuntimeClasspath` contains AndroidX dependencies, but the `android.useAndroidX` property is not enabled, which may cause runtime issues.
+  Set `android.useAndroidX=true` in the `gradle.properties` file and retry.
+  The following AndroidX dependencies are detected:
+  :app:releaseRuntimeClasspath -> androidx.compose.ui:ui-tooling-preview:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-tooling-preview-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.annotation:annotation:1.6.0
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.annotation:annotation:1.6.0 -> androidx.annotation:annotation-jvm:1.6.0
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.runtime:runtime:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.runtime:runtime-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.runtime:runtime-saveable:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.runtime:runtime-saveable-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose.ui:ui:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.activity:activity-ktx:1.8.1
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.collection:collection:1.1.0
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.core:core:1.12.0
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.core:core:1.12.0 -> androidx.annotation:annotation-experimental:1.3.0
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.core:core:1.12.0 -> androidx.concurrent:concurrent-futures:1.1.0
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.core:core:1.12.0 -> androidx.interpolator:interpolator:1.0.0
+  :app:releaseRuntimeClasspath -> androidx.compose.material3:material3:1.1.2 -> androidx.lifecycle:lifecycle-runtime:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-android:1.5.4 -> androidx.emoji2:emoji2:1.4.0 -> androidx.lifecycle:lifecycle-process:2.6.2 -> androidx.lifecycle:lifecycle-livedata-core:2.6.2 -> androidx.arch.core:core-common:2.2.0
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-android:1.5.4 -> androidx.emoji2:emoji2:1.4.0 -> androidx.lifecycle:lifecycle-process:2.6.2 -> androidx.lifecycle:lifecycle-livedata-core:2.6.2 -> androidx.arch.core:core-runtime:2.2.0
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-android:1.5.4 -> androidx.emoji2:emoji2:1.4.0 -> androidx.lifecycle:lifecycle-process:2.6.2 -> androidx.lifecycle:lifecycle-common:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.compose.material3:material3:1.1.2 -> androidx.lifecycle:lifecycle-common-java8:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.lifecycle:lifecycle-runtime-ktx:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.compose.material3:material3:1.1.2 -> androidx.lifecycle:lifecycle-viewmodel:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.activity:activity-ktx:1.8.1 -> androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.core:core-ktx:1.12.0
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-android:1.5.4 -> androidx.emoji2:emoji2:1.4.0 -> androidx.lifecycle:lifecycle-process:2.6.2 -> androidx.lifecycle:lifecycle-livedata-core:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-android:1.5.4 -> androidx.emoji2:emoji2:1.4.0 -> androidx.lifecycle:lifecycle-process:2.6.2
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-android:1.5.4 -> androidx.emoji2:emoji2:1.4.0 -> androidx.startup:startup-runtime:1.1.1
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.tracing:tracing:1.0.0
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.savedstate:savedstate:1.2.1
+  :app:releaseRuntimeClasspath -> androidx.compose.material3:material3:1.1.2 -> androidx.savedstate:savedstate-ktx:1.2.1
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.profileinstaller:profileinstaller:1.3.0
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1 -> androidx.activity:activity:1.8.1 -> androidx.core:core:1.12.0 -> androidx.versionedparcelable:versionedparcelable:1.1.1
+  :app:releaseRuntimeClasspath -> androidx.activity:activity-compose:1.8.1
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-android:1.5.4 -> androidx.autofill:autofill:1.0.0
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-geometry:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-geometry-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-util:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-util-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose.ui:ui-graphics:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-graphics-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-unit:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-unit-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-text:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-text-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-android:1.5.4 -> androidx.emoji2:emoji2:1.4.0
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.ui:ui-android:1.5.4 -> androidx.customview:customview-poolingcontainer:1.0.0
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.animation:animation:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.animation:animation-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.animation:animation-core:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.animation:animation-core-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-layout:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.foundation:foundation-layout-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.material:material:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.material:material-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.material:material-icons-core:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.material:material-icons-core-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose.material:material-icons-extended:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.material:material-icons-extended-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.material:material-ripple:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00 -> androidx.compose.material:material-ripple-android:1.5.4
+  :app:releaseRuntimeClasspath -> androidx.compose.material3:material3:1.1.2
+  :app:releaseRuntimeClasspath -> androidx.compose:compose-bom:2023.08.00
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':composeApp:compileKotlinDesktop'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+==============================================================================
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 6s
+15 actionable tasks: 14 executed, 1 up-to-date
+Watched directory hierarchies: [/Users/danielmiller/Documents/Code Projects/Loom Groovebox]

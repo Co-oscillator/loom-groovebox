@@ -5,6 +5,8 @@ import com.groovebox.GrooveboxState
 import java.io.File
 import java.awt.FileDialog
 import java.awt.Frame
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 actual fun NativeFileDialog(
@@ -15,22 +17,26 @@ actual fun NativeFileDialog(
     isSave: Boolean,
     trackIndex: Int,
     extensions: List<String>,
-    title: String
+    title: String,
+    onExport: ((Int, String, String) -> Unit)?
 ) {
     LaunchedEffect(Unit) {
-        // Run on IO thread to avoid blocking Compose UI thread
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val dialog = FileDialog(null as Frame?, title, if (isSave) FileDialog.SAVE else FileDialog.LOAD)
+        withContext(Dispatchers.IO) {
+            val parentFrame = Frame.getFrames().firstOrNull { it.isVisible }
+            val dialog = FileDialog(parentFrame, title, if (isSave) FileDialog.SAVE else FileDialog.LOAD)
+            
             dialog.directory = directory.absolutePath
             
-            // Simple extension filter
             if (extensions.isNotEmpty() && !isSave) {
                 dialog.file = extensions.joinToString(";") { "*.$it" }
             }
             
             dialog.isVisible = true
             
-            val selectedFile = dialog.files.firstOrNull()?.absolutePath
+            val selectedFile = if (dialog.file != null) {
+                File(dialog.directory, dialog.file).absolutePath
+            } else null
+            
             if (selectedFile != null) {
                 onFileSelected(selectedFile)
             }

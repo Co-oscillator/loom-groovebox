@@ -93,7 +93,7 @@ public:
   void setParameterPreview(int trackIndex, int parameterId, float value);
   void setSwing(float swing);
   void setTrackHumanize(int trackIndex, float amount);
-  void setPatternLength(int length);
+  void setPatternLength(int trackIndex, int length);
   void setPlaybackDirection(int trackIndex, int direction);
   void setIsRandomOrder(int trackIndex, bool isRandom);
   void setIsJumpMode(int trackIndex, bool isJump);
@@ -112,7 +112,8 @@ public:
                     bool isLatched, bool isMutated,
                     const std::vector<std::vector<bool>> &rhythms,
                     const std::vector<int> &sequence,
-                    const std::vector<float> &gateLengths);
+                    const std::vector<float> &gateLengths,
+                    float probability, float weird);
   void setChordProgConfig(int trackIndex, bool enabled, int mood,
                           int complexity);
   void setScaleConfig(int rootNote, const std::vector<int> &intervals);
@@ -137,6 +138,9 @@ public:
   void clearSequencer(int trackIndex);
   void setMasterVolume(float volume);
   bool getStepActive(int trackIndex, int stepIndex, int drumIndex = -1);
+  bool getIsPlaying() const { return mIsPlaying; }
+  bool getIsRecording() const { return mIsRecording; }
+  bool getIsRecordingSample() const { return mIsRecordingSample; }
   void getStepActiveStates(int trackIndex, bool *out, int maxSize);
   std::vector<Step> getSequencerSteps(int trackIndex);
   std::vector<float> getAllTrackParameters(int trackIndex); // New sync method
@@ -213,6 +217,11 @@ private:
 
   // Command Queue for Race-Free UI->Audio Communication
   struct AudioCommand {
+    AudioCommand()
+        : type(NOTE_ON), trackIndex(0), data1(0), data2(0), value(0.0f),
+          bValue(false), velocity(0.8f), ratchet(1), punch(false),
+          probability(1.0f), gate(1.0f), isSkipped(false), extraData(0),
+          immediate(false), subStepOffset(0.0f), laneIndex(-1) {}
     enum Type {
       NOTE_ON,
       NOTE_OFF,

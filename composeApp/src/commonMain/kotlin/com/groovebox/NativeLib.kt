@@ -7,7 +7,7 @@ expect class NativeLib() {
     fun setTrackVolume(trackIndex: Int, volume: Float)
     fun setEngineType(trackIndex: Int, type: Int)
     fun setTempo(bpm: Float)
-    fun setPatternLength(length: Int)
+    fun setPatternLength(trackIndex: Int, length: Int)
     fun setPlaying(playing: Boolean)
     fun triggerNote(trackIndex: Int, note: Int, velocity: Int)
     fun releaseNote(trackIndex: Int, note: Int)
@@ -48,7 +48,7 @@ expect class NativeLib() {
     fun getStepNotes(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): IntArray
     fun getStepVelocity(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Float
     fun getStepSubStep(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Float
-    fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray)
+    fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray, probability: Float, weird: Float)
     fun setChordProgConfig(trackIndex: Int, enabled: Boolean, mood: Int, complexity: Int)
     fun setScaleConfig(rootNote: Int, intervals: IntArray)
     fun getGranularPlayheads(trackIndex: Int): FloatArray
@@ -99,4 +99,7 @@ expect class NativeLib() {
     fun setChainEnabled(trackIndex: Int, enabled: Boolean)
     fun setChainLength(trackIndex: Int, length: Int)
     fun setChainSlot(trackIndex: Int, slotIndex: Int, laneIndex: Int, steps: Array<StepState>)
+    fun getIsPlaying(): Boolean
+    fun getIsRecording(): Boolean
+    fun getIsRecordingSample(): Boolean
 }

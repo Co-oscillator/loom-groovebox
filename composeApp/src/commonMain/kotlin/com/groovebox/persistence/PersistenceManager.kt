@@ -19,6 +19,7 @@ expect object PersistenceManager {
     fun saveSequence(trackState: TrackState, name: String)
     fun listSequences(): List<String>
     fun loadSequence(targetTrack: TrackState, name: String): TrackState?
+    fun loadMidiSequence(targetTrack: TrackState, path: String): TrackState?
     fun copyWavetablesToFilesDir()
     fun copySoundFontsToFilesDir()
     fun copyDefaultsToFilesDir()

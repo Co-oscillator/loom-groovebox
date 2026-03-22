@@ -79,7 +79,9 @@ import com.groovebox.TrackState
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, onRecordingSourceChange: (Int) -> Unit = {}) {
+fun ParametersScreen(viewModel: com.groovebox.GrooveboxViewModel, trackIndex: Int, nativeLib: NativeLib, onRecordingSourceChange: (Int) -> Unit = {}) {
+    val state = viewModel.state
+    val onStateChange = viewModel::onStateChange
     if (trackIndex < 0 || trackIndex >= state.tracks.size) return
     val track = state.tracks[trackIndex]
     
@@ -105,7 +107,7 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                EngineIcon(track.engineType, modifier = Modifier.size(24.dp), tint = engineColor)
+                EngineIcon(type = track.engineType, modifier = Modifier.size(24.dp), color = engineColor)
                 Spacer(modifier = Modifier.width(8.dp))
                 val displayName = track.engineType.name.replace("_", "\n")
                 Text(
@@ -303,13 +305,14 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                 val allParams = nativeLib.getAllTrackParameters(trackIndex)
                 if (allParams.isNotEmpty()) {
                     val paramMap = allParams.mapIndexed { idx, value -> idx to value }.toMap()
-                    val newTrack = state.tracks[trackIndex].copy(parameters = paramMap)
-                    val newTracks = state.tracks.toMutableList()
-                    newTracks[trackIndex] = newTrack
-                    onStateChange(state.copy(tracks = newTracks))
+                    viewModel.updateState { s ->
+                        s.copy(tracks = s.tracks.mapIndexed { i, t -> 
+                            if (i == trackIndex) t.copy(parameters = paramMap) else t 
+                        })
+                    }
                 }
             })
-            EngineType.FM_DRUM -> FmDrumParameters(state, trackIndex, onStateChange, nativeLib)
+            EngineType.FM_DRUM -> FmDrumParameters(viewModel, trackIndex, nativeLib)
             EngineType.SAMPLER -> SamplerParameters(state, trackIndex, onStateChange, nativeLib, onRecordingSourceChange)
             EngineType.GRANULAR -> GranularParameters(state, trackIndex, onStateChange, nativeLib, onRecordingSourceChange)
             EngineType.AUDIO_IN -> AudioInParameters(state, trackIndex, onStateChange, nativeLib)
@@ -354,9 +357,9 @@ fun ParametersScreen(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
 
 @Composable
 fun ParameterGroup(title: String, modifier: Modifier = Modifier, titleSize: Int = 10, content: @Composable () -> Unit) {
-    Column(modifier = modifier.padding(vertical = 2.dp)) {
-        Text(title, color = Color.LightGray, fontSize = titleSize.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Spacer(modifier = Modifier.height(2.dp))
+    Column(modifier = modifier.padding(vertical = 4.dp)) {
+        Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = titleSize.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2013,7 +2016,9 @@ fun AnalogDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: 
 
 
 @Composable
-fun FmDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
+fun FmDrumParameters(viewModel: com.groovebox.GrooveboxViewModel, trackIndex: Int, nativeLib: NativeLib) {
+    val state = viewModel.state
+    val onStateChange = viewModel::onStateChange
     val instruments = listOf("KICK", "SNARE", "TOM", "HIHAT", "OHH", "CYMB", "PERC", "NOISE")
     
     val platformInfo = com.groovebox.ui.LocalPlatformInfo.current
@@ -2040,19 +2045,19 @@ fun FmDrumParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gro
                         .fillMaxWidth()
                         .clickable {
                             nativeLib.setSelectedFmDrumInstrument(trackIndex, i)
-                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> if (idx == trackIndex) t.copy(selectedFmDrumInstrument = i) else t }))
+                            viewModel.setSelectedFmDrumInstrument(trackIndex, i)
                             nativeLib.triggerNote(trackIndex, 60 + i, 100)
                         }
                         .padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(name, style = MaterialTheme.typography.labelMedium, color = Color.LightGray, maxLines = 1)
+                    Text(name, style = MaterialTheme.typography.labelMedium, color = Color(0xFFEEEEEE), maxLines = 1)
                     
                     EngineIcon(
-                        engineType = EngineType.FM_DRUM,
+                        type = EngineType.FM_DRUM,
                         modifier = Modifier.size(32.dp),
-                        tint = getEngineColor(EngineType.FM_DRUM)
+                        color = getEngineColor(EngineType.FM_DRUM)
                     )
                 }
                 
@@ -2381,12 +2386,11 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
 fun GranularParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, onRecordingSourceChange: (Int) -> Unit = {}) {
     var waveform by remember { mutableStateOf<FloatArray?>(null) }
     var playheads by remember { mutableStateOf(floatArrayOf()) }
-    var isRecordingSample by remember { mutableStateOf(false) }
-    val themeColor = Color(0xFFFF00FF) // Fuschia for Granular
-
-
+    val themeColor = Color(0xFFFF00FF)
     // Animation loop for playheads and waveform
-    LaunchedEffect(trackIndex) {
+    val isRecordingSample = state.isRecordingSample && state.recordingTrackIndex == trackIndex
+    
+    LaunchedEffect(trackIndex, state.isRecordingSample) {
         waveform = nativeLib.getWaveform(trackIndex)
         while (true) {
             playheads = nativeLib.getGranularPlayheads(trackIndex)
@@ -2405,12 +2409,12 @@ fun GranularParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (G
             waveform = waveform,
             track = state.tracks[trackIndex],
             onStartRecording = { 
-                isRecordingSample = true
                 nativeLib.startRecordingSample(trackIndex) 
+                onStateChange(state.copy(isRecordingSample = true, recordingTrackIndex = trackIndex))
             },
             onStopRecording = { 
                 nativeLib.stopRecordingSample(trackIndex)
-                isRecordingSample = false
+                onStateChange(state.copy(isRecordingSample = false, recordingTrackIndex = -1))
                 waveform = nativeLib.getWaveform(trackIndex)
             },
             onRecordingSourceChange = onRecordingSourceChange,
@@ -2514,7 +2518,7 @@ fun SoundFontParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
         // Source Selection Row
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("GET SOUNDFONTS", style = MaterialTheme.typography.labelSmall, color = Color.LightGray, fontWeight = FontWeight.Bold)
+                Text("GET SOUNDFONTS", style = MaterialTheme.typography.labelSmall, color = Color(0xFFEEEEEE), fontWeight = FontWeight.Bold)
                 // val context = LocalContext.current // Removed
                 Text(
                     text = "Musical Artifacts",
@@ -2928,7 +2932,7 @@ fun AudioInParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
             // Filter Mode Toggle
             val currentMode = (track.parameters[123] ?: 0.0f).toInt().coerceIn(0, 2)
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("FILTER", style = MaterialTheme.typography.labelSmall, color = Color.LightGray)
+                Text("FILTER", style = MaterialTheme.typography.labelSmall, color = Color(0xFFEEEEEE))
                 Spacer(modifier = Modifier.height(4.dp))
                 Button(
                     onClick = { 
@@ -2948,7 +2952,7 @@ fun AudioInParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
             // TOGGLE: GATED vs OPEN
             val isGated = (track.parameters[120] ?: 0.0f) > 0.5f
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("MODE", style = MaterialTheme.typography.labelSmall, color = Color.LightGray)
+                Text("MODE", style = MaterialTheme.typography.labelSmall, color = Color(0xFFEEEEEE))
                 Spacer(modifier = Modifier.height(4.dp))
                 Button(
                     onClick = { 
@@ -2965,7 +2969,7 @@ fun AudioInParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("CHARACTER EQ", style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
+        Text("CHARACTER EQ", style = MaterialTheme.typography.labelMedium, color = Color(0xFFEEEEEE))
         Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth().height(100.dp),
@@ -3002,7 +3006,7 @@ fun AudioInParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("AMP ENVELOPE", style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
+        Text("AMP ENVELOPE", style = MaterialTheme.typography.labelMedium, color = Color(0xFFEEEEEE))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Knob(label = "Atk", initialValue = 0.1f, parameterId = 100, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
             Knob(label = "Dec", initialValue = 0.5f, parameterId = 101, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
@@ -3011,7 +3015,7 @@ fun AudioInParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("FILTER ENVELOPE", style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
+        Text("FILTER ENVELOPE", style = MaterialTheme.typography.labelMedium, color = Color(0xFFEEEEEE))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Knob(label = "Atk", initialValue = 0.01f, parameterId = 114, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
             Knob(label = "Dec", initialValue = 0.1f, parameterId = 115, state = state, onStateChange = onStateChange, nativeLib = nativeLib)
@@ -3042,7 +3046,7 @@ fun GlobalFxSends(state: GrooveboxState, trackIndex: Int, onStateChange: (Groove
             }
         }
     } else {
-        Text("No Active FX in Chain", color = Color.LightGray, fontSize = 10.sp, modifier = Modifier.padding(8.dp))
+        Text("No Active FX in Chain", color = Color(0xFFEEEEEE), fontSize = 10.sp, modifier = Modifier.padding(8.dp))
     }
 }
 
@@ -3081,7 +3085,7 @@ fun GlobalActiveSends(state: GrooveboxState, trackIndex: Int, onStateChange: (Gr
                             nativeLib = nativeLib, 
                             knobSize = 40.dp,
                             overrideValue = fxSends[fxId],
-                            overrideColor = Color.LightGray
+                            overrideColor = Color(0xFFEEEEEE)
                         )
                     }
                 }

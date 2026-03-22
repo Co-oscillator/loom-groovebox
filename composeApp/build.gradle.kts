@@ -3,7 +3,7 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
+    alias(libs.plugins.androidLibrary)
     alias(libs.plugins.jetbrainsCompose)
 }
 
@@ -43,7 +43,7 @@ kotlin {
 }
 
 android {
-    namespace = "com.groovebox"
+    namespace = "com.groovebox.compose"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
@@ -55,11 +55,8 @@ android {
         val versionProps = Properties()
         versionProps.load(versionPropsFile.inputStream())
 
-        applicationId = "com.groovebox"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = versionProps["VERSION_CODE"].toString().toInt()
-        versionName = versionProps["VERSION_NAME"].toString()
     }
     packaging {
         resources {
@@ -87,7 +84,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "LoomGroovebox"
-            packageVersion = "2.6.17"
+            packageVersion = "2.8.5"
 
             macOS {
                 bundleID = "com.groovebox.loom"
@@ -101,6 +98,9 @@ compose.desktop {
                 entitlementsFile.set(project.file("entitlements.plist"))
             }
         }
-        jvmArgs += "-Djava.library.path=${project.projectDir}/native/build"
+        buildTypes.release.proguard {
+            configurationFiles.from(project.file("compose-desktop.pro"))
+        }
+        jvmArgs += "-Djava.library.path=\$APPDIR:\$APPDIR/resources"
     }
 }

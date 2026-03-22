@@ -3,6 +3,7 @@ package com.groovebox
 import androidx.compose.runtime.*
 import kotlinx.coroutines.*
 import com.groovebox.ui.views.isBlackKey
+import com.groovebox.utils.*
 
 class GrooveboxViewModel(
     private val nativeLib: NativeLib,
@@ -11,39 +12,107 @@ class GrooveboxViewModel(
     var state by mutableStateOf(createInitialState())
         private set
 
-    fun onStateChange(newState: GrooveboxState) {
-        state = newState
+    fun onStateChange(update: GrooveboxState) {
+        state = update
+    }
+
+    fun updateState(transform: (GrooveboxState) -> GrooveboxState) {
+        state = transform(state)
+    }
+
+    fun updateCurrentStep(newStep: Int) {
+        if (state.currentStep != newStep) {
+            state = state.copy(currentStep = newStep)
+        }
+    }
+
+    fun setPlaybackState(isPlaying: Boolean, isRecording: Boolean = state.isRecording) {
+        state = state.copy(isPlaying = isPlaying, isRecording = isRecording)
+    }
+
+    fun setSelectedTab(index: Int) {
+        if (state.selectedTab != index) {
+            state = state.copy(selectedTab = index)
+        }
+    }
+
+    fun setSelectedTrack(index: Int) {
+        if (state.selectedTrackIndex != index) {
+            val track = state.tracks[index]
+            val isDrum = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM
+            state = if (isDrum) {
+                state.copy(selectedTrackIndex = index, gridMode = GridMode.GRID_4X4)
+            } else {
+                state.copy(selectedTrackIndex = index)
+            }
+        }
+    }
+
+    fun setSelectedFmDrumInstrument(trackIdx: Int, instIdx: Int) {
+        state = state.copy(
+            tracks = state.tracks.mapIndexed { idx, t ->
+                if (idx == trackIdx) t.copy(selectedFmDrumInstrument = instIdx) else t
+            }
+        )
     }
 
     private fun createInitialState(): GrooveboxState {
         val tracks = List(8) { i ->
-            when(i) {
-                0 -> TrackState(id = i, engineType = EngineType.SUBTRACTIVE)
-                1 -> {
-                    val fmParams = mutableMapOf<Int, Float>()
-                    fmParams[160] = 0.8f // Op 1 Lvl
-                    fmParams[166] = 0.4f // Op 2 Lvl
-                    fmParams[165] = 1.0f // Op 1 Ratio
-                    fmParams[171] = 2.0f // Op 2 Ratio
-                    fmParams[161] = 0.01f // Op 1 Atk
-                    fmParams[162] = 0.5f // Op 1 Dcy
-                    fmParams[9] = 0.5f   // Center Pan
-                    TrackState(id = i, engineType = EngineType.FM, parameters = fmParams, fmCarrierMask = 3, pan = 0.5f)
-                }
-                2 -> TrackState(id = i, engineType = EngineType.WAVETABLE)
-                3 -> TrackState(id = i, engineType = EngineType.SAMPLER)
-                4 -> TrackState(id = i, engineType = EngineType.GRANULAR)
-                5 -> TrackState(id = i, engineType = EngineType.FM_DRUM)
-                6 -> TrackState(id = i, engineType = EngineType.ANALOG_DRUM)
-                7 -> TrackState(id = i, engineType = EngineType.MIDI)
-                else -> TrackState(id = i, engineType = EngineType.SUBTRACTIVE)
+            val engineType = when(i) {
+                0 -> EngineType.SUBTRACTIVE
+                1 -> EngineType.FM
+                2 -> EngineType.WAVETABLE
+                3 -> EngineType.SAMPLER
+                4 -> EngineType.GRANULAR
+                5 -> EngineType.FM_DRUM
+                6 -> EngineType.ANALOG_DRUM
+                7 -> EngineType.MIDI
+                else -> EngineType.SUBTRACTIVE
             }
+            
+            val params = mutableMapOf<Int, Float>()
+            var padModTarget = 1 // Default Cutoff
+            
+            when(engineType) {
+                EngineType.SUBTRACTIVE -> {
+                    params[118] = 0.5f // Env Intensity
+                    padModTarget = 1
+                }
+                EngineType.FM -> {
+                    params[160] = 0.8f // Op 1 Lvl
+                    params[166] = 0.4f // Op 2 Lvl
+                    params[165] = 1.0f // Op 1 Ratio
+                    params[171] = 2.0f // Op 2 Ratio
+                    params[161] = 0.01f // Op 1 Atk
+                    params[162] = 0.5f // Op 1 Dcy
+                    params[9] = 0.5f   // Center Pan
+                    padModTarget = 159 // Drive
+                }
+                EngineType.WAVETABLE -> padModTarget = 450 // Morph
+                EngineType.SAMPLER -> padModTarget = 302 // Speed
+                EngineType.GRANULAR -> padModTarget = 406 // Grain Size
+                EngineType.AUDIO_IN -> padModTarget = 122 // Fold
+                EngineType.SOUNDFONT -> padModTarget = 1 // Filter
+                else -> {}
+            }
+            
+            TrackState(id = i, engineType = engineType, parameters = params, padModTargetId = getDefaultPadModTarget(engineType))
         }
-        return GrooveboxState(tracks = tracks, tempo = 80.0f)
+
+        val stripAssignments = EngineType.values().associateWith { getDefaultStripAssignments(it) }
+        val knobAssignments = EngineType.values().associateWith { getDefaultKnobAssignments(it) }
+
+        return GrooveboxState(
+            tracks = tracks, 
+            tempo = 80.0f,
+            engineTypeStripAssignments = stripAssignments,
+            engineTypeKnobAssignments = knobAssignments
+        )
     }
 
     fun sanitizeAndSetState(loadedState: GrooveboxState) {
         state = sanitizeGrooveboxState(loadedState)
+        syncWithNative() // Ensure native engine is in sync after loading
     }
 
     fun syncWithNative() {
@@ -80,88 +149,124 @@ class GrooveboxViewModel(
         }
     }
 
-    private fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
-        val sanitizedTracks = state.tracks.map { track ->
-            var newTrack = track
-            if (newTrack.volume < 0.05f) newTrack = newTrack.copy(volume = 0.7f)
-            newTrack = newTrack.copy(isActive = true)
-            val newParams = newTrack.parameters.toMutableMap()
-            newParams[0] = newTrack.volume
-            if ((newParams[1] ?: 0.0f) < 0.01f) newParams[1] = 1.0f 
-            if ((newParams[101] ?: 0.0f) < 0.01f) newParams[101] = 0.5f 
-            if ((newParams[102] ?: 0.0f) < 0.01f) newParams[102] = 1.0f 
-            
-            if (newTrack.engineType == EngineType.SUBTRACTIVE) {
-                if ((newParams[5] ?: 0.0f) < 0.1f) newParams[5] = 0.7f 
-                if ((newParams[107] ?: 0.0f) < 0.001f && (newParams[108] ?: 0.0f) < 0.001f) {
-                    newParams[107] = 0.6f
-                    newParams[108] = 0.4f
+
+    fun pullRecordedSteps(trackIdx: Int) {
+        if (trackIdx !in state.tracks.indices) return
+        val track = state.tracks[trackIdx]
+        
+        val isSamplerChops = track.engineType == EngineType.SAMPLER && (track.parameters[320] ?: 0f) > 0.6f
+        val isMultiTrack = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM || isSamplerChops
+        
+        val patternLen = track.patternLength
+        var changed = false
+
+        if (isMultiTrack) {
+            val drumIdx = track.selectedFmDrumInstrument
+            val updatedSteps = track.drumSteps[drumIdx].mapIndexed { stepIdx, s ->
+                if (stepIdx < patternLen) {
+                    val isActive = nativeLib.getStepActive(trackIdx, stepIdx, drumIdx)
+                    if (isActive && !s.active) {
+                        changed = true
+                        val notes = nativeLib.getStepNotes(trackIdx, stepIdx, drumIdx)
+                        val vel = nativeLib.getStepVelocity(trackIdx, stepIdx, drumIdx)
+                        val sub = nativeLib.getStepSubStep(trackIdx, stepIdx, drumIdx)
+                        s.copy(active = true, notes = notes.toList(), velocity = vel, subStepOffset = sub)
+                    } else if (!isActive && s.active) {
+                        changed = true
+                        s.copy(active = false, notes = emptyList())
+                    } else s
+                } else s
+            }
+            if (changed) {
+                val newDrumSteps = track.drumSteps.mapIndexed { di, dsteps ->
+                    if (di == drumIdx) updatedSteps else dsteps
                 }
-                if ((newParams[109] ?: 0.0f) < 0.1f) newParams[109] = 0.4f
-                if ((newParams[162] ?: 0.0f) < 0.05f) newParams[162] = 0.125f 
-                if ((newParams[172] ?: 0.0f) < 0.1f) newParams[172] = 0.0f    
+                state = state.copy(tracks = state.tracks.mapIndexed { idx, t ->
+                    if (idx == trackIdx) t.copy(drumSteps = newDrumSteps) else t
+                })
             }
+        } else {
+            val steps = track.steps
+            val updatedSteps = steps.mapIndexed { stepIdx, s ->
+                if (stepIdx < patternLen) {
+                    val isActive = nativeLib.getStepActive(trackIdx, stepIdx)
+                    if (s.active != isActive) {
+                        changed = true
+                        if (isActive) {
+                            val notes = nativeLib.getStepNotes(trackIdx, stepIdx)
+                            val vel = nativeLib.getStepVelocity(trackIdx, stepIdx)
+                            val sub = nativeLib.getStepSubStep(trackIdx, stepIdx)
+                            s.copy(active = true, notes = notes.toList(), velocity = vel, subStepOffset = sub)
+                        } else {
+                            s.copy(active = false, notes = emptyList())
+                        }
+                    } else s
+                } else s
+            }
+            if (changed) {
+                state = state.copy(tracks = state.tracks.mapIndexed { idx, tr -> 
+                    if (idx == trackIdx) tr.copy(steps = updatedSteps) else tr 
+                })
+            }
+        }
+    }
 
-            if (newParams[9] == null || (newParams[9] ?: 0.5f) < 0.001f) {
-                newParams[9] = 0.5f
-                newTrack = newTrack.copy(pan = 0.5f)
-            }
-            
-            if (newTrack.engineType == EngineType.FM) {
-                if ((newParams[350] ?: 0.0f) < 0.1f) newParams[350] = 1.0f 
-            }
-
-            newTrack.copy(
-                parameters = newParams,
-                soundFontPresetName = newTrack.soundFontPresetName ?: "None",
-                soundFontMapping = newTrack.soundFontMapping ?: emptyMap(),
-                lastSamplePath = newTrack.lastSamplePath ?: "",
-                activeWavetableName = newTrack.activeWavetableName ?: "Basic",
-                mutatedNotes = newTrack.mutatedNotes ?: emptyMap()
+    fun pullTransportState() {
+        val playing = nativeLib.getIsPlaying()
+        val recording = nativeLib.getIsRecording()
+        val recordingSample = nativeLib.getIsRecordingSample()
+        
+        if (state.isPlaying != playing || state.isRecording != recording || state.isRecordingSample != recordingSample) {
+            state = state.copy(
+                isPlaying = playing,
+                isRecording = recording,
+                isRecordingSample = recordingSample
             )
         }
-        
-        return state.copy(
-            tracks = sanitizedTracks,
-            isPlaying = false,
-            selectedTab = 0
-        )
     }
 
-    private fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
-        nativeLib.setTempo(state.tempo)
-        nativeLib.setMasterVolume(state.masterVolume)
-        nativeLib.setScaleConfig(state.rootNote, state.scaleType.intervals.toIntArray())
-        nativeLib.setRecordingSource(state.recordingSource)
-        nativeLib.setSwing(state.swing)
+    fun pollEngineState() {
+        pullTransportState()
+        val cpu = nativeLib.getCpuLoad()
+        val focusedTrackIdx = state.selectedTrackIndex
+        val track = state.tracks[focusedTrackIdx]
         
-        state.tracks.forEachIndexed { trackIdx, t ->
-            nativeLib.setEngineType(trackIdx, t.engineType.ordinal)
-            nativeLib.setTrackVolume(trackIdx, t.volume)
-            nativeLib.setTrackTranspose(trackIdx, t.transpose)
-            nativeLib.setTrackActive(trackIdx, t.isActive)
-            nativeLib.setTrackPan(trackIdx, t.pan)
-            
-            t.parameters.forEach { (pid, v) -> 
-                nativeLib.setParameter(trackIdx, pid, v) 
-            }
-            
-            nativeLib.setPatternLength(state.patternLength)
-            
-            if (t.engineType == EngineType.FM_DRUM || t.engineType == EngineType.ANALOG_DRUM || t.engineType == EngineType.SAMPLER) {
-                 for (instIdx in 0 until 16) {
-                     val voiceSteps = t.drumSteps.getOrNull(instIdx) ?: emptyList()
-                     voiceSteps.forEachIndexed { stepIdx, s ->
-                         nativeLib.setStep(trackIdx, stepIdx, s.active, s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped)
-                     }
-                 }
-            } else {
-                 t.steps.forEachIndexed { stepIdx, s ->
-                     nativeLib.setStep(trackIdx, stepIdx, s.active && s.notes.isNotEmpty(), s.notes.toIntArray(), s.velocity, s.ratchet, s.punch, s.probability, s.gate, s.isSkipped)
-                 }
+        // Pull modulated parameter values for visual consistency
+        val engineParams = nativeLib.getAllTrackParameters(focusedTrackIdx)
+        val updatedParams = track.parameters.toMutableMap()
+        
+        // Only update if they differ significantly to avoid UI churn
+        engineParams.forEachIndexed { pid, v ->
+            if (pid in track.parameters) {
+                if (Math.abs((track.parameters[pid] ?: 0f) - v) > 0.001f) {
+                    updatedParams[pid] = v
+                }
             }
         }
+        
+        state = state.copy(
+            cpuLoad = cpu,
+            tracks = state.tracks.mapIndexed { idx, t ->
+                if (idx == focusedTrackIdx) t.copy(parameters = updatedParams) else t
+            }
+        )
+        
+        // Sync waveform if on Sampler/Granular and recording or focused
+        if (track.engineType == EngineType.SAMPLER || track.engineType == EngineType.GRANULAR) {
+            pullWaveform(focusedTrackIdx)
+        }
     }
+
+    fun pullWaveform(trackIdx: Int) {
+        val waveform = nativeLib.getWaveform(trackIdx)
+        if (waveform != null) {
+            // We don't store waveform in state directly usually, it's often a separate Flow or managed by the screen
+            // But if we want to ensure visual preview, we might need a way to pass it.
+            // For now, let's assume the screen calls nativeLib.getWaveform directly or we add a waveform field to TrackState if needed.
+            // Actually, looking at SamplerScreen, it might be using a local state.
+        }
+    }
+
 
     /**
      * Helper to determine which MIDI note a given 4x4 pad index (0-15) should trigger
@@ -219,6 +324,30 @@ class GrooveboxViewModel(
         if (note != -1) {
             nativeLib.releaseNote(state.selectedTrackIndex, note)
             state = state.copy(heldNotes = state.heldNotes - note)
+        }
+    }
+
+    fun processMidiMessage(data: ByteArray) {
+        if (data.size < 3) return
+        val status = data[0].toInt() and 0xFF
+        val type = status and 0xF0
+        val note = data[1].toInt() and 0x7F
+        val velocity = data[2].toInt() and 0x7F
+
+        when (type) {
+            0x90 -> { // Note On
+                if (velocity > 0) {
+                    nativeLib.triggerNote(state.selectedTrackIndex, note, velocity)
+                    state = state.copy(heldNotes = state.heldNotes + note)
+                } else {
+                    nativeLib.releaseNote(state.selectedTrackIndex, note)
+                    state = state.copy(heldNotes = state.heldNotes - note)
+                }
+            }
+            0x80 -> { // Note Off
+                nativeLib.releaseNote(state.selectedTrackIndex, note)
+                state = state.copy(heldNotes = state.heldNotes - note)
+            }
         }
     }
 }

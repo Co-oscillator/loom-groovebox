@@ -123,9 +123,10 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                         contentAlignment = Alignment.Center
                     ) {
                         EngineIcon(
-                            engineType = track.engineType,
+                            type = track.engineType,
                             modifier = Modifier.size(42.dp),
-                            tint = if (isSelected) engineColor else Color.White.copy(alpha = 0.8f)
+                            color = if (isSelected) engineColor else Color.White.copy(alpha = 0.8f),
+                            isGenerating = track.isAudiblyActive
                         )
                         
                         DropdownMenu(

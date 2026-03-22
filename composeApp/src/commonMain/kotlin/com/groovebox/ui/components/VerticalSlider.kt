@@ -51,7 +51,7 @@ fun VerticalSlider(
         Text(
             label, 
             style = MaterialTheme.typography.labelSmall, 
-            color = Color.White.copy(alpha = 0.7f),
+            color = Color(0xFFEEEEEE),
             fontSize = 8.sp,
             fontWeight = FontWeight.Bold
         )

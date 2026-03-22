@@ -238,7 +238,7 @@ groovebox_IS_TOP_LEVEL:STATIC=ON
 groovebox_SOURCE_DIR:STATIC=/Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/native
 
 //Dependencies for the target
-native-lib_LIB_DEPENDS:STATIC=general;-framework AudioUnit;general;-framework AudioToolbox;general;-framework CoreAudio;general;-framework CoreFoundation;
+loom-native-core_LIB_DEPENDS:STATIC=general;-framework AudioUnit;general;-framework AudioToolbox;general;-framework CoreAudio;general;-framework CoreFoundation;
 
 
 ########################

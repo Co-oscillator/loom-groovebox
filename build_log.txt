@@ -1,0 +1,1028 @@
+Initialized native services in: /Users/danielmiller/.gradle/native
+Initialized jansi services in: /Users/danielmiller/.gradle/native
+Found daemon DaemonInfo{pid=4273, address=[3ef81e66-d239-4d10-946d-400319798a01 port:61111, addresses:[/127.0.0.1]], state=Idle, lastBusy=1773713925475, context=DefaultDaemonContext[uid=70fb9922-0ec3-4632-a5b2-a5ae57306674,javaHome=/Users/danielmiller/.antigravity/extensions/redhat.java-1.52.0-darwin-arm64/jre/21.0.9-macosx-aarch64,javaVersion=21,javaVendor=Eclipse Adoptium,daemonRegistryDir=/Users/danielmiller/.gradle/daemon,pid=4273,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx4g,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]} however its context does not match the desired criteria.
+JVM is incompatible.
+Wanted: DaemonRequestContext{jvmCriteria=/opt/homebrew/Cellar/openjdk@17/17.0.17/libexec/openjdk.jdk/Contents/Home (no JDK specified, using current Java home), daemonOpts=[-Xmx4g, -Dfile.encoding=UTF-8, -Duser.country=US, -Duser.language=en, -Duser.variant], applyInstrumentationAgent=true, nativeServicesMode=ENABLED, priority=NORMAL}
+Actual: DefaultDaemonContext[uid=70fb9922-0ec3-4632-a5b2-a5ae57306674,javaHome=/Users/danielmiller/.antigravity/extensions/redhat.java-1.52.0-darwin-arm64/jre/21.0.9-macosx-aarch64,javaVersion=21,javaVendor=Eclipse Adoptium,daemonRegistryDir=/Users/danielmiller/.gradle/daemon,pid=4273,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx4g,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]
+
+  Looking for a different daemon...
+The client will now receive all logging from the daemon (pid: 8161). The daemon log file: /Users/danielmiller/.gradle/daemon/8.13/daemon-8161.out.log
+Starting 6th build in daemon [uptime: 1 mins 43.786 secs, performance: 100%, GC rate: 0.00/s, heap usage: 0% of 4 GiB]
+Using 10 worker leases.
+Now considering [/Users/danielmiller/Documents/Code Projects/Loom Groovebox] as hierarchies to watch
+Watching the file system is configured to be enabled if available
+File system watching is active
+Starting Build
+Settings evaluated using settings file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/settings.gradle'.
+Projects loaded. Root project using build file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/build.gradle'.
+Included projects: [root project 'Groovebox', project ':app', project ':composeApp']
+
+> Configure project :
+Evaluating root project 'Groovebox' using build file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/build.gradle'.
+Resolved plugin [id: 'com.android.application', version: '8.13.2', apply: false]
+Resolved plugin [id: 'com.android.library', version: '8.13.2', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.android', version: '1.9.0', apply: false]
+Resolved plugin [id: 'org.jetbrains.compose', version: '1.5.11', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.multiplatform', version: '1.9.0', apply: false]
+
+> Configure project :app
+Evaluating project ':app' using build file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build.gradle'.
+Resolved plugin [id: 'com.android.application']
+Resolved plugin [id: 'org.jetbrains.kotlin.android']
+Using default execution profile
+Using Kotlin Gradle Plugin gradle81 variant
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+C/C++: android.ndkVersion from module build.gradle is [27.0.12077973]
+C/C++: android.ndkPath from module build.gradle is not set
+C/C++: ndk.dir in local.properties is not set
+C/C++: Not considering ANDROID_NDK_HOME because support was removed after deprecation period.
+C/C++: sdkFolder is /Users/danielmiller/Library/Android/sdk
+
+> Configure project :composeApp
+Evaluating project ':composeApp' using build file '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.multiplatform', version: '1.9.0']
+Resolved plugin [id: 'com.android.library', version: '8.13.2']
+Resolved plugin [id: 'org.jetbrains.compose', version: '1.5.11']
+Using Kotlin Gradle Plugin gradle81 variant
+Using default execution profile
+kotlin scripting plugin: created the scripting discovery configuration: kotlinScriptDef
+kotlin scripting plugin: created the scripting discovery configuration: testKotlinScriptDef
+All projects evaluated.
+Task path ':app:compileReleaseKotlin' matched project ':app'
+Task name matched 'compileReleaseKotlin'
+Selected primary task 'compileReleaseKotlin' from project :app
+Tasks to be executed: [task ':app:incrementVersion', task ':app:checkVersion', task ':app:preBuild', task ':app:preReleaseBuild', task ':composeApp:preBuild', task ':composeApp:preReleaseBuild', task ':composeApp:writeReleaseAarMetadata', task ':app:checkReleaseAarMetadata', task ':composeApp:processReleaseNavigationResources', task ':app:processReleaseNavigationResources', task ':app:compileReleaseNavigationResources', task ':app:generateReleaseResValues', task ':composeApp:generateReleaseResValues', task ':composeApp:generateReleaseResources', task ':composeApp:packageReleaseResources', task ':app:mapReleaseSourceSetPaths', task ':app:generateReleaseResources', task ':app:mergeReleaseResources', task ':app:packageReleaseResources', task ':app:parseReleaseLocalResources', task ':app:createReleaseCompatibleScreenManifests', task ':app:extractDeepLinksRelease', task ':composeApp:extractDeepLinksRelease', task ':composeApp:processReleaseManifest', task ':app:processReleaseMainManifest', task ':app:processReleaseManifest', task ':app:processReleaseManifestForPackage', task ':composeApp:parseReleaseLocalResources', task ':composeApp:generateReleaseRFile', task ':app:processReleaseResources', task ':composeApp:compileReleaseKotlinAndroid', task ':composeApp:javaPreCompileRelease', task ':composeApp:compileReleaseJavaWithJavac', task ':composeApp:bundleLibCompileToJarRelease', task ':app:compileReleaseKotlin']
+Tasks that were excluded: []
+Resolve mutations for :app:incrementVersion (Thread[Execution worker,5,main]) started.
+:app:incrementVersion (Thread[Execution worker,5,main]) started.
+
+> Task :app:incrementVersion
+Caching disabled for task ':app:incrementVersion' because:
+  Build cache is disabled
+Task ':app:incrementVersion' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Starting process 'command 'python3''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox Command: python3 check_version.py --increment
+Successfully started process 'command 'python3''
+Auto-incremented to: 2.6.62 (Build 191)
+Resolve mutations for :app:checkVersion (Thread[Execution worker,5,main]) started.
+:app:checkVersion (Thread[Execution worker,5,main]) started.
+
+> Task :app:checkVersion
+Caching disabled for task ':app:checkVersion' because:
+  Build cache is disabled
+Task ':app:checkVersion' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Starting process 'command 'python3''. Working directory: /Users/danielmiller/Documents/Code Projects/Loom Groovebox Command: python3 check_version.py
+Successfully started process 'command 'python3''
+Target Version: 2.6.62 (Build 191)
+Version verification passed.
+Resolve mutations for :app:preBuild (Thread[Execution worker,5,main]) started.
+:app:preBuild (Thread[Execution worker,5,main]) started.
+
+> Task :app:preBuild
+Skipping task ':app:preBuild' as it has no actions.
+Resolve mutations for :app:preReleaseBuild (Thread[Execution worker,5,main]) started.
+:app:preReleaseBuild (Thread[Execution worker,5,main]) started.
+
+> Task :app:preReleaseBuild
+Skipping task ':app:preReleaseBuild' as it has no actions.
+Resolve mutations for :composeApp:preBuild (Thread[Execution worker,5,main]) started.
+:composeApp:preBuild (Thread[Execution worker,5,main]) started.
+
+> Task :composeApp:preBuild UP-TO-DATE
+Skipping task ':composeApp:preBuild' as it has no actions.
+Resolve mutations for :composeApp:preReleaseBuild (Thread[Execution worker,5,main]) started.
+:composeApp:preReleaseBuild (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :composeApp:preReleaseBuild UP-TO-DATE
+Skipping task ':composeApp:preReleaseBuild' as it has no actions.
+Resolve mutations for :composeApp:writeReleaseAarMetadata (Thread[Execution worker Thread 3,5,main]) started.
+:composeApp:writeReleaseAarMetadata (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :composeApp:writeReleaseAarMetadata UP-TO-DATE
+Caching disabled for task ':composeApp:writeReleaseAarMetadata' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Skipping task ':composeApp:writeReleaseAarMetadata' as it is up-to-date.
+work action resolve aar-metadata.properties (project :composeApp) (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :app:checkReleaseAarMetadata (Thread[Execution worker Thread 3,5,main]) started.
+:app:checkReleaseAarMetadata (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:checkReleaseAarMetadata UP-TO-DATE
+Caching disabled for task ':app:checkReleaseAarMetadata' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Skipping task ':app:checkReleaseAarMetadata' as it is up-to-date.
+Resolve mutations for :composeApp:processReleaseNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+:composeApp:processReleaseNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :composeApp:processReleaseNavigationResources UP-TO-DATE
+Caching disabled for task ':composeApp:processReleaseNavigationResources' because:
+  Build cache is disabled
+Skipping task ':composeApp:processReleaseNavigationResources' as it is up-to-date.
+work action resolve release (project :composeApp) (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :app:processReleaseNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:processReleaseNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:processReleaseNavigationResources UP-TO-DATE
+Caching disabled for task ':app:processReleaseNavigationResources' because:
+  Build cache is disabled
+Skipping task ':app:processReleaseNavigationResources' as it is up-to-date.
+Resolve mutations for :app:compileReleaseNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:compileReleaseNavigationResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:compileReleaseNavigationResources UP-TO-DATE
+Caching disabled for task ':app:compileReleaseNavigationResources' because:
+  Build cache is disabled
+Skipping task ':app:compileReleaseNavigationResources' as it is up-to-date.
+Resolve mutations for :app:generateReleaseResValues (Thread[Execution worker Thread 3,5,main]) started.
+:app:generateReleaseResValues (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:generateReleaseResValues UP-TO-DATE
+Caching disabled for task ':app:generateReleaseResValues' because:
+  Build cache is disabled
+Skipping task ':app:generateReleaseResValues' as it is up-to-date.
+Resolve mutations for :composeApp:generateReleaseResValues (Thread[Execution worker Thread 3,5,main]) started.
+:composeApp:generateReleaseResValues (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :composeApp:generateReleaseResValues UP-TO-DATE
+Caching disabled for task ':composeApp:generateReleaseResValues' because:
+  Build cache is disabled
+Skipping task ':composeApp:generateReleaseResValues' as it is up-to-date.
+Resolve mutations for :composeApp:generateReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+:composeApp:generateReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :composeApp:generateReleaseResources UP-TO-DATE
+Caching disabled for task ':composeApp:generateReleaseResources' because:
+  Build cache is disabled
+Skipping task ':composeApp:generateReleaseResources' as it is up-to-date.
+Resolve mutations for :composeApp:packageReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+:composeApp:packageReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :composeApp:packageReleaseResources UP-TO-DATE
+Caching disabled for task ':composeApp:packageReleaseResources' because:
+  Build cache is disabled
+Skipping task ':composeApp:packageReleaseResources' as it is up-to-date.
+work action resolve packageReleaseResources (project :composeApp) (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :app:mapReleaseSourceSetPaths (Thread[Execution worker Thread 3,5,main]) started.
+:app:mapReleaseSourceSetPaths (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:mapReleaseSourceSetPaths UP-TO-DATE
+Caching disabled for task ':app:mapReleaseSourceSetPaths' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Skipping task ':app:mapReleaseSourceSetPaths' as it is up-to-date.
+Resolve mutations for :app:generateReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:generateReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:generateReleaseResources UP-TO-DATE
+Caching disabled for task ':app:generateReleaseResources' because:
+  Build cache is disabled
+Skipping task ':app:generateReleaseResources' as it is up-to-date.
+Resolve mutations for :app:mergeReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:mergeReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:mergeReleaseResources UP-TO-DATE
+Caching disabled for task ':app:mergeReleaseResources' because:
+  Build cache is disabled
+Skipping task ':app:mergeReleaseResources' as it is up-to-date.
+Resolve mutations for :app:packageReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:packageReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:packageReleaseResources UP-TO-DATE
+Caching disabled for task ':app:packageReleaseResources' because:
+  Build cache is disabled
+Skipping task ':app:packageReleaseResources' as it is up-to-date.
+Resolve mutations for :app:parseReleaseLocalResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:parseReleaseLocalResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:parseReleaseLocalResources UP-TO-DATE
+Caching disabled for task ':app:parseReleaseLocalResources' because:
+  Build cache is disabled
+Skipping task ':app:parseReleaseLocalResources' as it is up-to-date.
+Resolve mutations for :app:createReleaseCompatibleScreenManifests (Thread[Execution worker Thread 3,5,main]) started.
+:app:createReleaseCompatibleScreenManifests (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:createReleaseCompatibleScreenManifests
+Caching disabled for task ':app:createReleaseCompatibleScreenManifests' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Task ':app:createReleaseCompatibleScreenManifests' is not up-to-date because:
+  Value of input property 'variantOutputs.$0.versionCode' has changed for task ':app:createReleaseCompatibleScreenManifests'
+  Value of input property 'variantOutputs.$0.versionName' has changed for task ':app:createReleaseCompatibleScreenManifests'
+Resolve mutations for :app:extractDeepLinksRelease (Thread[Execution worker Thread 3,5,main]) started.
+:app:extractDeepLinksRelease (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+Caching disabled for task ':app:extractDeepLinksRelease' because:
+  Build cache is disabled
+Skipping task ':app:extractDeepLinksRelease' as it is up-to-date.
+Resolve mutations for :composeApp:extractDeepLinksRelease (Thread[Execution worker Thread 3,5,main]) started.
+:composeApp:extractDeepLinksRelease (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :composeApp:extractDeepLinksRelease UP-TO-DATE
+Caching disabled for task ':composeApp:extractDeepLinksRelease' because:
+  Build cache is disabled
+Skipping task ':composeApp:extractDeepLinksRelease' as it is up-to-date.
+work action resolve navigation.json (project :composeApp) (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :composeApp:processReleaseManifest (Thread[Execution worker Thread 3,5,main]) started.
+:composeApp:processReleaseManifest (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :composeApp:processReleaseManifest UP-TO-DATE
+Caching disabled for task ':composeApp:processReleaseManifest' because:
+  Build cache is disabled
+Skipping task ':composeApp:processReleaseManifest' as it is up-to-date.
+work action resolve AndroidManifest.xml (project :composeApp) (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :app:processReleaseMainManifest (Thread[Execution worker Thread 3,5,main]) started.
+:app:processReleaseMainManifest (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:processReleaseMainManifest
+Caching disabled for task ':app:processReleaseMainManifest' because:
+  Build cache is disabled
+Task ':app:processReleaseMainManifest' is not up-to-date because:
+  Value of input property 'versionCode' has changed for task ':app:processReleaseMainManifest'
+  Value of input property 'versionName' has changed for task ':app:processReleaseMainManifest'
+Loading library manifest /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/9337f03fcb73111da948c1494cff95a0/transformed/jetified-material3-1.1.2/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/a14c28cfe7749d2ce52c138b60205f3d/transformed/jetified-activity-1.8.1/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/04497d5c1340f288bafaf9eef7fd1983/transformed/jetified-activity-compose-1.8.1/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/42eb182f50a30c01f7f0cc30f9dd3841/transformed/jetified-library-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/2b7ea47fcbfdbbdcfc2242a378a36b3e/transformed/jetified-material-icons-extended-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/617a8b5da899d97339cb879f8b6d6560/transformed/jetified-material-ripple-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/2cb34c7e953f9df1d5a5aac57e646ea0/transformed/jetified-material-icons-core-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/9fe4e9ef902df514681c5c14adad145c/transformed/jetified-material-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/50259f57480aa944a468e2f21b71c6cf/transformed/jetified-animation-core-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/bdc8e37f6164bb2e6fb5276837a42c8a/transformed/jetified-animation-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/ccbde0882f3f3ed782f3fc3220f31274/transformed/jetified-foundation-layout-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/abf9fc7f361a5aa39794409cb4f7ed2f/transformed/jetified-foundation-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/148a98065f8416fbc8576504e2f0eee2/transformed/jetified-ui-geometry-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/949a1004b2309b9017adb72a2cd4f660/transformed/jetified-ui-tooling-preview-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/1dd711abaaf2db1a2e18a4575b2598f8/transformed/jetified-ui-unit-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/7a42277320b6584da4d794512c2b0827/transformed/jetified-ui-graphics-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/737d457a047868b4f46e8289f7ed31ff/transformed/jetified-ui-util-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/aeff141de97b56fe617e4ecdb67ca560/transformed/jetified-ui-text-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/0502c3e4c7a4e8f2ce807b484b79114e/transformed/jetified-ui-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/25587169d697b1fc8b3c6925d9693b47/transformed/jetified-activity-ktx-1.8.1/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/49cd31341f581f745147ee6d8c6fe331/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/65e72bd96f20c5d228f5bb0be16627dd/transformed/lifecycle-livedata-core-2.6.2/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/ecd247644e92582d5289ae3876283201/transformed/jetified-lifecycle-viewmodel-ktx-2.6.2/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/06229b6e03897004b0ba7fbe3d084e7d/transformed/lifecycle-viewmodel-2.6.2/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/8b550b5d64e1bb1e04b9eb3974a6099b/transformed/jetified-savedstate-ktx-1.2.1/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/2e32055b84cc73c9d6a9e938a0238fc8/transformed/jetified-savedstate-1.2.1/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/13287fc82c38889260653c5a29e2893c/transformed/jetified-lifecycle-viewmodel-savedstate-2.6.2/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/6667d9476c47a04cfe355df601e67d5d/transformed/jetified-customview-poolingcontainer-1.0.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/a54bdfa507493f2c9a8f4d7ecb437a61/transformed/jetified-core-ktx-1.12.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/27229900e2809b36c8aa8605b1266b17/transformed/jetified-autofill-1.0.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/c2d5e48a6c863c9b3aadcabff3bb74e2/transformed/core-1.12.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/37750b4441ee078116475f63f165d7d2/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/f15fee5b4e8dcb4b602cab29ae1b274a/transformed/jetified-lifecycle-runtime-ktx-2.6.2/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/8cbd9e68ab806329eb002f61d6b823a4/transformed/jetified-runtime-saveable-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/95bf10d2562670f44277a3b90fdd98d0/transformed/jetified-runtime-release/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/f093e26276d7b910d8175b4c4ab0849f/transformed/jetified-oboe-1.9.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/45aa8c8a2b26c182369c84b46b2f2a75/transformed/jetified-annotation-experimental-1.3.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/e82e8032c29573c658b5f0dc0ec99516/transformed/interpolator-1.0.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/671d69518a6b99ce8fe584028fbdaadb/transformed/versionedparcelable-1.1.1/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/025b0d65fb9021276f7954f5bf4b49dd/transformed/core-runtime-2.2.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/acabaeaa981ec97c2e3854561b146de5/transformed/jetified-startup-runtime-1.1.1/AndroidManifest.xml
+Loading library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/3f5f730e42aff009fcc3892e0d939ae7/transformed/jetified-tracing-1.0.0/AndroidManifest.xml
+Merging main manifest /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml
+
+Merging library manifest /Users/danielmiller/Documents/Code Projects/Loom Groovebox/composeApp/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml
+Merging manifest with lower [:composeApp] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [:composeApp] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/9337f03fcb73111da948c1494cff95a0/transformed/jetified-material3-1.1.2/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.material3:material3:1.1.2] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.material3:material3:1.1.2] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/a14c28cfe7749d2ce52c138b60205f3d/transformed/jetified-activity-1.8.1/AndroidManifest.xml
+Merging manifest with lower [androidx.activity:activity:1.8.1] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.activity:activity:1.8.1] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/04497d5c1340f288bafaf9eef7fd1983/transformed/jetified-activity-compose-1.8.1/AndroidManifest.xml
+Merging manifest with lower [androidx.activity:activity-compose:1.8.1] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.activity:activity-compose:1.8.1] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/42eb182f50a30c01f7f0cc30f9dd3841/transformed/jetified-library-release/AndroidManifest.xml
+Merging manifest with lower [org.jetbrains.compose.components:library-android:1.5.11] AndroidManifest.xml:2:1-9:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [org.jetbrains.compose.components:library-android:1.5.11] AndroidManifest.xml:5:5-7:41
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/2b7ea47fcbfdbbdcfc2242a378a36b3e/transformed/jetified-material-icons-extended-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.material:material-icons-extended-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.material:material-icons-extended-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/617a8b5da899d97339cb879f8b6d6560/transformed/jetified-material-ripple-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.material:material-ripple-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.material:material-ripple-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/2cb34c7e953f9df1d5a5aac57e646ea0/transformed/jetified-material-icons-core-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.material:material-icons-core-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.material:material-icons-core-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/9fe4e9ef902df514681c5c14adad145c/transformed/jetified-material-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.material:material-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.material:material-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/50259f57480aa944a468e2f21b71c6cf/transformed/jetified-animation-core-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.animation:animation-core-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.animation:animation-core-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/bdc8e37f6164bb2e6fb5276837a42c8a/transformed/jetified-animation-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.animation:animation-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.animation:animation-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/ccbde0882f3f3ed782f3fc3220f31274/transformed/jetified-foundation-layout-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.foundation:foundation-layout-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.foundation:foundation-layout-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/abf9fc7f361a5aa39794409cb4f7ed2f/transformed/jetified-foundation-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.foundation:foundation-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.foundation:foundation-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/148a98065f8416fbc8576504e2f0eee2/transformed/jetified-ui-geometry-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.ui:ui-geometry-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.ui:ui-geometry-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/949a1004b2309b9017adb72a2cd4f660/transformed/jetified-ui-tooling-preview-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.ui:ui-tooling-preview-android:1.5.4] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.ui:ui-tooling-preview-android:1.5.4] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/1dd711abaaf2db1a2e18a4575b2598f8/transformed/jetified-ui-unit-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.ui:ui-unit-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.ui:ui-unit-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/7a42277320b6584da4d794512c2b0827/transformed/jetified-ui-graphics-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.ui:ui-graphics-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.ui:ui-graphics-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/737d457a047868b4f46e8289f7ed31ff/transformed/jetified-ui-util-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.ui:ui-util-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.ui:ui-util-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/aeff141de97b56fe617e4ecdb67ca560/transformed/jetified-ui-text-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.ui:ui-text-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.ui:ui-text-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/0502c3e4c7a4e8f2ce807b484b79114e/transformed/jetified-ui-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.ui:ui-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.ui:ui-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/25587169d697b1fc8b3c6925d9693b47/transformed/jetified-activity-ktx-1.8.1/AndroidManifest.xml
+Merging manifest with lower [androidx.activity:activity-ktx:1.8.1] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.activity:activity-ktx:1.8.1] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml
+Merging manifest with lower [androidx.emoji2:emoji2:1.4.0] AndroidManifest.xml:17:1-35:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.emoji2:emoji2:1.4.0] AndroidManifest.xml:21:5-44
+application defined in both files...
+Merging application with lower [androidx.emoji2:emoji2:1.4.0] AndroidManifest.xml:23:5-33:19
+Adopted [provider: null]
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/49cd31341f581f745147ee6d8c6fe331/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml
+Merging manifest with lower [androidx.lifecycle:lifecycle-process:2.6.2] AndroidManifest.xml:17:1-35:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.lifecycle:lifecycle-process:2.6.2] AndroidManifest.xml:21:5-44
+application defined in both files...
+Merging application with lower [androidx.lifecycle:lifecycle-process:2.6.2] AndroidManifest.xml:23:5-33:19
+provider#androidx.startup.InitializationProvider defined in both files...
+Merging provider#androidx.startup.InitializationProvider with lower [androidx.lifecycle:lifecycle-process:2.6.2] AndroidManifest.xml:24:9-32:20
+Adopted [meta-data: null]
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/65e72bd96f20c5d228f5bb0be16627dd/transformed/lifecycle-livedata-core-2.6.2/AndroidManifest.xml
+Merging manifest with lower [androidx.lifecycle:lifecycle-livedata-core:2.6.2] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.lifecycle:lifecycle-livedata-core:2.6.2] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/ecd247644e92582d5289ae3876283201/transformed/jetified-lifecycle-viewmodel-ktx-2.6.2/AndroidManifest.xml
+Merging manifest with lower [androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/06229b6e03897004b0ba7fbe3d084e7d/transformed/lifecycle-viewmodel-2.6.2/AndroidManifest.xml
+Merging manifest with lower [androidx.lifecycle:lifecycle-viewmodel:2.6.2] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.lifecycle:lifecycle-viewmodel:2.6.2] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/8b550b5d64e1bb1e04b9eb3974a6099b/transformed/jetified-savedstate-ktx-1.2.1/AndroidManifest.xml
+Merging manifest with lower [androidx.savedstate:savedstate-ktx:1.2.1] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.savedstate:savedstate-ktx:1.2.1] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/2e32055b84cc73c9d6a9e938a0238fc8/transformed/jetified-savedstate-1.2.1/AndroidManifest.xml
+Merging manifest with lower [androidx.savedstate:savedstate:1.2.1] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.savedstate:savedstate:1.2.1] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/13287fc82c38889260653c5a29e2893c/transformed/jetified-lifecycle-viewmodel-savedstate-2.6.2/AndroidManifest.xml
+Merging manifest with lower [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.2] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.2] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/6667d9476c47a04cfe355df601e67d5d/transformed/jetified-customview-poolingcontainer-1.0.0/AndroidManifest.xml
+Merging manifest with lower [androidx.customview:customview-poolingcontainer:1.0.0] AndroidManifest.xml:17:1-23:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.customview:customview-poolingcontainer:1.0.0] AndroidManifest.xml:20:5-21:38
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/a54bdfa507493f2c9a8f4d7ecb437a61/transformed/jetified-core-ktx-1.12.0/AndroidManifest.xml
+Merging manifest with lower [androidx.core:core-ktx:1.12.0] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.core:core-ktx:1.12.0] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/27229900e2809b36c8aa8605b1266b17/transformed/jetified-autofill-1.0.0/AndroidManifest.xml
+Merging manifest with lower [androidx.autofill:autofill:1.0.0] AndroidManifest.xml:17:1-24:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.autofill:autofill:1.0.0] AndroidManifest.xml:20:5-22:41
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/c2d5e48a6c863c9b3aadcabff3bb74e2/transformed/core-1.12.0/AndroidManifest.xml
+Merging manifest with lower [androidx.core:core:1.12.0] AndroidManifest.xml:17:1-30:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.core:core:1.12.0] AndroidManifest.xml:20:5-44
+Adopted [permission: null]
+Adopted [uses-permission: null]
+application defined in both files...
+Merging application with lower [androidx.core:core:1.12.0] AndroidManifest.xml:28:5-89
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/37750b4441ee078116475f63f165d7d2/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml
+Merging manifest with lower [androidx.lifecycle:lifecycle-runtime:2.6.2] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.lifecycle:lifecycle-runtime:2.6.2] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/f15fee5b4e8dcb4b602cab29ae1b274a/transformed/jetified-lifecycle-runtime-ktx-2.6.2/AndroidManifest.xml
+Merging manifest with lower [androidx.lifecycle:lifecycle-runtime-ktx:2.6.2] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.lifecycle:lifecycle-runtime-ktx:2.6.2] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/8cbd9e68ab806329eb002f61d6b823a4/transformed/jetified-runtime-saveable-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.runtime:runtime-saveable-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.runtime:runtime-saveable-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/95bf10d2562670f44277a3b90fdd98d0/transformed/jetified-runtime-release/AndroidManifest.xml
+Merging manifest with lower [androidx.compose.runtime:runtime-android:1.5.4] AndroidManifest.xml:2:1-7:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.compose.runtime:runtime-android:1.5.4] AndroidManifest.xml:5:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/f093e26276d7b910d8175b4c4ab0849f/transformed/jetified-oboe-1.9.0/AndroidManifest.xml
+Merging manifest with lower [com.google.oboe:oboe:1.9.0] AndroidManifest.xml:1:1-3:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [com.google.oboe:oboe:1.9.0] AndroidManifest.xml:2:2-70
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/45aa8c8a2b26c182369c84b46b2f2a75/transformed/jetified-annotation-experimental-1.3.0/AndroidManifest.xml
+Merging manifest with lower [androidx.annotation:annotation-experimental:1.3.0] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.annotation:annotation-experimental:1.3.0] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/e82e8032c29573c658b5f0dc0ec99516/transformed/interpolator-1.0.0/AndroidManifest.xml
+Merging manifest with lower [androidx.interpolator:interpolator:1.0.0] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.interpolator:interpolator:1.0.0] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/671d69518a6b99ce8fe584028fbdaadb/transformed/versionedparcelable-1.1.1/AndroidManifest.xml
+Merging manifest with lower [androidx.versionedparcelable:versionedparcelable:1.1.1] AndroidManifest.xml:17:1-27:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.versionedparcelable:versionedparcelable:1.1.1] AndroidManifest.xml:20:5-22:41
+application defined in both files...
+Merging application with lower [androidx.versionedparcelable:versionedparcelable:1.1.1] AndroidManifest.xml:24:5-25:19
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/025b0d65fb9021276f7954f5bf4b49dd/transformed/core-runtime-2.2.0/AndroidManifest.xml
+Merging manifest with lower [androidx.arch.core:core-runtime:2.2.0] AndroidManifest.xml:17:1-22:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.arch.core:core-runtime:2.2.0] AndroidManifest.xml:20:5-44
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml
+Merging manifest with lower [androidx.profileinstaller:profileinstaller:1.3.0] AndroidManifest.xml:17:1-55:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.profileinstaller:profileinstaller:1.3.0] AndroidManifest.xml:21:5-44
+application defined in both files...
+Merging application with lower [androidx.profileinstaller:profileinstaller:1.3.0] AndroidManifest.xml:23:5-53:19
+provider#androidx.startup.InitializationProvider defined in both files...
+Merging provider#androidx.startup.InitializationProvider with lower [androidx.profileinstaller:profileinstaller:1.3.0] AndroidManifest.xml:24:9-32:20
+Adopted [meta-data: null]
+Adopted [receiver: null]
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/acabaeaa981ec97c2e3854561b146de5/transformed/jetified-startup-runtime-1.1.1/AndroidManifest.xml
+Merging manifest with lower [androidx.startup:startup-runtime:1.1.1] AndroidManifest.xml:17:1-33:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.startup:startup-runtime:1.1.1] AndroidManifest.xml:21:5-23:41
+application defined in both files...
+Merging application with lower [androidx.startup:startup-runtime:1.1.1] AndroidManifest.xml:25:5-31:19
+provider#androidx.startup.InitializationProvider defined in both files...
+Merging provider#androidx.startup.InitializationProvider with lower [androidx.startup:startup-runtime:1.1.1] AndroidManifest.xml:26:9-30:34
+Merging library manifest /Users/danielmiller/.gradle/caches/8.13/transforms/3f5f730e42aff009fcc3892e0d939ae7/transformed/jetified-tracing-1.0.0/AndroidManifest.xml
+Merging manifest with lower [androidx.tracing:tracing:1.0.0] AndroidManifest.xml:17:1-24:12
+uses-sdk defined in both files...
+Merging uses-sdk with lower [androidx.tracing:tracing:1.0.0] AndroidManifest.xml:20:5-22:41
+Merging result: SUCCESS
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.groovebox"
+4    android:versionCode="190"
+5    android:versionName="2.6.61" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:4:5-67
+11-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+12-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:5:5-80
+12-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:5:22-77
+13    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+13-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:6:5-71
+13-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:6:22-68
+14    <uses-permission
+14-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:7:5-107
+15        android:name="android.permission.READ_EXTERNAL_STORAGE"
+15-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:7:22-77
+16        android:maxSdkVersion="32" />
+16-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:7:78-104
+17    <uses-permission
+17-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:8:5-108
+18        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+18-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:8:22-78
+19        android:maxSdkVersion="28" />
+19-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:8:79-105
+20    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+20-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:9:5-75
+20-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:9:22-72
+21    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+21-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:10:5-77
+21-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:10:22-74
+22    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+22-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:11:5-94
+22-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:11:22-91
+23
+24    <uses-feature
+24-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:13:5-83
+25        android:name="android.hardware.midi"
+25-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:13:19-55
+26        android:required="false" />
+26-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:13:56-80
+27    <uses-feature
+27-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:14:5-96
+28        android:name="android.hardware.audio.low_latency"
+28-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:14:19-68
+29        android:required="false" />
+29-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:14:69-93
+30    <uses-feature
+30-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:15:5-87
+31        android:name="android.hardware.usb.host"
+31-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:15:19-59
+32        android:required="false" />
+32-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:15:60-84
+33    <uses-feature
+33-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:16:5-89
+34        android:name="android.hardware.microphone"
+34-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:16:19-61
+35        android:required="false" />
+35-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:16:62-86
+36    <uses-feature
+36-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:17:5-90
+37        android:name="android.hardware.touchscreen"
+37-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:17:19-62
+38        android:required="false" />
+38-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:17:63-87
+39    <uses-feature
+39-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:18:5-88
+40        android:name="android.hardware.faketouch"
+40-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:18:19-60
+41        android:required="false" />
+41-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:18:61-85
+42    <uses-feature
+42-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:19:5-91
+43        android:name="android.hardware.audio.output"
+43-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:19:19-63
+44        android:required="false" />
+44-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:19:64-88
+45    <uses-feature
+45-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:20:5-88
+46        android:name="android.hardware.audio.pro"
+46-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:20:19-60
+47        android:required="false" />
+47-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:20:61-85
+48    <uses-feature
+48-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:21:5-88
+49        android:name="android.hardware.bluetooth"
+49-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:21:19-60
+50        android:required="false" />
+50-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:21:61-85
+51    <uses-feature
+51-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:22:5-83
+52        android:name="android.hardware.wifi"
+52-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:22:19-55
+53        android:required="false" />
+53-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:22:56-80
+54    <uses-feature
+54-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:23:5-83
+55        android:name="android.software.midi"
+55-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:23:19-55
+56        android:required="false" />
+56-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:23:56-80
+57    <uses-feature
+57-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:24:5-87
+58        android:name="android.software.leanback"
+58-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:24:19-59
+59        android:required="false" />
+59-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:24:60-84
+60    <uses-feature
+60-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:25:5-79
+61        android:glEsVersion="0x00020000"
+61-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:25:19-51
+62        android:required="false" />
+62-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:25:52-76
+63
+64    <supports-screens
+64-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:27:5-33:40
+65        android:anyDensity="true"
+65-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:28:9-34
+66        android:largeScreens="true"
+66-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:29:9-36
+67        android:normalScreens="true"
+67-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:30:9-37
+68        android:resizeable="true"
+68-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:31:9-34
+69        android:smallScreens="true"
+69-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:32:9-36
+70        android:xlargeScreens="true" />
+70-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:33:9-37
+71
+72    <permission
+72-->[androidx.core:core:1.12.0] /Users/danielmiller/.gradle/caches/8.13/transforms/c2d5e48a6c863c9b3aadcabff3bb74e2/transformed/core-1.12.0/AndroidManifest.xml:22:5-24:47
+73        android:name="com.groovebox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+73-->[androidx.core:core:1.12.0] /Users/danielmiller/.gradle/caches/8.13/transforms/c2d5e48a6c863c9b3aadcabff3bb74e2/transformed/core-1.12.0/AndroidManifest.xml:23:9-81
+74        android:protectionLevel="signature" />
+74-->[androidx.core:core:1.12.0] /Users/danielmiller/.gradle/caches/8.13/transforms/c2d5e48a6c863c9b3aadcabff3bb74e2/transformed/core-1.12.0/AndroidManifest.xml:24:9-44
+75
+76    <uses-permission android:name="com.groovebox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+76-->[androidx.core:core:1.12.0] /Users/danielmiller/.gradle/caches/8.13/transforms/c2d5e48a6c863c9b3aadcabff3bb74e2/transformed/core-1.12.0/AndroidManifest.xml:26:5-97
+76-->[androidx.core:core:1.12.0] /Users/danielmiller/.gradle/caches/8.13/transforms/c2d5e48a6c863c9b3aadcabff3bb74e2/transformed/core-1.12.0/AndroidManifest.xml:26:22-94
+77
+78    <application
+78-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:35:5-61:19
+79        android:allowBackup="true"
+79-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:36:9-35
+80        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+80-->[androidx.core:core:1.12.0] /Users/danielmiller/.gradle/caches/8.13/transforms/c2d5e48a6c863c9b3aadcabff3bb74e2/transformed/core-1.12.0/AndroidManifest.xml:28:18-86
+81        android:extractNativeLibs="false"
+82        android:icon="@mipmap/ic_icon"
+82-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:37:9-39
+83        android:label="@string/app_name"
+83-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:38:9-41
+84        android:requestLegacyExternalStorage="true"
+84-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:41:9-52
+85        android:roundIcon="@mipmap/ic_icon_round"
+85-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:39:9-50
+86        android:supportsRtl="true"
+86-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:40:9-35
+87        android:theme="@style/Theme.App" >
+87-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:42:9-41
+88        <activity
+88-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:43:9-53:20
+89            android:name="com.groovebox.MainActivity"
+89-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:44:13-41
+90            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+90-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:47:13-87
+91            android:exported="true"
+91-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:45:13-36
+92            android:screenOrientation="sensorLandscape"
+92-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:46:13-56
+93            android:theme="@style/Theme.App" >
+93-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:48:13-45
+94            <intent-filter>
+94-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:49:13-52:29
+95                <action android:name="android.intent.action.MAIN" />
+95-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:50:17-69
+95-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:50:25-66
+96
+97                <category android:name="android.intent.category.LAUNCHER" />
+97-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:51:17-77
+97-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:51:27-74
+98            </intent-filter>
+99        </activity>
+100
+101        <service
+101-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:55:9-59:63
+102            android:name="com.groovebox.AudioCaptureService"
+102-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:56:13-48
+103            android:enabled="true"
+103-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:57:13-35
+104            android:exported="false"
+104-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:58:13-37
+105            android:foregroundServiceType="mediaProjection" />
+105-->/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/AndroidManifest.xml:59:13-60
+106
+107        <provider
+107-->[androidx.emoji2:emoji2:1.4.0] /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml:24:9-32:20
+108            android:name="androidx.startup.InitializationProvider"
+108-->[androidx.emoji2:emoji2:1.4.0] /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml:25:13-67
+109            android:authorities="com.groovebox.androidx-startup"
+109-->[androidx.emoji2:emoji2:1.4.0] /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml:26:13-68
+110            android:exported="false" >
+110-->[androidx.emoji2:emoji2:1.4.0] /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml:27:13-37
+111            <meta-data
+111-->[androidx.emoji2:emoji2:1.4.0] /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml:29:13-31:52
+112                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+112-->[androidx.emoji2:emoji2:1.4.0] /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml:30:17-75
+113                android:value="androidx.startup" />
+113-->[androidx.emoji2:emoji2:1.4.0] /Users/danielmiller/.gradle/caches/8.13/transforms/99af1ba14f3946166756044b1680e33c/transformed/jetified-emoji2-1.4.0/AndroidManifest.xml:31:17-49
+114            <meta-data
+114-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/danielmiller/.gradle/caches/8.13/transforms/49cd31341f581f745147ee6d8c6fe331/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:29:13-31:52
+115                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+115-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/danielmiller/.gradle/caches/8.13/transforms/49cd31341f581f745147ee6d8c6fe331/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:30:17-78
+116                android:value="androidx.startup" />
+116-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/danielmiller/.gradle/caches/8.13/transforms/49cd31341f581f745147ee6d8c6fe331/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:31:17-49
+117            <meta-data
+117-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
+118                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+118-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
+119                android:value="androidx.startup" />
+119-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
+120        </provider>
+121
+122        <receiver
+122-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
+123            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+123-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
+124            android:directBootAware="false"
+124-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
+125            android:enabled="true"
+125-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
+126            android:exported="true"
+126-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
+127            android:permission="android.permission.DUMP" >
+127-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
+128            <intent-filter>
+128-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
+129                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+129-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
+129-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
+130            </intent-filter>
+131            <intent-filter>
+131-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
+132                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+132-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
+132-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
+133            </intent-filter>
+134            <intent-filter>
+134-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
+135                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+135-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
+135-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
+136            </intent-filter>
+137            <intent-filter>
+137-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
+138                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+138-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
+138-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/danielmiller/.gradle/caches/8.13/transforms/2ef3ce7a5fd658d1a1842c9a806eb830/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:50:25-92
+139            </intent-filter>
+140        </receiver>
+141    </application>
+142
+143</manifest>
+
+Merged manifest saved to /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
+Resolve mutations for :app:processReleaseManifest (Thread[Execution worker Thread 3,5,main]) started.
+:app:processReleaseManifest (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:processReleaseManifest
+Caching disabled for task ':app:processReleaseManifest' because:
+  Build cache is disabled
+Task ':app:processReleaseManifest' is not up-to-date because:
+  Value of input property 'outputsHandler.variantOutputs.$0.versionCode' has changed for task ':app:processReleaseManifest'
+  Value of input property 'outputsHandler.variantOutputs.$0.versionName' has changed for task ':app:processReleaseManifest'
+Resolve mutations for :app:processReleaseManifestForPackage (Thread[Execution worker Thread 3,5,main]) started.
+:app:processReleaseManifestForPackage (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :composeApp:parseReleaseLocalResources (Thread[Execution worker Thread 9,5,main]) started.
+:composeApp:parseReleaseLocalResources (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :composeApp:parseReleaseLocalResources UP-TO-DATE
+Caching disabled for task ':composeApp:parseReleaseLocalResources' because:
+  Build cache is disabled
+Skipping task ':composeApp:parseReleaseLocalResources' as it is up-to-date.
+Resolve mutations for :composeApp:generateReleaseRFile (Thread[Execution worker Thread 9,5,main]) started.
+:composeApp:generateReleaseRFile (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :composeApp:generateReleaseRFile UP-TO-DATE
+Caching disabled for task ':composeApp:generateReleaseRFile' because:
+  Build cache is disabled
+Skipping task ':composeApp:generateReleaseRFile' as it is up-to-date.
+work action resolve package-aware-r.txt (project :composeApp) (Thread[Execution worker Thread 9,5,main]) started.
+Resolve mutations for :composeApp:compileReleaseKotlinAndroid (Thread[Execution worker Thread 9,5,main]) started.
+:composeApp:compileReleaseKotlinAndroid (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :composeApp:compileReleaseKotlinAndroid UP-TO-DATE
+Caching disabled for task ':composeApp:compileReleaseKotlinAndroid' because:
+  Build cache is disabled
+Skipping task ':composeApp:compileReleaseKotlinAndroid' as it is up-to-date.
+Resolve mutations for :composeApp:javaPreCompileRelease (Thread[Execution worker Thread 9,5,main]) started.
+:composeApp:javaPreCompileRelease (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :composeApp:javaPreCompileRelease UP-TO-DATE
+Caching disabled for task ':composeApp:javaPreCompileRelease' because:
+  Build cache is disabled
+Skipping task ':composeApp:javaPreCompileRelease' as it is up-to-date.
+Resolve mutations for :composeApp:compileReleaseJavaWithJavac (Thread[Execution worker Thread 9,5,main]) started.
+:composeApp:compileReleaseJavaWithJavac (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :composeApp:compileReleaseJavaWithJavac NO-SOURCE
+Skipping task ':composeApp:compileReleaseJavaWithJavac' as it has no source files and no previous output files.
+Resolve mutations for :composeApp:bundleLibCompileToJarRelease (Thread[Execution worker Thread 9,5,main]) started.
+:composeApp:bundleLibCompileToJarRelease (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :composeApp:bundleLibCompileToJarRelease UP-TO-DATE
+Caching disabled for task ':composeApp:bundleLibCompileToJarRelease' because:
+  Build cache is disabled
+  Simple merging task
+Skipping task ':composeApp:bundleLibCompileToJarRelease' as it is up-to-date.
+work action resolve classes.jar (project :composeApp) (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :app:processReleaseManifestForPackage
+Custom actions are attached to task ':app:processReleaseManifestForPackage'.
+Caching disabled for task ':app:processReleaseManifestForPackage' because:
+  Build cache is disabled
+Task ':app:processReleaseManifestForPackage' is not up-to-date because:
+  Input property 'mergedManifests' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml has changed.
+  Input property 'mergedManifests' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/intermediates/merged_manifests/release/processReleaseManifest/output-metadata.json has changed.
+Resolve mutations for :app:processReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+:app:processReleaseResources (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:processReleaseResources
+Caching disabled for task ':app:processReleaseResources' because:
+  Build cache is disabled
+Task ':app:processReleaseResources' is not up-to-date because:
+  Value of input property 'outputsHandler.variantOutputs.$0.versionCode' has changed for task ':app:processReleaseResources'
+  Value of input property 'outputsHandler.variantOutputs.$0.versionName' has changed for task ':app:processReleaseResources'
+The input changes require a full rebuild for incremental task ':app:processReleaseResources'.
+AAPT2 aapt2-8.13.2-14304508-osx Daemon #0: starting
+Aapt output file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/intermediates/linked_resources_proto_format/release/processReleaseResources/linked-resources-proto-format-release.ap_
+Resolve mutations for :app:compileReleaseKotlin (Thread[Execution worker Thread 3,5,main]) started.
+:app:compileReleaseKotlin (Thread[Execution worker Thread 3,5,main]) started.
+
+> Task :app:compileReleaseKotlin FAILED
+Caching disabled for task ':app:compileReleaseKotlin' because:
+  Build cache is disabled
+Task ':app:compileReleaseKotlin' is not up-to-date because:
+  Input property 'classpathSnapshotProperties.classpathSnapshot' file /Users/danielmiller/.gradle/caches/8.13/transforms/c591aac3d645cffa3320a7be2c63de7a/transformed/classes_jar-snapshot.bin has been removed.
+  Input property 'classpathSnapshotProperties.classpathSnapshot' file /Users/danielmiller/.gradle/caches/8.13/transforms/65b383e3ca16062fe3b80b101818286e/transformed/classes_jar-snapshot.bin has been added.
+  Input property 'sources' file /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/java/com/groovebox/MainActivity.kt has changed.
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/kotlin', not found
+file or directory '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/release/java', not found
+Kotlin source files: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/java/com/groovebox/MainActivity.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/java/com/groovebox/midi/MidiRouter.kt, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/java/com/groovebox/AudioCaptureService.kt
+Java source files: 
+Script source files: 
+Script file extensions: 
+Using Kotlin/JVM incremental compilation
+[KOTLIN] Kotlin compilation 'jdkHome' argument: null
+i: found daemon on port 17743 (80504 ms old), trying to connect
+i: connected to the daemon
+Options for KOTLIN DAEMON: IncrementalCompilationOptions(super=CompilationOptions(compilerMode=INCREMENTAL_COMPILER, targetPlatform=JVM, reportCategories=[0, 3], reportSeverity=2, requestedCompilationResults=[0], kotlinScriptExtensions=[]), areFileChangesKnown=true, modifiedFiles=[/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/java/com/groovebox/MainActivity.kt, /Users/danielmiller/.gradle/caches/8.13/transforms/65b383e3ca16062fe3b80b101818286e/transformed/classes_jar-snapshot.bin], deletedFiles=[/Users/danielmiller/.gradle/caches/8.13/transforms/c591aac3d645cffa3320a7be2c63de7a/transformed/classes_jar-snapshot.bin], classpathChanges=ToBeComputedByIncrementalCompiler, workingDir=/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/kotlin/compileReleaseKotlin/cacheable, multiModuleICSettings=MultiModuleICSettings(buildHistoryFile=/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/kotlin/compileReleaseKotlin/local-state/build-history.bin, useModuleDetection=true), usePreciseJavaTracking=true, outputFiles=[/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/tmp/kotlin-classes/release, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/kotlin/compileReleaseKotlin/cacheable, /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/build/kotlin/compileReleaseKotlin/local-state])
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1863:2 Expecting '}'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:735:17 Unresolved reference: GrooveboxTheme
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:736:21 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1710:5 Modifier 'override' is not applicable to 'local function'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1711:14 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1711:59 No supertypes are accessible in this context
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1718:35 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1719:20 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1719:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1723:35 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1724:20 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1724:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1728:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1729:20 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1729:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1733:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1734:20 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1734:37 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1741:28 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1742:13 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1742:30 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1743:47 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1746:28 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1747:13 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1747:30 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1748:47 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1753:32 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1754:17 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1758:35 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1759:17 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1759:34 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1765:24 Unresolved reference: getPadIndexFromKeyCode
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1767:17 Unresolved reference: heldKeys
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1768:17 Unresolved reference: viewModel
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1773:16 No supertypes are accessible in this context
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1776:5 Modifier 'override' is not applicable to 'local function'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1777:14 Unresolved reference: grooveboxState
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1777:59 No supertypes are accessible in this context
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1779:24 Unresolved reference: getPadIndexFromKeyCode
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1781:17 Unresolved reference: heldKeys
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1782:17 Unresolved reference: viewModel
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1786:16 No supertypes are accessible in this context
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/app/src/main/java/com/groovebox/MainActivity.kt:1789:5 Modifier 'private' is not applicable to 'local function'
+Restoring task outputs to pre-compilation state
+AAPT2 aapt2-8.13.2-14304508-osx Daemon #0: shutdown
+
+[Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileReleaseKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 2s
+30 actionable tasks: 8 executed, 22 up-to-date
+Watched directory hierarchies: [/Users/danielmiller/Documents/Code Projects/Loom Groovebox]

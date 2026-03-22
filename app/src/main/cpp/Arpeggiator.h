@@ -2,7 +2,11 @@
 #define ARPEGGIATOR_H
 
 #include "ChordProgressionEngine.h"
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 #include <algorithm>
+#include <chrono>
 #include <random>
 #include <vector>
 
@@ -25,7 +29,11 @@ public:
   Arpeggiator()
       : mMode(ArpMode::OFF), mStep(0), mNoteIndex(0), mOctaves(0),
         mInversion(0), mIsLatched(false), mIsWaitingForNewGesture(false),
-        mUpperLane1Index(0), mUpperLane2Index(0), mRng(std::random_device{}()) {
+        mUpperLane1Index(0), mUpperLane2Index(0),
+        mRng(static_cast<uint32_t>(
+            std::chrono::high_resolution_clock::now().time_since_epoch().count() ^
+            std::random_device{}())),
+        mProbability(0.0f), mWeird(0.0f), mRateMultiplier(1.0f), mSpeedMultiplier(1.0f) {
     // Default: Lane 0 (Root) active, Lanes 1-3 inactive
     mRhythms.resize(4, std::vector<bool>(16, false));
     std::fill(mRhythms[0].begin(), mRhythms[0].end(), true);
@@ -34,7 +42,25 @@ public:
     mHeldNotes.reserve(32);
     mSequence.reserve(128);
     mNotesToPlay.reserve(8);
+    mDroppedNotes.reserve(128);
   }
+
+  void setProbability(float prob) {
+    mProbability = prob;
+  }
+  float getProbability() const { return mProbability; }
+
+  void setWeird(float weird) {
+    mWeird = weird;
+    if (mWeird <= 0.001f) {
+      mRateMultiplier = 1.0f;
+      mSpeedMultiplier = 1.0f;
+    }
+  }
+  float getWeird() const { return mWeird; }
+
+  float getRateMultiplier() const { return mRateMultiplier; }
+  float getSpeedMultiplier() const { return mSpeedMultiplier; }
 
   void setChordProgConfig(bool enabled, int mood, int complexity) {
     mIsChordProgEnabled = enabled;
@@ -77,7 +103,8 @@ public:
   float getCurrentGate() const {
     if (mGateLengths.empty())
       return 0.5f;
-    return mGateLengths[mStep % 16];
+    int maxSteps = mIsLatched ? 16 : 8;
+    return mGateLengths[mStep % maxSteps];
   }
   void setIsMutated(bool mutated) { mIsMutated = mutated; }
 
@@ -100,12 +127,39 @@ public:
       mIsWaitingForNewGesture = false;
     }
 
+    bool wasEmpty = mHeldNotes.empty();
+
     if (std::find(mHeldNotes.begin(), mHeldNotes.end(), note) ==
         mHeldNotes.end()) {
       mHeldNotes.push_back(note);
       std::sort(mHeldNotes.begin(), mHeldNotes.end());
+
       generateChordProgression();
       updateSequence();
+
+      if (wasEmpty) {
+        mStep = 0; // Fresh start for new gesture
+        mNoteIndex = 0;
+        
+        // Per-gesture randomization roll (Only for unlatched)
+        if (!mIsLatched) {
+            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+            mHasDropsInCurrentGesture = (mProbability > 0.001f && dist(mRng) < mProbability);
+            mIsWeirdInCurrentGesture = (mWeird > 0.001f && dist(mRng) < mWeird);
+
+            if (mIsWeirdInCurrentGesture) {
+                rollRandomVariations();
+            } else {
+                mRateMultiplier = 1.0f;
+                mSpeedMultiplier = 1.0f;
+            }
+        } else {
+            mHasDropsInCurrentGesture = false;
+            mIsWeirdInCurrentGesture = false;
+            mRateMultiplier = 1.0f;
+            mSpeedMultiplier = 1.0f;
+        }
+      }
     }
   }
 
@@ -127,7 +181,18 @@ public:
       mIsWaitingForNewGesture = true;
     } else {
       mHeldNotes.clear();
+      mRateMultiplier = 1.0f;
+      mSpeedMultiplier = 1.0f;
+      mStep = 0;
+      mNoteIndex = 0;
+      mHasDropsInCurrentGesture = false;
+      mIsWeirdInCurrentGesture = false;
       updateSequence();
+    }
+    // Safety: always reset multipliers if weird is zero, even in latch
+    if (mWeird <= 0.001f) {
+        mRateMultiplier = 1.0f;
+        mSpeedMultiplier = 1.0f;
     }
   }
 
@@ -147,56 +212,79 @@ public:
       return mNotesToPlay;
 
     // Check for harmonic step change
+    const int stepsPerChord = mIsLatched ? 32 : 8;
+
     if (mIsChordProgEnabled && !mGeneratedChordProgression.empty()) {
-      int harmonicStep = (mStep / mStepsPerChord) % 8;
+      int harmonicStep = (mStep / stepsPerChord) % 16;
       if (harmonicStep != mLastHarmonicStep) {
         mLastHarmonicStep = harmonicStep;
         updateSequence(); // Refresh sequence with new chord notes merged
       }
     }
 
-    int stepIndex = mStep % 16; // 16 step pattern
+    int maxSteps = mIsLatched ? 16 : 8;
+    int stepIndex = mStep % maxSteps; // Conditional step pattern
 
     int seqSize = (int)mSequence.size();
     bool playedAnyInStep = false;
 
+    // Probability check: roll per step for more immediate response
+    std::uniform_real_distribution<float> probDist(0.0f, 1.0f);
+
+    // Helper to add note with dropped check
+    auto addNoteIfVisible = [&](int idx) {
+        if (idx >= 0 && idx < seqSize) {
+            bool isDropped = false;
+            if (mHasDropsInCurrentGesture) {
+                if (probDist(mRng) < 0.20f) {
+                    isDropped = true;
+                }
+            }
+
+            if (!isDropped) {
+                int noteIdx = mSequence[idx];
+                mNotesToPlay.push_back(noteIdx);
+            }
+            playedAnyInStep = true; // Keep sequence moving even if note is dropped
+        }
+    };
+
     // Lane 0: Root/Main Note
     if (mRhythms.size() > 0 && mRhythms[0][stepIndex]) {
-      int idx = mNoteIndex % seqSize;
-
-      int noteIdx = mSequence[idx];
-      if (mInversion != 0 && (mNoteIndex % seqSize) == 0) {
-        noteIdx += mInversion * 12; // Apply inversion to root of cycle
+      // Determine if this specific trigger is dropped.
+      // Only roll if the gesture overall was flagged as "having drops".
+      bool isDropped = false;
+      if (mHasDropsInCurrentGesture) {
+          // Fixed 20% chance to drop notes if the gesture is "faulty"
+          if (probDist(mRng) < 0.20f) {
+              isDropped = true;
+          }
       }
-      mNotesToPlay.push_back(noteIdx);
-      playedAnyInStep = true;
+
+      if (!isDropped) {
+          int idx = mNoteIndex % seqSize;
+          int noteIdx = mSequence[idx];
+          if (mInversion != 0 && (mNoteIndex % seqSize) == 0) {
+            noteIdx += mInversion * 12; // Apply inversion to root of cycle
+          }
+          mNotesToPlay.push_back(noteIdx);
+      }
+      playedAnyInStep = true; 
     }
 
     // Lane 1: +1 Walk
     if (mRhythms.size() > 1 && mRhythms[1][stepIndex]) {
-      if (seqSize > 0) {
-        int idx = (mNoteIndex + 1) % seqSize;
-        mNotesToPlay.push_back(mSequence[idx]);
-        playedAnyInStep = true;
-      }
+      addNoteIfVisible((mNoteIndex + 1) % seqSize);
     }
 
     // Lane 2: +2 Walk
     if (mRhythms.size() > 2 && mRhythms[2][stepIndex]) {
-      if (seqSize > 0) {
-        int idx = (mNoteIndex + 2) % seqSize;
-        mNotesToPlay.push_back(mSequence[idx]);
-        playedAnyInStep = true;
-      }
+      addNoteIfVisible((mNoteIndex + 2) % seqSize);
     }
 
     // Lane 3: +3 Walk
     if (mRhythms.size() > 3 && mRhythms[3][stepIndex]) {
-      if (seqSize > 0) {
-        int idx = (mNoteIndex + 3) % seqSize;
-        mNotesToPlay.push_back(mSequence[idx]);
-        playedAnyInStep = true;
-      }
+      addNoteIfVisible((mNoteIndex + 3) % seqSize);
     }
 
     if (playedAnyInStep) {
@@ -240,15 +328,9 @@ private:
   std::vector<int> mScaleIntervals;
   std::vector<std::vector<int>> mGeneratedChordProgression;
 
-  int mLastHarmonicStep = -1;
-  const int mStepsPerChord = 32;
-
-  // Track staggering indices for upper lanes
-  int mUpperLane1Index = 0;
-  int mUpperLane2Index = 0;
-
   void generateChordProgression() {
     if (mIsChordProgEnabled && !mHeldNotes.empty()) {
+      const int stepsPerChord = mIsLatched ? 32 : 8;
       mGeneratedChordProgression = ChordProgressionEngine::generateProgression(
           mRootNote, mScaleIntervals, mChordProgMood,
           static_cast<Complexity>(mChordProgComplexity), mHeldNotes);
@@ -269,12 +351,15 @@ private:
 
     // Merge Chord Progression Notes
     if (mIsChordProgEnabled && !mGeneratedChordProgression.empty()) {
-      int harmonicStep = (mStep / mStepsPerChord) % 8;
-      std::vector<int> chord = mGeneratedChordProgression[harmonicStep];
-      for (int n : chord) {
-        if (std::find(baseNotes.begin(), baseNotes.end(), n) ==
-            baseNotes.end()) {
-          baseNotes.push_back(n);
+      const int stepsPerChord = mIsLatched ? 32 : 8;
+      int harmonicStep = (mStep / stepsPerChord) % 16;
+      if (harmonicStep < (int)mGeneratedChordProgression.size()) {
+        std::vector<int> chord = mGeneratedChordProgression[harmonicStep];
+        for (int n : chord) {
+          if (std::find(baseNotes.begin(), baseNotes.end(), n) ==
+              baseNotes.end()) {
+            baseNotes.push_back(n);
+          }
         }
       }
     }
@@ -396,6 +481,62 @@ private:
       break;
     }
   }
+
+  void rollRandomVariations() {
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+    // Rate Logic (Speed up)
+    // Tiers: <0.3 (mild, no 4x/7x), 0.3-0.6 (up to 4x), >0.6 (up to 7x)
+    if (mWeird > 0.6f) {
+        float r = dist(mRng);
+        if (r < 0.25f) mRateMultiplier = 7.0f;
+        else if (r < 0.55f) mRateMultiplier = 4.0f;
+        else if (r < 0.85f) mRateMultiplier = 2.0f;
+        else mRateMultiplier = (mWeird > 0.99f) ? 4.0f : 1.0f; // Guaranteed change at 100%
+    } else if (mWeird > 0.3f) {
+        float r = dist(mRng);
+        if (r < 0.45f) mRateMultiplier = 4.0f;
+        else if (r < 0.85f) mRateMultiplier = 2.0f;
+        else mRateMultiplier = 1.0f;
+    } else {
+        float r = dist(mRng);
+        if (r < 0.70f) mRateMultiplier = 2.0f;
+        else mRateMultiplier = 1.0f;
+    }
+
+    // Speed Logic (Timing variation)
+    // Applying similar tiers for speed variations
+    if (mWeird > 0.6f) {
+        float r = dist(mRng);
+        if (r < 0.25f) mSpeedMultiplier = 3.0f;    // Extreme
+        else if (r < 0.50f) mSpeedMultiplier = 1.5f; // Fast
+        else if (r < 0.70f) mSpeedMultiplier = 0.5f; // Slow
+        else if (r < 0.90f) mSpeedMultiplier = 0.75f;// Mild slow
+        else mSpeedMultiplier = (mWeird > 0.99f) ? 1.25f : 1.0f; // Guaranteed change at 100%
+    } else if (mWeird > 0.3f) {
+        float r = dist(mRng);
+        if (r < 0.45f) mSpeedMultiplier = 1.5f;
+        else if (r < 0.90f) mSpeedMultiplier = 0.75f;
+        else mSpeedMultiplier = 1.0f;
+    } else {
+        float r = dist(mRng);
+        if (r < 0.50f) mSpeedMultiplier = 1.25f; // Milder speed up
+        else if (r < 0.90f) mSpeedMultiplier = 0.85f; // Milder slow down
+        else mSpeedMultiplier = 1.0f;
+    }
+  }
+
+  int mLastHarmonicStep = -1;
+  int mUpperLane1Index = 0;
+  int mUpperLane2Index = 0;
+
+  float mProbability;
+  float mWeird;
+  float mRateMultiplier;
+  float mSpeedMultiplier;
+  bool mHasDropsInCurrentGesture = false;
+  bool mIsWeirdInCurrentGesture = false;
+  std::vector<bool> mDroppedNotes;
 };
 
 #endif

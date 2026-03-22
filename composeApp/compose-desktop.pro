@@ -1,0 +1,3 @@
+-ignorewarnings
+-dontwarn kotlinx.serialization.**
+-dontwarn kotlinx.datetime.**

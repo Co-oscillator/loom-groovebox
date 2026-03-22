@@ -6,7 +6,7 @@
 #include <sstream>
 
 #include <algorithm>
-#include "Log.h"
+#include <android/log.h>
 #include <chrono>
 #include <cmath>
 #include <jni.h>
@@ -104,8 +104,8 @@ AudioEngine::AudioEngine() {
   mPhaserFxR.setMix(1.0f);
   mFlangerFxL.setMix(1.0f);
   mFlangerFxR.setMix(1.0f);
-  mOctaverFxL.setMix(1.0f);
-  mOctaverFxR.setMix(1.0f);
+  mOctaverFxL.setMix(0.0f);
+  mOctaverFxR.setMix(0.0f);
   mTapeEchoFxL.setMix(1.0f);
   mTapeEchoFxR.setMix(1.0f);
 
@@ -595,6 +595,9 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
     if (!isSequencerTrigger) {
       track.mPhysicallyHeldNoteCount++;
       if (track.arpeggiator.getMode() != ArpMode::OFF) {
+        if (track.mPhysicallyHeldNoteCount == 1) {
+          track.mArpCountdown = 0; // Immediate trigger for new gesture
+        }
         track.arpeggiator.addNote(note);
         return;
       }
@@ -608,7 +611,7 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
         float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
         float effectiveMultiplier = std::max(0.01f, track.mClockMultiplier);
         float trackSamplesPerStep = samplesPerStep / effectiveMultiplier;
-        LOGD(
+        __android_log_print(ANDROID_LOG_DEBUG, "GrooveboxAudio",
                             "SeqTrigger T%d Note=%d SPS=%.2f Multi=%.2f "
                             "Gate=%.2f Bank=%d Punch=%d",
                             trackIndex, note, trackSamplesPerStep,
@@ -966,8 +969,7 @@ void AudioEngine::updateEngineParameter(int trackIndex, int parameterId,
       break;
     case 7:
       // Cubic Scaling for Synth LFO too
-      track.subtractiveEngine.setLfoRate(0.01f +
-                                         (value * value * value) * 49.99f);
+      track.subtractiveEngine.setLfoRate(0.01f * powf(10.0f, value * 3.69897f));
       track.soundFontEngine.setParameter(7, value);
       break;
     case 8:
@@ -1311,14 +1313,25 @@ void AudioEngine::processCommands() {
       }
       break;
     case AudioCommand::SET_PATTERN_LENGTH:
-      mPatternLength = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
-      // Propagate to all track sequencers
-      {
-        int pages = (mPatternLength + 15) / 16;
-        for (int i = 0; i < (int)mTracks.size(); ++i) {
-          mTracks[i].sequencer.setConfiguration(pages, 16);
-          for (int d = 0; d < 16; ++d)
-            mTracks[i].drumSequencers[d].setConfiguration(pages, 16);
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        int length = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
+        mTracks[cmd.trackIndex].patternLength = length;
+        int pages = (length + 15) / 16;
+        mTracks[cmd.trackIndex].sequencer.setConfiguration(pages, 16);
+        for (int d = 0; d < 16; ++d)
+          mTracks[cmd.trackIndex].drumSequencers[d].setConfiguration(pages, 16);
+      } else {
+        mPatternLength =
+            (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
+        // Propagate to all track sequencers
+        {
+          int pages = (mPatternLength + 15) / 16;
+          for (int i = 0; i < (int)mTracks.size(); ++i) {
+            mTracks[i].patternLength = mPatternLength;
+            mTracks[i].sequencer.setConfiguration(pages, 16);
+            for (int d = 0; d < 16; ++d)
+              mTracks[i].drumSequencers[d].setConfiguration(pages, 16);
+          }
         }
       }
       break;
@@ -1798,9 +1811,20 @@ void AudioEngine::releaseNoteLocked(int trackIndex, int note,
         if (track.mPhysicallyHeldNoteCount <= 0) {
           track.mPhysicallyHeldNoteCount = 0;
           track.arpeggiator.onAllPhysicallyReleased();
+          track.mArpCountdown = 0; // Reset for next gesture
         }
         if (track.arpeggiator.getMode() != ArpMode::OFF) {
           track.arpeggiator.removeNote(note);
+        }
+      }
+
+      // Apply Per-Track Transpose (Match triggerNoteLocked logic)
+      int transposedNote = note;
+      if (track.engineType != 5 && track.engineType != 6) {
+        bool isSliceMode =
+            (track.engineType == 2 && track.parameters[320] > 1.5f);
+        if (!isSliceMode) {
+          transposedNote += track.transpose;
         }
       }
 
@@ -1809,10 +1833,10 @@ void AudioEngine::releaseNoteLocked(int trackIndex, int note,
       // switching.
       for (int i = 0; i < Track::MAX_POLYPHONY; ++i) {
         if (track.mActiveNotes[i].active &&
-            track.mActiveNotes[i].note == note) {
+            track.mActiveNotes[i].note == transposedNote) {
           track.mActiveNotes[i].active = false;
           mGlobalVoiceCount--;
-          break;
+          // Do NOT break, release all voices for this note to be safe
         }
       }
       if (mIsRecording && mIsPlaying && !isSequencerTrigger) {
@@ -2277,6 +2301,10 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
         if (track.arpeggiator.getMode() != ArpMode::OFF) {
           float arpSamplesPerStep =
               samplesPerStep * std::max(0.125f, track.mArpRate);
+          
+          arpSamplesPerStep /= track.arpeggiator.getRateMultiplier();
+          arpSamplesPerStep /= track.arpeggiator.getSpeedMultiplier();
+
           if (track.mArpDivisionMode == 1)
             arpSamplesPerStep *= 1.5f;
           else if (track.mArpDivisionMode == 2)
@@ -2657,9 +2685,10 @@ void AudioEngine::setTrackHumanize(int trackIndex, float amount) {
   mCommandQueue.push_back(cmd);
 }
 
-void AudioEngine::setPatternLength(int length) {
+void AudioEngine::setPatternLength(int trackIndex, int length) {
   AudioCommand cmd;
   cmd.type = AudioCommand::SET_PATTERN_LENGTH;
+  cmd.trackIndex = trackIndex;
   cmd.data1 = length;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
@@ -2862,11 +2891,14 @@ void AudioEngine::setArpConfig(int trackIndex, int mode, int octaves,
                                int inversion, bool isLatched, bool isMutated,
                                const std::vector<std::vector<bool>> &rhythms,
                                const std::vector<int> &sequence,
-                               const std::vector<float> &gateLengths) {
+                               const std::vector<float> &gateLengths,
+                               float probability) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     ArpMode newMode = static_cast<ArpMode>(mode);
     Track &track = mTracks[trackIndex];
+
+    track.arpeggiator.setProbability(probability);
 
     bool wasLatched = track.arpeggiator.isLatched();
     if (wasLatched && !isLatched && track.mPhysicallyHeldNoteCount == 0) {
@@ -3257,19 +3289,29 @@ void AudioEngine::panic() {
   }
 }
 
-int AudioEngine::getActiveNoteMask(int trackIndex) {
+uint64_t AudioEngine::getActiveNoteMask(int trackIndex) {
   if (trackIndex < 0 || trackIndex >= 8)
     return 0;
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  int mask = 0;
+  uint64_t mask = 0;
   auto &track = mTracks[trackIndex];
+
+  // Engine types that ignore transpose (Drums, Slicers)
+  bool ignoresTranspose = (track.engineType == 5 || track.engineType == 6);
+  if (track.engineType == 2 && track.parameters[320] > 1.5f) {
+    ignoresTranspose = true;
+  }
+
   for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
     if (track.mActiveNotes[v].active) {
       int note = track.mActiveNotes[v].note;
-      // We only care about notes 0..31 for simple 4x4 or 6x6 highlights
-      // mapped relative to the view. For now, bitset simple 32 notes.
-      if (note >= 60 && note < 92) {
-        mask |= (1 << (note - 60));
+      
+      // Reverse the transpose to get the "physical" note for UI highlighting
+      // (only for synth engines)
+      int displayNote = ignoresTranspose ? note : (note - track.transpose);
+
+      if (displayNote >= 60 && displayNote < 92) {
+        mask |= (1ULL << (displayNote - 60));
       }
     }
   }
@@ -3289,7 +3331,7 @@ void AudioEngine::setGenericLfoParam(int lfoIndex, int paramId, float value) {
     // Cubic scaling: 0.01Hz to 30Hz
     // Range = 30 - 0.01 = 29.99
     // Val = 0.01 + (v^3 * 29.99)
-    mLfos[lfoIndex].setFrequency(0.01f + (value * value * value) * 29.99f);
+    mLfos[lfoIndex].setFrequency(0.01f * powf(10.0f, value * 3.47712f));
     mLfos[lfoIndex].setUiRate(value);
     break;
   case 1:
@@ -4034,12 +4076,33 @@ void AudioEngine::renderToWav(int numCycles, const std::string &path) {
 
         // Advance sequencers
         for (int t = 0; t < (int)mTracks.size(); ++t) {
-          if (mTracks[t].isActive) {
-            mTracks[t].sequencer.advance();
-            const Step &s = mTracks[t].sequencer.getCurrentStep();
-            if (s.active) {
-              // Trigger logic here... simplified for stability
-              triggerNoteLocked(t, 60, 100, true);
+          Track &track = mTracks[t];
+          if (track.isActive) {
+            bool isDrumTrack = (track.engineType == 5 || track.engineType == 6 ||
+                                (track.engineType == 2 &&
+                                 track.parameters[320] > 1.5f));
+
+            if (isDrumTrack) {
+              for (int d = 0; d < 16; ++d) {
+                track.drumSequencers[d].advance();
+                const Step &s = track.drumSequencers[d].getCurrentStep();
+                if (s.active && !s.notes.empty()) {
+                  // Trigger first note (usually 60+d)
+                  triggerNoteLocked(t, s.notes[0].note,
+                                    static_cast<int>(s.notes[0].velocity * 127.0f), true,
+                                    s.gate, s.punch);
+                }
+              }
+            } else {
+              track.sequencer.advance();
+              const Step &s = track.sequencer.getCurrentStep();
+              if (s.active) {
+                for (const auto &ni : s.notes) {
+                  triggerNoteLocked(t, ni.note,
+                                    static_cast<int>(ni.velocity * 127.0f), true,
+                                    s.gate, s.punch);
+                }
+              }
             }
           }
         }

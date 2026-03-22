@@ -61,6 +61,9 @@ public:
   void releaseNote(int trackIndex, int note);
   void setTempo(float bpm);
   void setPlaying(bool playing);
+  bool getIsPlaying() const { return mIsPlaying; }
+  bool getIsRecording() const { return mIsRecording; }
+  bool getIsRecordingSample() const { return mIsRecordingSample; }
   void setStep(int trackIndex, int stepIndex, bool active,
                const std::vector<int> &notes, float velocity = 0.8f,
                int ratchet = 1, bool punch = false, float probability = 1.0f,
@@ -86,7 +89,7 @@ public:
   void setParameterPreview(int trackIndex, int parameterId, float value);
   void setSwing(float swing);
   void setTrackHumanize(int trackIndex, float amount);
-  void setPatternLength(int length);
+  void setPatternLength(int trackIndex, int length);
   void setPlaybackDirection(int trackIndex, int direction);
   void setIsRandomOrder(int trackIndex, bool isRandom);
   void setIsJumpMode(int trackIndex, bool isJump);
@@ -105,7 +108,8 @@ public:
                     bool isLatched, bool isMutated,
                     const std::vector<std::vector<bool>> &rhythms,
                     const std::vector<int> &sequence,
-                    const std::vector<float> &gateLengths);
+                    const std::vector<float> &gateLengths,
+                    float probability, float weird);
   void setChordProgConfig(int trackIndex, bool enabled, int mood,
                           int complexity);
   void setScaleConfig(int rootNote, const std::vector<int> &intervals);
@@ -139,6 +143,9 @@ public:
   std::vector<float> getRecordedSampleData(int trackIndex,
                                            float targetSampleRate);
   size_t getSampleLength(int trackIndex);
+  std::vector<int> getStepNotes(int trackIndex, int stepIndex, int drumIndex = -1);
+  float getStepVelocity(int trackIndex, int stepIndex, int drumIndex = -1);
+  float getStepSubStep(int trackIndex, int stepIndex, int drumIndex = -1);
   uint64_t getActiveNoteMask(int trackIndex);
   void setPitchBend(int trackIndex, float semitones);
   void setPadMod(int trackIndex, float value);
@@ -237,6 +244,7 @@ private:
     int trackIndex;
     int data1;                         // note, or paramId
     int data2;                         // Second data field (e.g. stepIndex)
+    int trackIdx;                      // Specific track for global commands if needed
     float value;                       // velocity, or paramValue
     bool bValue;                       // Boolean value
     std::vector<int> notes;            // For SET_STEP

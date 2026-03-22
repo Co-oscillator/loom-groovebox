@@ -45,46 +45,54 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
              }
         }
 
-        // Note On/Off: Only target the currently selected track
-        if (msgType == 0x90 || msgType == 0x80) {
         // Note On/Off: Check all tracks for channel matches
         if (msgType == 0x90 || msgType == 0x80) {
             state.tracks.forEachIndexed { i, track ->
                 val listensOnAll = track.midiInChannel == 17
                 val listensOnChan = track.midiInChannel == midiChan
                 
-                // "All" channels only triggers if this is the selected track
-                // specific channel triggers regardless of selection
-                val shouldTrigger = (listensOnAll && i == state.selectedTrackIndex) || listensOnChan
+                // "All" channels (17) only triggers if this is the selected track.
+                // Specific channel (1..16) triggers even if unselected (Background MIDI support).
+                var shouldTrigger = (track.midiInChannel == 17 && i == state.selectedTrackIndex) || (track.midiInChannel == midiChan)
                 
+                // GHOST NOTE FIX: Prevent non-selected tracks from triggering when playing 
+                // notes in the pad range (now 0-127 for absolute background isolation)
+                // if they aren't the primary target.
+                if (i != state.selectedTrackIndex && data1 in 0..127) {
+                    shouldTrigger = false
+                }
+
                 if (shouldTrigger) {
                     var triggeredNote = data1
 
-                    // EMP16 Bank A Pad Remapping (ONLY in Bank 0)
-                    // Apply remapping only if this is the selected track and we are in Bank 0
-                    // For background tracks (fixed channel), we likely want standard chromatic mapping
-                    // But if the user plays the pads on channel 1, they expect the remapping.
-                    // We'll apply it if it's the selected track OR if it's a drum engine.
-                    
+                    // EMP16 Bank A / 6x6 Remapping (ONLY in Bank 0)
                     val isDrum = track.engineType == com.groovebox.EngineType.FM_DRUM || track.engineType == com.groovebox.EngineType.ANALOG_DRUM
                     
                     if (state.currentSequencerBank == 0 && i == state.selectedTrackIndex) {
-                        val padIdx = when (data1) {
-                            in 60..63 -> data1 - 60
-                            in 56..59 -> (data1 - 56) + 4
-                            in 52..55 -> (data1 - 52) + 8
-                            in 48..51 -> (data1 - 48) + 12
+                        val padIdx = when (state.gridMode) {
+                            com.groovebox.GridMode.GRID_4X4 -> {
+                                when (data1) {
+                                    in 60..63 -> data1 - 60
+                                    in 56..59 -> (data1 - 56) + 4
+                                    in 52..55 -> (data1 - 52) + 8
+                                    in 48..51 -> (data1 - 48) + 12
+                                    else -> -1
+                                }
+                            }
+                            com.groovebox.GridMode.GRID_6X6 -> if (data1 in 48..83) data1 - 48 else -1
                             else -> -1
                         }
+
                         if (padIdx != -1) {
                             triggeredNote = if (isDrum) {
-                                60 + (padIdx % 8)
+                                60 + (padIdx % 16) // Expanded for more drum voices
                             } else {
-                                val scaleNotes = com.groovebox.ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, 24)
+                                val scaleNotes = com.groovebox.ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, 48)
                                 scaleNotes.getOrElse(padIdx) { data1 }
                             }
                         }
                     } else if (state.currentSequencerBank != 0 && i == state.selectedTrackIndex && data1 in 41..95) {
+
                          // Ignore potentially conflicting pad ranges for selected track in other banks
                          return@forEachIndexed
                     }
@@ -103,7 +111,6 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
                 }
             }
             return
-        }
         }
 
         if (msgType == 0xB0) { // Control Change (CC)

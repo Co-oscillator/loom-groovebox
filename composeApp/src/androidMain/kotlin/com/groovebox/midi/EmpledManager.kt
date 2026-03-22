@@ -11,7 +11,7 @@ actual class EmpledManager(private val midiManager: MidiManager) {
         SETTINGS(128, 128, 128) // Gray
     }
 
-    fun updatePadColor(padIndex: Int, r: Int, g: Int, b: Int) {
+    actual fun updatePadColor(padIndex: Int, r: Int, g: Int, b: Int) {
         if (padIndex !in 0..15) return
         val note = 48 + padIndex
         val colorValue = getBestColorIndex(r, g, b)
@@ -26,7 +26,7 @@ actual class EmpledManager(private val midiManager: MidiManager) {
     /**
      * Specialized LED update for sequencing pads which are in CC mode (CC 24-55)
      */
-    fun updateSequencerPadColor(padIndex: Int, r: Int, g: Int, b: Int, bankIdx: Int) {
+    actual fun updateSequencerPadColor(padIndex: Int, r: Int, g: Int, b: Int, bankIdx: Int) {
         if (padIndex !in 0..15) return
         val ccNum = (bankIdx - 1) * 16 + 24 + padIndex
         if (ccNum !in 24..55) return
@@ -44,7 +44,7 @@ actual class EmpledManager(private val midiManager: MidiManager) {
         updatePadColor(padIndex, r, g, b)
     }
 
-    fun updatePadColorCompose(padIndex: Int, color: androidx.compose.ui.graphics.Color) {
+    actual fun updatePadColorCompose(padIndex: Int, color: androidx.compose.ui.graphics.Color) {
         updatePadColor(
             padIndex,
             (color.red * color.alpha * 255).toInt(),
@@ -53,7 +53,7 @@ actual class EmpledManager(private val midiManager: MidiManager) {
         )
     }
 
-    fun updateSequencerPadColorCompose(padIndex: Int, color: androidx.compose.ui.graphics.Color, bankIdx: Int) {
+    actual fun updateSequencerPadColorCompose(padIndex: Int, color: androidx.compose.ui.graphics.Color, bankIdx: Int) {
         updateSequencerPadColor(
             padIndex,
             (color.red * color.alpha * 255).toInt(),
@@ -101,7 +101,7 @@ actual class EmpledManager(private val midiManager: MidiManager) {
     /**
      * Enabling external feedback mode (Donner/Avatar specific heartbeat/handshake)
      */
-    fun sendHandshake() {
+    actual fun sendHandshake() {
         // 1. MIDI Identity Request (Often triggers a response or wakes up the device)
         midiManager.sendMidi(byteArrayOf(0xF0.toByte(), 0x7E, 0x7F, 0x06, 0x01, 0xF7.toByte()))
 
@@ -112,13 +112,12 @@ actual class EmpledManager(private val midiManager: MidiManager) {
         // 3. Mackie Control Universal (MCU) Enable
         midiManager.sendMidi(byteArrayOf(0xF0.toByte(), 0x00, 0x00, 0x66, 0x14, 0x0C, 0x01, 0xF7.toByte()))
 
-        // 4. Common "Handshake" CCs - BROADCAST TO ALL CHANNELS
-        // Some devices only unlock if they receive this on their specific control channel (e.g. 16)
-        for (ch in 0..15) {
-             midiManager.sendMidi(byteArrayOf((0xB0 + ch).toByte(), 127.toByte(), 127.toByte()))
-        }
+        /**
+         * REDUCED NOISE: Removed the 16-channel CC 127 broadcast which was causing
+         * significant start-up MIDI events and potential loopback saturation.
+         */
         
-        // 5. Donner/Avatar specific "Enable External LED" SysEx (Keep just in case)
+        // 4. Donner/Avatar specific "Enable External LED" SysEx
         val sysexEnable = byteArrayOf(
             0xF0.toByte(), 0x00, 0x20, 0x6B, 
             0x7F.toByte(), 0x42, 0x02, 0x00, 0x01, 

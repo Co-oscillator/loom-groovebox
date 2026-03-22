@@ -10,18 +10,27 @@
 .DS_Store
 /build
 /app/build
-/captures
+/composeApp/build
+/*/build/
 .externalNativeBuild
 .cxx
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
 local.properties
 /app/release/
 
-# Build logs & error dumps
-*.log
-build_*.txt
-build_*.log
-final_*.txt
-vs_build*.txt
+# Binaries
+*.dylib
+*.so
+*.dll
+*.a
+*.lib
+*.obj
+*.o
+*.class
+*.exe
 
 # APK binaries
 /APK/
@@ -55,3 +64,9 @@ version.properties
 1KB
 UserManual.pdf
 
+
+# Misc
+55: 1KB
+56: UserManual.pdf
+57:
+58: *.hprof

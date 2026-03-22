@@ -483,6 +483,9 @@ void AudioEngine::saveTrackPresetToPath(int trackIndex, std::string path) {
 }
 
 bool AudioEngine::start() {
+  if (mStream != nullptr) {
+    return true;
+  }
   oboe::AudioStreamBuilder builder;
   builder.setFormat(oboe::AudioFormat::Float)
       ->setChannelCount(oboe::ChannelCount::Stereo)
@@ -595,6 +598,9 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
     if (!isSequencerTrigger) {
       track.mPhysicallyHeldNoteCount++;
       if (track.arpeggiator.getMode() != ArpMode::OFF) {
+        if (track.mPhysicallyHeldNoteCount == 1) {
+          track.mArpCountdown = 0; // Immediate trigger for new gesture
+        }
         track.arpeggiator.addNote(note);
         return;
       }
@@ -627,7 +633,7 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
     }
 
     if (punch) {
-      track.mPunchCounter = 4000; // Reset punch counter on trigger
+      track.mPunchCounter = static_cast<int>(mSampleRate * 0.05f); // 50ms spike
     }
 
     // 1. Legato / Retrigger Check
@@ -1263,9 +1269,9 @@ void AudioEngine::processCommands() {
     case AudioCommand::SET_TRACK_VOLUME:
       if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
         mTracks[cmd.trackIndex].volume = cmd.value;
+        mTracks[cmd.trackIndex].mSilenceFrames = 0;
         if (cmd.value > 0.001f) {
           mTracks[cmd.trackIndex].isActive = true;
-          mTracks[cmd.trackIndex].mSilenceFrames = 0;
         }
       }
       break;
@@ -1274,8 +1280,10 @@ void AudioEngine::processCommands() {
         mTracks[cmd.trackIndex].pan = cmd.value;
       break;
     case AudioCommand::SET_TRACK_ACTIVE:
-      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size())
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
         mTracks[cmd.trackIndex].isActive = cmd.bValue;
+        if (cmd.bValue) mTracks[cmd.trackIndex].mSilenceFrames = 0;
+      }
       break;
     case AudioCommand::SET_TEMPO:
       mBpm = cmd.value;
@@ -1310,14 +1318,25 @@ void AudioEngine::processCommands() {
       }
       break;
     case AudioCommand::SET_PATTERN_LENGTH:
-      mPatternLength = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
-      // Propagate to all track sequencers
-      {
-        int pages = (mPatternLength + 15) / 16;
-        for (int i = 0; i < (int)mTracks.size(); ++i) {
-          mTracks[i].sequencer.setConfiguration(pages, 16);
-          for (int d = 0; d < 16; ++d)
-            mTracks[i].drumSequencers[d].setConfiguration(pages, 16);
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        int length = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
+        mTracks[cmd.trackIndex].patternLength = length;
+        int pages = (length + 15) / 16;
+        mTracks[cmd.trackIndex].sequencer.setConfiguration(pages, 16);
+        for (int d = 0; d < 16; ++d)
+          mTracks[cmd.trackIndex].drumSequencers[d].setConfiguration(pages, 16);
+      } else {
+        mPatternLength =
+            (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
+        // Propagate to all track sequencers
+        {
+          int pages = (mPatternLength + 15) / 16;
+          for (int i = 0; i < (int)mTracks.size(); ++i) {
+            mTracks[i].patternLength = mPatternLength;
+            mTracks[i].sequencer.setConfiguration(pages, 16);
+            for (int d = 0; d < 16; ++d)
+              mTracks[i].drumSequencers[d].setConfiguration(pages, 16);
+          }
         }
       }
       break;
@@ -1797,6 +1816,7 @@ void AudioEngine::releaseNoteLocked(int trackIndex, int note,
         if (track.mPhysicallyHeldNoteCount <= 0) {
           track.mPhysicallyHeldNoteCount = 0;
           track.arpeggiator.onAllPhysicallyReleased();
+          track.mArpCountdown = 0; // Reset for next gesture
         }
         if (track.arpeggiator.getMode() != ArpMode::OFF) {
           track.arpeggiator.removeNote(note);
@@ -2286,6 +2306,10 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
         if (track.arpeggiator.getMode() != ArpMode::OFF) {
           float arpSamplesPerStep =
               samplesPerStep * std::max(0.125f, track.mArpRate);
+          
+          arpSamplesPerStep /= track.arpeggiator.getRateMultiplier();
+          arpSamplesPerStep /= track.arpeggiator.getSpeedMultiplier();
+
           if (track.mArpDivisionMode == 1)
             arpSamplesPerStep *= 1.5f;
           else if (track.mArpDivisionMode == 2)
@@ -2371,7 +2395,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
     // Push to resampling recorder (Sampler/Granular)
     bool isStillRecording = mIsRecordingSample;
-    if (mRecordingSource == RESAMPLE && isStillRecording &&
+    if ((mRecordingSource == RESAMPLE || mRecordingSource == SYSTEM) && isStillRecording &&
         mRecordingTrackIndex != -1) {
       auto &recTrack = mTracks[mRecordingTrackIndex];
       std::vector<float> resampleBuffer;
@@ -2560,6 +2584,12 @@ void AudioEngine::setTempo(float bpm) {
 
 void AudioEngine::setPlaying(bool playing) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
+  
+  // SANITY CHECK: Never allow playing if BPM is invalid
+  if (playing && (!std::isfinite(mBpm) || mBpm < 1.0f)) {
+      mBpm = 120.0f;
+  }
+
   mIsPlaying = playing;
   if (!playing) {
     mSampleCount = 0;
@@ -2594,6 +2624,7 @@ void AudioEngine::setPlaying(bool playing) {
     mStartupFrames = 0;
 
     for (auto &track : mTracks) {
+      if (!std::isfinite(mBpm) || mBpm < 1.0f) mBpm = 120.0f;
       track.mInternalStepIndex = 0;
       track.mStepCountdown = 0.0;
       track.mPendingNotes.clear();
@@ -2666,9 +2697,10 @@ void AudioEngine::setTrackHumanize(int trackIndex, float amount) {
   mCommandQueue.push_back(cmd);
 }
 
-void AudioEngine::setPatternLength(int length) {
+void AudioEngine::setPatternLength(int trackIndex, int length) {
   AudioCommand cmd;
   cmd.type = AudioCommand::SET_PATTERN_LENGTH;
+  cmd.trackIndex = trackIndex;
   cmd.data1 = length;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
@@ -2871,11 +2903,15 @@ void AudioEngine::setArpConfig(int trackIndex, int mode, int octaves,
                                int inversion, bool isLatched, bool isMutated,
                                const std::vector<std::vector<bool>> &rhythms,
                                const std::vector<int> &sequence,
-                               const std::vector<float> &gateLengths) {
+                               const std::vector<float> &gateLengths,
+                               float probability, float weird) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     ArpMode newMode = static_cast<ArpMode>(mode);
     Track &track = mTracks[trackIndex];
+
+    track.arpeggiator.setProbability(probability);
+    track.arpeggiator.setWeird(weird);
 
     bool wasLatched = track.arpeggiator.isLatched();
     if (wasLatched && !isLatched && track.mPhysicallyHeldNoteCount == 0) {
@@ -3244,12 +3280,14 @@ void AudioEngine::clearSequencer(int trackIndex) {
 void AudioEngine::setMasterVolume(float volume) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   mMasterVolume = volume * 1.5f; // 50% boost at max
+  for (auto &track : mTracks) {
+    track.mSilenceFrames = 0;
+  }
 }
 
 void AudioEngine::panic() {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   for (auto &track : mTracks) {
-    track.mSilenceFrames = 0;
     // Release all notes in the engine
     track.subtractiveEngine.allNotesOff();
     track.fmEngine.allNotesOff();
@@ -3287,8 +3325,8 @@ uint64_t AudioEngine::getActiveNoteMask(int trackIndex) {
       // (only for synth engines)
       int displayNote = ignoresTranspose ? note : (note - track.transpose);
 
-      if (displayNote >= 60 && displayNote < 92) {
-        mask |= (1ULL << (displayNote - 60));
+      if (displayNote >= 48 && displayNote < 112) {
+        mask |= (1ULL << (displayNote - 48));
       }
     }
   }
@@ -3748,21 +3786,18 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       float preFaderR = rawSampleR;
 
       if (track.mPunchCounter > 0) {
-        float punchScale = 2.5f;
+        float punchScale = 1.3f; // Reduced from 2.5f for smoother transients
         preFaderL *= punchScale;
         preFaderR *= punchScale;
         preFaderL = fast_tanh(preFaderL);
         preFaderR = fast_tanh(preFaderR);
 
-        // Apply 1.25x makeup gain to ensure it's louder than standard
-        // saturated output
-        float makeupGain = 1.25f;
+        // Apply 1.1x makeup gain (Reduced from 1.25x)
+        float makeupGain = 1.1f;
         preFaderL *= makeupGain;
         preFaderR *= makeupGain;
 
         track.mPunchCounter--;
-        // rawSampleL/R updated here to reflect the saturation for the final
-        // mix
         rawSampleL = preFaderL;
         rawSampleR = preFaderR;
       }
@@ -4006,20 +4041,9 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     // (see routeFx calls above). Master insert was removed to prevent
     // double-processing and "track grabbing" issues.
 
-    // Final Limiter / Soft Clip
-    if (finalL > 1.0f)
-      finalL = fast_tanh(finalL);
-    else if (finalL < -1.0f)
-      finalL = fast_tanh(finalL);
-
-    if (finalR > 1.0f)
-      finalR = fast_tanh(finalR);
-    else if (finalR < -1.0f)
-      finalR = fast_tanh(finalR);
-
-    // Final Master Volume
-    outBuffer[i * 2] = finalL * mMasterVolume;
-    outBuffer[i * 2 + 1] = finalR * mMasterVolume;
+    // Final Master Volume & Limiter
+    outBuffer[i * 2] = softLimit(finalL * mMasterVolume);
+    outBuffer[i * 2 + 1] = softLimit(finalR * mMasterVolume);
   }
 }
 
@@ -4066,7 +4090,7 @@ void AudioEngine::renderToWav(int numCycles, const std::string &path) {
                 if (s.active && !s.notes.empty()) {
                   // Trigger first note (usually 60+d)
                   triggerNoteLocked(t, s.notes[0].note,
-                                    static_cast<int>(s.velocity * 127.0f), true,
+                                    static_cast<int>(s.notes[0].velocity * 127.0f), true,
                                     s.gate, s.punch);
                 }
               }
@@ -4076,7 +4100,7 @@ void AudioEngine::renderToWav(int numCycles, const std::string &path) {
               if (s.active) {
                 for (const auto &ni : s.notes) {
                   triggerNoteLocked(t, ni.note,
-                                    static_cast<int>(s.velocity * 127.0f), true,
+                                    static_cast<int>(ni.velocity * 127.0f), true,
                                     s.gate, s.punch);
                 }
               }

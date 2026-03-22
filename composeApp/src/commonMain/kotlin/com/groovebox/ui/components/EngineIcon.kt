@@ -3,127 +3,251 @@ package com.groovebox.ui.components
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import com.groovebox.EngineType
-import androidx.compose.material3.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.size
 
 @Composable
 fun EngineIcon(
-    engineType: EngineType,
-    modifier: Modifier = Modifier,
-    tint: Color = Color.White,
-    size: Dp = 24.dp
+    type: EngineType, 
+    modifier: Modifier = Modifier, 
+    color: Color = Color.White, 
+    drumType: String? = null,
+    isGenerating: Boolean = false
 ) {
-    Canvas(modifier = modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val cX = w / 2f
-        val cY = h / 2f
+    val finalColor = if (isGenerating) color else color.copy(alpha = 0.6f)
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val strokeWidth = if (isGenerating) 3.dp.toPx() else 2.dp.toPx()
         
-        when (engineType) {
-            EngineType.SUBTRACTIVE -> {
-                // Square
-                drawRect(
-                    color = tint,
-                    topLeft = androidx.compose.ui.geometry.Offset(w * 0.15f, h * 0.15f),
-                    size = androidx.compose.ui.geometry.Size(w * 0.7f, h * 0.7f)
-                )
-            }
-            EngineType.FM -> {
-                // Triangle
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(cX, h * 0.1f)
-                    lineTo(w * 0.9f, h * 0.9f)
-                    lineTo(w * 0.1f, h * 0.9f)
-                    close()
+        if (isGenerating) {
+            drawCircle(
+                color = color.copy(alpha = 0.2f),
+                radius = size.minDimension * 0.6f,
+                center = Offset(size.width / 2f, size.height / 2f)
+            )
+        }
+        
+        when {
+            type == EngineType.FM_DRUM && drumType != null -> {
+                when (drumType) {
+                    "KICK" -> {
+                        // Jagged Ring (Star-like or ZigZag circle)
+                        val center = Offset(size.width / 2f, size.height / 2f)
+                        val radiusOuter = size.minDimension * 0.45f
+                        val radiusInner = size.minDimension * 0.35f
+                        val points = 16
+                        
+                        val path = Path().apply {
+                            for (i in 0 until points * 2) {
+                                val angle = (Math.PI * 2 * i) / (points * 2)
+                                val r = if (i % 2 == 0) radiusOuter else radiusInner
+                                val x = center.x + r * Math.cos(angle).toFloat()
+                                val y = center.y + r * Math.sin(angle).toFloat()
+                                if (i == 0) moveTo(x, y) else lineTo(x, y)
+                            }
+                            close()
+                        }
+                        drawPath(path, finalColor, style = Stroke(width = strokeWidth))
+                        
+                        // Inner solid circle
+                        drawCircle(finalColor, radius = size.minDimension * 0.15f, center = center)
+                    }
+                    "SNARE" -> {
+                        drawRect(finalColor, size = Size(size.width, size.height * 0.4f), topLeft = Offset(0f, size.height * 0.3f), style = Stroke(width = strokeWidth))
+                        drawLine(finalColor, start = Offset(0f, size.height * 0.5f), end = Offset(size.width, size.height * 0.5f), strokeWidth = 1f)
+                    }
+                    "HIHAT", "HIHAT OPEN" -> {
+                        val path = Path().apply {
+                            moveTo(size.width * 0.1f, size.height * 0.7f)
+                            quadraticBezierTo(size.width * 0.5f, size.height * 0.3f, size.width * 0.9f, size.height * 0.7f)
+                            if (drumType == "HIHAT OPEN") {
+                                moveTo(size.width * 0.2f, size.height * 0.4f)
+                                lineTo(size.width * 0.8f, size.height * 0.4f)
+                            }
+                        }
+                        drawPath(path, finalColor, style = Stroke(width = strokeWidth))
+                    }
+                    "TOM" -> {
+                        drawArc(finalColor, startAngle = 180f, sweepAngle = 180f, useCenter = false, topLeft = Offset(0f, size.height * 0.2f), size = Size(size.width, size.height * 0.6f), style = Stroke(width = strokeWidth))
+                        drawLine(finalColor, start = Offset(0f, size.height * 0.5f), end = Offset(size.width, size.height * 0.5f), strokeWidth = strokeWidth)
+                    }
+                    "CYMBAL" -> {
+                        drawArc(finalColor, startAngle = 200f, sweepAngle = 140f, useCenter = false, style = Stroke(width = strokeWidth))
+                        drawLine(finalColor, start = Offset(size.width / 2f, size.height / 2f), end = Offset(size.width / 2f, size.height), strokeWidth = strokeWidth)
+                    }
+                    else -> {
+                        // Diamond for Perc/Noise
+                        val path = Path().apply {
+                            moveTo(size.width / 2f, 0f)
+                            lineTo(size.width, size.height / 2f)
+                            lineTo(size.width / 2f, size.height)
+                            lineTo(0f, size.height / 2f)
+                            close()
+                        }
+                        drawPath(path, finalColor, style = Stroke(width = strokeWidth))
+                    }
                 }
-                drawPath(path = path, color = tint)
             }
-            EngineType.SAMPLER -> {
-                // Waveform / Zig-zag
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(w * 0.1f, h * 0.5f)
-                    lineTo(w * 0.3f, h * 0.2f)
-                    lineTo(w * 0.7f, h * 0.8f)
-                    lineTo(w * 0.9f, h * 0.5f)
+            type == EngineType.SUBTRACTIVE -> {
+                // Sawtooth line
+                val path = Path().apply {
+                    moveTo(0f, size.height * 0.8f)
+                    lineTo(size.width * 0.8f, size.height * 0.2f)
+                    lineTo(size.width * 0.8f, size.height * 0.8f)
+                    moveTo(size.width * 0.8f, size.height * 0.8f)
+                    lineTo(size.width, size.height * 0.8f)
                 }
-                drawPath(
-                    path = path, 
-                    color = tint, 
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.1f)
-                )
+                drawPath(path, finalColor, style = Stroke(width = strokeWidth))
             }
-            EngineType.GRANULAR -> {
-                // 3 Small dots (particles)
-                drawCircle(color = tint, radius = w * 0.15f, center = androidx.compose.ui.geometry.Offset(cX, h * 0.3f))
-                drawCircle(color = tint, radius = w * 0.15f, center = androidx.compose.ui.geometry.Offset(w * 0.3f, h * 0.7f))
-                drawCircle(color = tint, radius = w * 0.15f, center = androidx.compose.ui.geometry.Offset(w * 0.7f, h * 0.7f))
+            type == EngineType.FM -> {
+                // Overlapping Sine waves (Reverted)
+                for (offset in listOf(0f, size.height * 0.2f)) {
+                    val path = Path()
+                    for (i in 0..60) {
+                        val x = (i / 60f) * size.width
+                        val y = (size.height / 2f + offset / 2f) + Math.sin(i * 0.3).toFloat() * (size.height * 0.2f)
+                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    drawPath(path, finalColor.copy(alpha = if (offset == 0f) (if (isGenerating) 1f else 0.8f) else (if (isGenerating) 0.6f else 0.4f)), style = Stroke(width = strokeWidth))
+                }
             }
-            EngineType.FM_DRUM -> {
-                // Hexagon
-                val r = w * 0.45f
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    for (i in 0 until 6) {
-                        val angle = (i * 60 + 30) * kotlin.math.PI / 180f
-                        val x = cX + r * kotlin.math.cos(angle).toFloat()
-                        val y = cY + r * kotlin.math.sin(angle).toFloat()
+            type == EngineType.FM_DRUM && drumType == null -> {
+                // Analog Drum style (Kick, Snare, Hihat) but with Jagged Ring for Kick
+                val centerKick = Offset(size.width * 0.3f, size.height * 0.7f)
+                val radiusOuter = size.minDimension * 0.22f
+                val radiusInner = size.minDimension * 0.16f
+                val points = 12
+
+                val path = Path().apply {
+                    for (i in 0 until points * 2) {
+                        val angle = (Math.PI * 2 * i) / (points * 2)
+                        val r = if (i % 2 == 0) radiusOuter else radiusInner
+                        val x = centerKick.x + r * Math.cos(angle).toFloat()
+                        val y = centerKick.y + r * Math.sin(angle).toFloat()
                         if (i == 0) moveTo(x, y) else lineTo(x, y)
                     }
                     close()
                 }
-                drawPath(path = path, color = tint)
+                drawPath(path, finalColor, style = Stroke(width = strokeWidth))
+
+                // Snare (Analog style)
+                drawRect(finalColor, size = Size(size.width * 0.3f, size.height * 0.15f), topLeft = Offset(size.width * 0.6f, size.height * 0.5f), style = Stroke(width = strokeWidth))
+                // HiHat (Analog style)
+                drawLine(finalColor, start = Offset(size.width * 0.2f, size.height * 0.3f), end = Offset(size.width * 0.5f, size.height * 0.3f), strokeWidth = strokeWidth)
+                drawLine(finalColor, start = Offset(size.width * 0.35f, size.height * 0.3f), end = Offset(size.width * 0.35f, size.height * 0.5f), strokeWidth = strokeWidth)
             }
-            EngineType.ANALOG_DRUM -> {
-                // Circle
-                drawCircle(
-                    color = tint,
-                    radius = w * 0.4f,
-                    center = androidx.compose.ui.geometry.Offset(cX, cY)
-                )
-            }
-            EngineType.AUDIO_IN -> {
-                // Open circle with a dot in middle (target/input)
-                drawCircle(
-                    color = tint,
-                    radius = w * 0.4f,
-                    center = androidx.compose.ui.geometry.Offset(cX, cY),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.1f)
-                )
-                drawCircle(
-                    color = tint,
-                    radius = w * 0.15f,
-                    center = androidx.compose.ui.geometry.Offset(cX, cY)
-                )
-            }
-            EngineType.SOUNDFONT -> {
-                // Diamond
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(cX, h * 0.1f)
-                    lineTo(w * 0.9f, cY)
-                    lineTo(cX, h * 0.9f)
-                    lineTo(w * 0.1f, cY)
-                    close()
+            type == EngineType.SAMPLER -> {
+                // Waveform snippet
+                val path = Path().apply {
+                    moveTo(0f, size.height / 2f)
+                    lineTo(size.width * 0.2f, size.height * 0.1f)
+                    lineTo(size.width * 0.4f, size.height * 0.9f)
+                    lineTo(size.width * 0.6f, size.height * 0.3f)
+                    lineTo(size.width * 0.8f, size.height * 0.7f)
+                    lineTo(size.width, size.height / 2f)
                 }
-                drawPath(path = path, color = tint)
+                drawPath(path, finalColor, style = Stroke(width = strokeWidth))
+            }
+            type == EngineType.GRANULAR -> {
+                // Cloud of points/lines
+                val random = java.util.Random(42)
+                repeat(if (isGenerating) 18 else 12) {
+                    val x = random.nextFloat() * size.width
+                    val y = random.nextFloat() * size.height
+                    drawCircle(finalColor, radius = if (isGenerating) 3f else 2f, center = Offset(x, y))
+                }
+            }
+            type == EngineType.WAVETABLE -> {
+                // Stacked isometric lines
+                repeat(3) { i ->
+                    val yOff = i * 8f
+                    val path = Path().apply {
+                        moveTo(0f, size.height * 0.7f - yOff)
+                        lineTo(size.width * 0.4f, size.height * 0.4f - yOff)
+                        lineTo(size.width, size.height * 0.6f - yOff)
+                    }
+                    drawPath(path, finalColor.copy(alpha = (if (isGenerating) 1f else 0.8f) - i * 0.3f), style = Stroke(width = strokeWidth))
+                }
+            }
+            type == EngineType.ANALOG_DRUM -> {
+                // Drum Kit Icon
+                // Kick
+                drawCircle(finalColor, radius = size.minDimension * 0.2f, center = Offset(size.width * 0.3f, size.height * 0.7f), style = Stroke(width = strokeWidth))
+                // Snare
+                drawRect(finalColor, size = Size(size.width * 0.3f, size.height * 0.15f), topLeft = Offset(size.width * 0.6f, size.height * 0.5f), style = Stroke(width = strokeWidth))
+                // HiHat
+                drawLine(finalColor, start = Offset(size.width * 0.2f, size.height * 0.3f), end = Offset(size.width * 0.5f, size.height * 0.3f), strokeWidth = strokeWidth)
+                drawLine(finalColor, start = Offset(size.width * 0.35f, size.height * 0.3f), end = Offset(size.width * 0.35f, size.height * 0.5f), strokeWidth = strokeWidth)
+            }
+            type == EngineType.MIDI -> {
+                // MIDI 5-Pin DIN Icon
+                val center = Offset(size.width / 2, size.height / 2)
+                val radius = size.minDimension * 0.45f
+                
+                // Outer Ring
+                drawCircle(finalColor, radius = radius, style = Stroke(width = strokeWidth))
+                
+                // Pins (5 dots in a semicircle)
+                val pinRadius = size.minDimension * 0.06f
+                // Simple version: 5 dots in an arc at the bottom
+                val arcRadius = radius * 0.65f
+                for (i in 0..4) {
+                    val angleDeg = 180f + (30f * (i - 2)) // 120, 150, 180, 210, 240
+                    val angleRad = Math.toRadians(angleDeg.toDouble())
+                    val x = center.x + arcRadius * Math.sin(angleRad).toFloat()
+                    val y = center.y + arcRadius * Math.cos(angleRad).toFloat()
+                    drawCircle(finalColor, radius = pinRadius, center = Offset(x, y))
+                }
+                // Key notch at top
+                 drawRect(finalColor, size = Size(size.width * 0.15f, size.height * 0.1f), topLeft = Offset(center.x - size.width * 0.075f, center.y - radius), style = Fill)
+            }
+            type == EngineType.AUDIO_IN -> {
+                // Waveform entering a circle/mic
+                drawCircle(finalColor, radius = size.minDimension * 0.4f, style = Stroke(width = strokeWidth))
+                val path = Path().apply {
+                    moveTo(size.width * 0.2f, size.height * 0.5f)
+                    lineTo(size.width * 0.4f, size.height * 0.3f)
+                    lineTo(size.width * 0.6f, size.height * 0.7f)
+                    lineTo(size.width * 0.8f, size.height * 0.5f)
+                }
+                drawPath(path, finalColor, style = Stroke(width = strokeWidth))
+            }
+            type == EngineType.SOUNDFONT -> {
+                // Beamed Note Icon with Offset Square
+                val headRadius = size.minDimension * 0.15f
+                val stemHeight = size.height * 0.5f
+                val note1Center = Offset(size.width * 0.3f, size.height * 0.75f)
+                val note2Center = Offset(size.width * 0.7f, size.height * 0.65f)
+                
+                // Background Square (Offset) - Drawn first
+                val squareSize = size.minDimension * 0.6f
+                drawRect(
+                    color = finalColor.copy(alpha = if (isGenerating) 0.5f else 0.3f),
+                    topLeft = Offset(size.width * 0.45f, size.height * 0.1f),
+                    size = Size(squareSize, squareSize),
+                    style = Stroke(width = strokeWidth)
+                )
+
+                // Heads
+                drawOval(finalColor, topLeft = Offset(note1Center.x - headRadius, note1Center.y - headRadius * 0.8f), size = Size(headRadius * 2, headRadius * 1.6f))
+                drawOval(finalColor, topLeft = Offset(note2Center.x - headRadius, note2Center.y - headRadius * 0.8f), size = Size(headRadius * 2, headRadius * 1.6f))
+                
+                // Stems
+                val stemWidth = strokeWidth
+                drawLine(finalColor, start = Offset(note1Center.x + headRadius * 0.8f, note1Center.y), end = Offset(note1Center.x + headRadius * 0.8f, note1Center.y - stemHeight), strokeWidth = stemWidth)
+                drawLine(finalColor, start = Offset(note2Center.x + headRadius * 0.8f, note2Center.y), end = Offset(note2Center.x + headRadius * 0.8f, note2Center.y - stemHeight), strokeWidth = stemWidth)
+                
+                // Beam
+                val beamStart = Offset(note1Center.x + headRadius * 0.8f, note1Center.y - stemHeight)
+                val beamEnd = Offset(note2Center.x + headRadius * 0.8f, note2Center.y - stemHeight)
+                drawLine(finalColor, start = beamStart, end = beamEnd, strokeWidth = stemWidth * 2.5f)
             }
             else -> {
-                // Cross / Plus
-                drawRect(
-                    color = tint,
-                    topLeft = androidx.compose.ui.geometry.Offset(w * 0.4f, h * 0.1f),
-                    size = androidx.compose.ui.geometry.Size(w * 0.2f, h * 0.8f)
-                )
-                drawRect(
-                    color = tint,
-                    topLeft = androidx.compose.ui.geometry.Offset(w * 0.1f, h * 0.4f),
-                    size = androidx.compose.ui.geometry.Size(w * 0.8f, h * 0.2f)
-                )
+                drawRect(finalColor, style = Stroke(width = strokeWidth))
             }
         }
     }

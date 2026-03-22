@@ -90,8 +90,11 @@ actual object PersistenceManager {
 
     actual fun listSequences(): List<String> {
         val seqDir = File(getLoomFolder(), "Sequences")
-        return seqDir.listFiles { _, name -> name.endsWith(".gbs") }?.map { it.name.removeSuffix(".gbs") } ?: emptyList()
+        return seqDir.listFiles { _, name -> 
+            name.endsWith(".gbs") || name.endsWith(".mid") || name.endsWith(".midi") 
+        }?.map { it.name.removeSuffix(".gbs") } ?: emptyList()
     }
+
 
     actual fun loadSequence(targetTrack: TrackState, name: String): TrackState? {
         try {
@@ -105,6 +108,18 @@ actual object PersistenceManager {
         } catch (e: Exception) { e.printStackTrace() }
         return null
     }
+
+    actual fun loadMidiSequence(targetTrack: TrackState, path: String): TrackState? {
+        try {
+            val file = File(path)
+            if (!file.exists()) return null
+            return FileInputStream(file).use { input ->
+                com.groovebox.midi.MidiParser.parseMidiToTrackState(input, targetTrack)
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+        return null
+    }
+
 
     actual fun copyWavetablesToFilesDir() { /* TODO: Copy from JAR resources */ }
     actual fun copySoundFontsToFilesDir() { /* TODO: Copy from JAR resources */ }

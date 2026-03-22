@@ -13,7 +13,7 @@ actual object AudioExporter {
     private const val TAG = "AudioExporter"
     private const val TIMEOUT_US = 10000L
 
-    fun encodeToAAC(pcmData: FloatArray, outputPath: String, sampleRate: Int = 44100, bitrate: Int = 256000) {
+    actual fun encodeToAAC(pcmData: FloatArray, outputPath: String, sampleRate: Int, bitrate: Int) {
         val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, 1)
         format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
         format.setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
@@ -78,7 +78,7 @@ actual object AudioExporter {
         muxer.release()
     }
 
-    fun encodeToFLAC(pcmData: FloatArray, outputPath: String, sampleRate: Int = 44100) {
+    actual fun encodeToFLAC(pcmData: FloatArray, outputPath: String, sampleRate: Int) {
         // Android MediaCodec FLAC encoder is available from API 25+
         val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_FLAC, sampleRate, 1)
         format.setInteger(MediaFormat.KEY_FLAC_COMPRESSION_LEVEL, 5) // Default 5

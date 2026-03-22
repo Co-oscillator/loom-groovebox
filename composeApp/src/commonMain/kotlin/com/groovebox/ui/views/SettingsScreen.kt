@@ -102,7 +102,9 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text("RESOURCES", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("v${state.appVersion}", style = MaterialTheme.typography.labelSmall, color = Color.Cyan.copy(alpha = 0.7f))
+                        Spacer(modifier = Modifier.height(8.dp))
                         
                         OutlinedButton(
                             onClick = {
@@ -216,6 +218,27 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                     }
                 }
 
+                if (LocalPlatformInfo.current.platform == "android") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Keyboard Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                            Text("Use physical keyboard for notes & octaves", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+                        Switch(
+                            checked = state.isKeyboardModeEnabled,
+                            onCheckedChange = { 
+                                val newState = state.copy(isKeyboardModeEnabled = it)
+                                if (!it && state.gridMode == com.groovebox.GridMode.MAC_KEYS) {
+                                    onStateChange(newState.copy(gridMode = com.groovebox.GridMode.GRID_4X4))
+                                } else {
+                                    onStateChange(newState)
+                                }
+                            }
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("MIDI Pad Gestures", style = MaterialTheme.typography.labelMedium, color = Color.White)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -239,8 +262,21 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column {
+                        Text("Invert MIDI Pad Y-axis", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                        Text("Flips the vertical modulation mapping", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    }
+                    Switch(
+                        checked = state.invertPadY,
+                        onCheckedChange = { onStateChange(state.copy(invertPadY = it)) }
+                    )
+                }
             }
         }
+
 
         // Project Management Cluster
         Text("Project", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
@@ -509,10 +545,13 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                     platformShowMessage("New Project Created (Init)")
                 },
                 modifier = Modifier.weight(0.8f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFEEEEEE),
+                    contentColor = Color.Black
+                ),
                 contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
-                Text("NEW", fontSize = 10.sp)
+                Text("NEW", fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Button(
                 onClick = { showSaveDialog = true },

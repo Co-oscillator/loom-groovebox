@@ -263,10 +263,10 @@ Java_com_groovebox_NativeLib_pushSystemAudioSamples(JNIEnv *env, jobject thiz,
   }
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setPatternLength(
-    JNIEnv *env, jobject thiz, jint length) {
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetPatternLength(
+    JNIEnv *env, jobject thiz, jint track_index, jint length) {
   if (engine)
-    engine->setPatternLength(length);
+    engine->setPatternLength(track_index, length);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -294,7 +294,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_groovebox_NativeLib_getCurrentStep(
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setArpConfig(
     JNIEnv *env, jobject thiz, jint track_index, jint mode, jint octaves,
     jint inversion, jboolean is_latched, jboolean is_mutated,
-    jobjectArray rhythms, jintArray sequence, jfloatArray gate_lengths) {
+    jobjectArray rhythms, jintArray sequence, jfloatArray gate_lengths, jfloat probability) {
   if (engine) {
     std::vector<std::vector<bool>> rhythmVecs;
     if (rhythms != nullptr) {
@@ -333,7 +333,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_setArpConfig(
     }
 
     engine->setArpConfig(track_index, mode, octaves, inversion, is_latched,
-                         is_mutated, rhythmVecs, seqVec, gateVec);
+                         is_mutated, rhythmVecs, seqVec, gateVec, probability);
   }
 }
 

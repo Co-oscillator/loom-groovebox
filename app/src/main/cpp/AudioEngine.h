@@ -428,7 +428,7 @@ public:
   int mPatternLength = 16;
   float mTempo = 120.0f;
   float mSwing = 0.0f;
-  long mStartupFrames = 10000; // Wait ~200ms at 48k
+  long mStartupFrames = 24000; // Wait ~500ms at 48k
   double mSampleRate = 44100.0;
   std::recursive_mutex mLock;
   void triggerNoteLocked(int trackIndex, int note, int velocity,

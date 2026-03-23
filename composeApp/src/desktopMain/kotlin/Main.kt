@@ -21,6 +21,7 @@ fun main() = application {
     val midiManager = com.groovebox.midi.MidiManager { data ->
         viewModel.processMidiMessage(data)
     }
+    viewModel.midiRouter.setMidiSender(midiManager::sendMidi)
     val audioCapture = com.groovebox.DesktopAudioCapture()
 
     val windowState = rememberWindowState(

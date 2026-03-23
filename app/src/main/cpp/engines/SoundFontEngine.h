@@ -105,6 +105,8 @@ public:
 
   int getPresetCount() { return mTsf ? tsf_get_presetcount(mTsf) : 0; }
 
+  bool hasActiveVoices() const { return mEnvelope.isActive(); }
+
   void noteOn(int note, int velocity) {
     if (mMutex && mTsf) {
       std::lock_guard<std::mutex> lock(*mMutex);

@@ -35,16 +35,14 @@ struct FastRandom {
 static inline float softLimit(float x) {
   if (std::isnan(x))
     return 0.0f;
-  // Soft-Knee Limiter (Linear until -3dB, then smooth curve to 0dB)
-  // -3dB = 0.707
+  
+  // Smoother Knee Limiter
+  // Starts saturating at 0.5f, with a smoother curve for high peaks
   float absX = std::abs(x);
-  if (absX < 0.707f)
-    return x;
-
-  // Soft compression above -3dB: x = sign(x) * (0.707 + (1.0 - 0.707) *
-  // fast_tanh((absX - 0.707) / (1.0 - 0.707)))
-  float extended = (absX - 0.707f) / 0.293f;
-  float limited = 0.707f + 0.293f * fast_tanh(extended);
+  if (absX < 0.5f) return x;
+  
+  // Curve: f(x) = 0.5 + 0.5 * tanh((x - 0.5) / 0.5)
+  float limited = 0.5f + 0.5f * fast_tanh((absX - 0.5f) * 2.0f);
   return (x > 0) ? limited : -limited;
 }
 
@@ -142,8 +140,8 @@ void AudioEngine::setPitchBend(int trackIndex, float semitones) {
 
 // Helper to reset a single track's parameters and engine state
 void AudioEngine::initTrack(int i) {
-  mTracks[i].volume = 0.7f;
-  mTracks[i].smoothedVolume = 0.7f;
+  mTracks[i].volume = 0.25f;
+  mTracks[i].smoothedVolume = 0.25f;
   mTracks[i].pan = 0.5f;
   mTracks[i].smoothedPan = 0.5f;
   mTracks[i].panL = 0.7071f;
@@ -3305,11 +3303,29 @@ void AudioEngine::panic() {
 }
 
 uint64_t AudioEngine::getActiveNoteMask(int trackIndex) {
-  if (trackIndex < 0 || trackIndex >= 8)
+  if (trackIndex < 0 || trackIndex >= (int)mTracks.size())
     return 0;
+  
   std::lock_guard<std::recursive_mutex> lock(mLock);
   uint64_t mask = 0;
   auto &track = mTracks[trackIndex];
+  
+  // High bits (62-63) reserved for "Any Voice Active" flag
+  bool anyVoiceActive = false;
+  
+  // Check engine voices for ANY activity (including release)
+  if (track.subtractiveEngine.isActive()) anyVoiceActive = true;
+  else if (track.fmEngine.isActive()) anyVoiceActive = true;
+  else if (track.wavetableEngine.isActive()) anyVoiceActive = true;
+  else if (track.samplerEngine.isActive()) anyVoiceActive = true;
+  else if (track.granularEngine.isActive()) anyVoiceActive = true;
+  else if (track.analogDrumEngine.isActive()) anyVoiceActive = true;
+  else if (track.fmDrumEngine.isActive()) anyVoiceActive = true;
+  else if (track.soundFontEngine.hasActiveVoices()) anyVoiceActive = true;
+
+  if (anyVoiceActive) {
+      mask |= (1ULL << 63); // Bit 63 for "Stuck/Sustaining Voice" identification
+  }
 
   // Engine types that ignore transpose (Drums, Slicers)
   bool ignoresTranspose = (track.engineType == 5 || track.engineType == 6);
@@ -3322,14 +3338,14 @@ uint64_t AudioEngine::getActiveNoteMask(int trackIndex) {
       int note = track.mActiveNotes[v].note;
       
       // Reverse the transpose to get the "physical" note for UI highlighting
-      // (only for synth engines)
       int displayNote = ignoresTranspose ? note : (note - track.transpose);
 
-      if (displayNote >= 48 && displayNote < 112) {
+      if (displayNote >= 48 && displayNote < 111) { // Up to bit 62
         mask |= (1ULL << (displayNote - 48));
       }
     }
   }
+  
   return mask;
 }
 
@@ -3453,7 +3469,8 @@ void AudioEngine::enqueueMidiEvent(int type, int channel, int data1,
 void AudioEngine::restorePresets() {
   std::lock_guard<std::recursive_mutex> lock(mLock);
   for (auto &track : mTracks) {
-    track.volume = 0.8f;
+    track.volume = 0.25f;
+    track.smoothedVolume = 0.25f;
     track.subtractiveEngine.resetToDefaults();
     track.fmEngine.resetToDefaults();
     track.fmDrumEngine.resetToDefaults();

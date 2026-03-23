@@ -37,7 +37,7 @@ data class ArpConfig(
 
 data class TrackState(
     val id: Int,
-    val volume: Float = 0.7f,
+    val volume: Float = 0.25f,
     val pan: Float = 0.5f,
     val humanize: Float = 0.0f,
     val engineType: EngineType = EngineType.SUBTRACTIVE,

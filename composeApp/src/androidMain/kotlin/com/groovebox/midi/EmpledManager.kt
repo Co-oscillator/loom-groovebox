@@ -16,8 +16,8 @@ actual class EmpledManager(private val midiManager: MidiManager) {
         val note = 48 + padIndex
         val colorValue = getBestColorIndex(r, g, b)
         
-        // Broadcast to both Channel 1 and Channel 10 for maximum compatibility
-        val channels = listOf(0x90, 0x99, 0xB0, 0xB9)
+        // Broadcast to Channel 1 (Note On and CC for maximum compatibility)
+        val channels = listOf(0x90, 0xB0)
         channels.forEach { status ->
             midiManager.sendMidi(byteArrayOf(status.toByte(), note.toByte(), colorValue.toByte()))
         }
@@ -33,8 +33,8 @@ actual class EmpledManager(private val midiManager: MidiManager) {
         
         val colorValue = getBestColorIndex(r, g, b)
         
-        // 1. Send to the SPECIFIC CC/Note address (24-55) on Ch 1 and 10
-        val targetAddresses = listOf(0x90 to ccNum, 0x99 to ccNum, 0xB0 to ccNum, 0xB9 to ccNum)
+        // 1. Send to the SPECIFIC CC/Note address (24-55) on Ch 1
+        val targetAddresses = listOf(0x90 to ccNum, 0xB0 to ccNum)
         targetAddresses.forEach { (status, data1) ->
             midiManager.sendMidi(byteArrayOf(status.toByte(), data1.toByte(), colorValue.toByte()))
         }

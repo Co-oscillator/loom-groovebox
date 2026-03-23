@@ -530,7 +530,9 @@ fun PadGrid(
                             }
                             val isBlack = if (track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM || isChopMode) false else isBlackKey(note)
                             val padColor = if (isBlack) androidx.compose.ui.graphics.lerp(Color.DarkGray, engineColor, 0.4f) else engineColor
-                            val isNoteActive = (note >= 48 && note < 112) && ((activeNoteMask and (1L shl (note - 48))) != 0L)
+                            // Use 0x3FFFFFFFFFFFFFFFL to mask out bits 62-63 (Status flags)
+                            val cleanMask = activeNoteMask and 0x3FFFFFFFFFFFFFFFL
+                            val isNoteActive = (note >= 48 && note < 112) && ((cleanMask and (1L shl (note - 48))) != 0L)
                             
                             Box(modifier = Modifier.size(padSize)) {
                                 if (note != -1) {

@@ -4,11 +4,17 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.*
 import com.groovebox.ui.views.isBlackKey
 import com.groovebox.utils.*
+import com.groovebox.midi.MidiRouter
+import com.groovebox.midi.MidiCommand
 
 class GrooveboxViewModel(
     private val nativeLib: NativeLib,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + Job())
 ) {
+    val midiRouter = MidiRouter(nativeLib) { command ->
+        handleMidiCommand(command)
+    }
+
     var state by mutableStateOf(createInitialState())
         private set
 
@@ -61,9 +67,9 @@ class GrooveboxViewModel(
             val engineType = when(i) {
                 0 -> EngineType.SUBTRACTIVE
                 1 -> EngineType.FM
-                2 -> EngineType.WAVETABLE
-                3 -> EngineType.SAMPLER
-                4 -> EngineType.GRANULAR
+                2 -> EngineType.SAMPLER
+                3 -> EngineType.GRANULAR
+                4 -> EngineType.WAVETABLE
                 5 -> EngineType.FM_DRUM
                 6 -> EngineType.ANALOG_DRUM
                 7 -> EngineType.MIDI
@@ -328,25 +334,78 @@ class GrooveboxViewModel(
     }
 
     fun processMidiMessage(data: ByteArray) {
-        if (data.size < 3) return
-        val status = data[0].toInt() and 0xFF
-        val type = status and 0xF0
-        val note = data[1].toInt() and 0x7F
-        val velocity = data[2].toInt() and 0x7F
+        midiRouter.processMidiMessage(data, state)
+    }
 
-        when (type) {
-            0x90 -> { // Note On
-                if (velocity > 0) {
-                    nativeLib.triggerNote(state.selectedTrackIndex, note, velocity)
-                    state = state.copy(heldNotes = state.heldNotes + note)
-                } else {
-                    nativeLib.releaseNote(state.selectedTrackIndex, note)
-                    state = state.copy(heldNotes = state.heldNotes - note)
+    private fun handleMidiCommand(command: MidiCommand) {
+        when (command) {
+            is MidiCommand.BankChange -> {
+                state = state.copy(currentSequencerBank = command.bank)
+            }
+            is MidiCommand.TrackVolume -> {
+                val newTracks = state.tracks.toMutableList()
+                if (command.trackIdx in newTracks.indices) {
+                    newTracks[command.trackIdx] = newTracks[command.trackIdx].copy(volume = command.volume)
+                    state = state.copy(tracks = newTracks)
                 }
             }
-            0x80 -> { // Note Off
-                nativeLib.releaseNote(state.selectedTrackIndex, note)
-                state = state.copy(heldNotes = state.heldNotes - note)
+            is MidiCommand.ParameterChange -> {
+                if (command.parameterId in -103..-100) {
+                    val stripIdx = -(command.parameterId + 100)
+                    val newValues = state.stripValues.toMutableList()
+                    if (stripIdx in newValues.indices) {
+                        newValues[stripIdx] = command.value
+                        state = state.copy(stripValues = newValues)
+                    }
+                } else if (command.parameterId in -203..-200) {
+                    val knobIdx = -(command.parameterId + 200)
+                    val newValues = state.knobValues.toMutableList()
+                    if (knobIdx in newValues.indices) {
+                        newValues[knobIdx] = command.value
+                        state = state.copy(knobValues = newValues)
+                    }
+                }
+            }
+            is MidiCommand.Transport -> {
+                when (command.action) {
+                    "PLAY" -> { state = state.copy(isPlaying = true); nativeLib.setPlaying(true) }
+                    "STOP" -> { state = state.copy(isPlaying = false, isRecording = false); nativeLib.setPlaying(false); nativeLib.setIsRecording(false) }
+                    "RECORD" -> { val newRec = !state.isRecording; state = state.copy(isRecording = newRec, isPlaying = if (newRec) true else state.isPlaying); nativeLib.setIsRecording(newRec); if (newRec) nativeLib.setPlaying(true) }
+                }
+            }
+            is MidiCommand.NextTrack -> { state = state.copy(selectedTrackIndex = (state.selectedTrackIndex + 1) % state.tracks.size) }
+            is MidiCommand.ToggleMidiLearn -> { val nl = !state.midiLearnActive; state = state.copy(midiLearnActive = nl, midiLearnStep = if (nl) 1 else 0, midiLearnSelectedStrip = null) }
+            is MidiCommand.MidiLearnSelect -> { if (state.midiLearnActive && state.midiLearnStep == 1) state = state.copy(midiLearnSelectedStrip = command.stripIdx, midiLearnStep = 2) }
+            is MidiCommand.MacroValue -> { val mi = command.macroIdx; if (mi in state.macros.indices) { val nm = state.macros.toMutableList(); nm[mi] = nm[mi].copy(value = command.value); state = state.copy(macros = nm) } }
+            is MidiCommand.NoteTriggered -> { state = state.copy(lastMidiNote = command.note, lastMidiVelocity = command.velocity) }
+            is MidiCommand.StepToggle -> { 
+                // We need the toggleStep logic here or accessible. 
+                // For now I will manually implement it or leave it as it matches MainActivity.
+                // Re-implementing toggleStep logic in VM is better anyway for shared logic.
+                val trackIdx = state.selectedTrackIndex
+                val track = state.tracks[trackIdx]
+                val stepIdx = command.stepIdx
+                val isDrum = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM
+                if (isDrum) {
+                    val instIdx = track.selectedFmDrumInstrument
+                    val currentDrumSteps = track.drumSteps[instIdx]
+                    val step = currentDrumSteps[stepIdx]
+                    val newActive = !step.active
+                    val newDrumSteps = track.drumSteps.mapIndexed { idx, ds ->
+                        if (idx == instIdx) ds.mapIndexed { si, s -> if (si == stepIdx) s.copy(active = newActive) else s }
+                        else ds
+                    }
+                    val finalNotes = if (newActive && step.notes.isEmpty()) listOf(60) else step.notes
+                    state = state.copy(tracks = state.tracks.mapIndexed { idx, t -> if (idx == trackIdx) t.copy(drumSteps = newDrumSteps) else t })
+                    nativeLib.setStep(trackIdx, stepIdx, newActive, finalNotes.toIntArray(), step.velocity, step.ratchet, step.punch, step.probability, step.gate, step.isSkipped)
+                } else {
+                    val step = track.steps[stepIdx]
+                    val newActive = !step.active
+                    val finalNotes = if (newActive && step.notes.isEmpty()) listOf(60) else step.notes
+                    val newSteps = track.steps.mapIndexed { si, s -> if (si == stepIdx) s.copy(active = newActive, notes = finalNotes) else s }
+                    state = state.copy(tracks = state.tracks.mapIndexed { idx, t -> if (idx == trackIdx) t.copy(steps = newSteps) else t })
+                    nativeLib.setStep(trackIdx, stepIdx, newActive, finalNotes.toIntArray(), step.velocity, step.ratchet, step.punch, step.probability, step.gate, step.isSkipped)
+                }
             }
         }
     }

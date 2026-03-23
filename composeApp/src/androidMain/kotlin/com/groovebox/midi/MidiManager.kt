@@ -96,6 +96,7 @@ actual class MidiManager(context: Context, private val onMessageReceived: (ByteA
 
                                 val hex = message.joinToString(" ") { String.format("%02X", it) }
                                 Log.e("MidiManager", "@@@ RAW MIDI IN (Port $i): $hex")
+                                logToUi("IN: $hex")
                                 onMessageReceived(message)
                             }
                         })

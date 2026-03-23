@@ -129,8 +129,19 @@ public:
         idx = i;
         break;
       }
-    if (idx == -1)
-      idx = 0;
+
+    if (idx == -1) {
+      // Find quietest voice (lowest current envelope value)
+      float minVol = 2.0f;
+      for (int i = 0; i < 16; ++i) {
+        float vVol = mVoices[i].envelope.isActive() ? mVoices[i].envelope.getValue() : 0.0f;
+        if (vVol < minVol) {
+          minVol = vVol;
+          idx = i;
+        }
+      }
+      if (idx == -1) idx = 0; // Fallback
+    }
 
     Voice &v = mVoices[idx];
     v.reset();
@@ -323,7 +334,7 @@ public:
     }
 
     if (activeCount > 1)
-      mixedOutput *= 0.7f;
+      mixedOutput *= (1.0f / sqrtf((float)activeCount));
 
     // Fix: Increment control counter for LFOs
     mControlCounter++; // Added this line

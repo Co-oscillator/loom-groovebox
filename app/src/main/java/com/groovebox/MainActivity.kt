@@ -313,54 +313,11 @@ class MainActivity : ComponentActivity() {
                 splashScreenStatus = "Connecting MIDI..."
                 // Init MIDI on Main thread (required by Android MIDI API for callbacks)
                 // but only AFTER the audio engine is ready so it doesn't race with IO init.
-                midiRouter = MidiRouter(nativeLib) { command ->
-                    when (command) {
-                        is MidiCommand.BankChange -> {
-                            grooveboxState = grooveboxState.copy(currentSequencerBank = command.bank)
-                        }
-                        is MidiCommand.TrackVolume -> {
-                            val newTracks = grooveboxState.tracks.toMutableList()
-                            if (command.trackIdx in newTracks.indices) {
-                                newTracks[command.trackIdx] = newTracks[command.trackIdx].copy(volume = command.volume)
-                                grooveboxState = grooveboxState.copy(tracks = newTracks)
-                            }
-                        }
-                        is MidiCommand.ParameterChange -> {
-                            if (command.parameterId in -103..-100) {
-                                val stripIdx = -(command.parameterId + 100)
-                                val newValues = grooveboxState.stripValues.toMutableList()
-                                if (stripIdx in newValues.indices) {
-                                    newValues[stripIdx] = command.value
-                                    grooveboxState = grooveboxState.copy(stripValues = newValues)
-                                }
-                            } else if (command.parameterId in -203..-200) {
-                                val knobIdx = -(command.parameterId + 200)
-                                val newValues = grooveboxState.knobValues.toMutableList()
-                                if (knobIdx in newValues.indices) {
-                                    newValues[knobIdx] = command.value
-                                    grooveboxState = grooveboxState.copy(knobValues = newValues)
-                                }
-                            }
-                        }
-                        is MidiCommand.Transport -> {
-                            when (command.action) {
-                                "PLAY" -> { grooveboxState = grooveboxState.copy(isPlaying = true); nativeLib.setPlaying(true) }
-                                "STOP" -> { grooveboxState = grooveboxState.copy(isPlaying = false, isRecording = false); nativeLib.setPlaying(false); nativeLib.setIsRecording(false) }
-                                "RECORD" -> { val newRec = !grooveboxState.isRecording; grooveboxState = grooveboxState.copy(isRecording = newRec, isPlaying = if (newRec) true else grooveboxState.isPlaying); nativeLib.setIsRecording(newRec); if (newRec) nativeLib.setPlaying(true) }
-                            }
-                        }
-                        is MidiCommand.NextTrack -> { grooveboxState = grooveboxState.copy(selectedTrackIndex = (grooveboxState.selectedTrackIndex + 1) % grooveboxState.tracks.size) }
-                        is MidiCommand.ToggleMidiLearn -> { val nl = !grooveboxState.midiLearnActive; grooveboxState = grooveboxState.copy(midiLearnActive = nl, midiLearnStep = if (nl) 1 else 0, midiLearnSelectedStrip = null) }
-                        is MidiCommand.MidiLearnSelect -> { if (grooveboxState.midiLearnActive && grooveboxState.midiLearnStep == 1) grooveboxState = grooveboxState.copy(midiLearnSelectedStrip = command.stripIdx, midiLearnStep = 2) }
-                        is MidiCommand.MacroValue -> { val mi = command.macroIdx; if (mi in grooveboxState.macros.indices) { val nm = grooveboxState.macros.toMutableList(); nm[mi] = nm[mi].copy(value = command.value); grooveboxState = grooveboxState.copy(macros = nm) } }
-                        is MidiCommand.NoteTriggered -> { grooveboxState = grooveboxState.copy(lastMidiNote = command.note, lastMidiVelocity = command.velocity) }
-                        is MidiCommand.StepToggle -> { toggleStep(grooveboxState, { grooveboxState = it }, nativeLib, grooveboxState.selectedTrackIndex, command.stepIdx) }
-                    }
-                }
+                midiRouter = viewModel.midiRouter
                 midiManager = MidiManager(this@MainActivity) { message ->
-                    midiRouter.processMidiMessage(message, grooveboxState)
+                    viewModel.processMidiMessage(message)
                 }
-                midiRouter.setMidiSender(midiManager::sendMidi)
+                viewModel.midiRouter.setMidiSender(midiManager::sendMidi)
                 empledManager = EmpledManager(midiManager)
                 empledManager.sendHandshake()
             }
@@ -879,7 +836,7 @@ fun MainScreen(
                         }
                     ))
                 }
-                kotlinx.coroutines.delay(20)
+                kotlinx.coroutines.delay(50)
             }
         }
     }

@@ -278,6 +278,71 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
         }
 
 
+        // MIDI Input Channels
+        Text("MIDI Input Config", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("Assign specific channels for background playback", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                state.tracks.forEachIndexed { i, track ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("T${i+1}: ${track.engineType.name.replace("_", " ")}", modifier = Modifier.weight(1.5f), color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        
+                        var expanded by remember { mutableStateOf(false) }
+                        Box(modifier = Modifier.weight(1f)) {
+                            Surface(
+                                onClick = { expanded = true },
+                                color = Color.DarkGray,
+                                shape = RoundedCornerShape(4.dp),
+                                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    text = if (track.midiInChannel == 17) "OMNI (All)" else "CH ${track.midiInChannel}",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).fillMaxWidth(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (track.midiInChannel == 17) Color.Cyan else Color.Yellow
+                                )
+                            }
+                            
+                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("OMNI (All)") },
+                                    onClick = {
+                                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                            if (idx == i) t.copy(midiInChannel = 17) else t 
+                                        }))
+                                        expanded = false
+                                    }
+                                )
+                                (1..16).forEach { ch ->
+                                    DropdownMenuItem(
+                                        text = { Text("Channel $ch") },
+                                        onClick = {
+                                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                if (idx == i) t.copy(midiInChannel = ch) else t 
+                                            }))
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (i < 7) Divider(color = Color.Gray.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 2.dp))
+                }
+            }
+        }
+
         // Project Management Cluster
         Text("Project", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
         val scope = rememberCoroutineScope()

@@ -129,8 +129,19 @@ public:
         idx = i;
         break;
       }
-    if (idx == -1)
-      idx = 0;
+
+    if (idx == -1) {
+      // Find quietest voice (lowest current envelope value)
+      float minVol = 2.0f;
+      for (int i = 0; i < 16; ++i) {
+        float vVol = mVoices[i].ampEnv.isActive() ? mVoices[i].ampEnv.getValue() : 0.0f;
+        if (vVol < minVol) {
+          minVol = vVol;
+          idx = i;
+        }
+      }
+      if (idx == -1) idx = 0; // Fallback
+    }
 
     Voice &v = mVoices[idx];
     v.active = true;
@@ -350,7 +361,7 @@ public:
       mixedOutput += v.svf.process(output, type);
     }
     mControlCounter++;
-    return fast_tanh(mixedOutput * (activeCount > 1 ? 0.7f : 1.0f));
+    return fast_tanh(mixedOutput * (activeCount > 1 ? (1.0f / sqrtf((float)activeCount)) : 1.0f));
   }
 
   bool isActive() const {

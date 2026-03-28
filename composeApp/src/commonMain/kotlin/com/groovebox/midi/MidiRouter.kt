@@ -145,7 +145,8 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
                                 scaleNotes.getOrElse(padIdx) { data1 }
                             }
                         } else {
-                            val octaveOffset = state.rootNote - 48
+                            val octaveBase = (state.rootNote / 12) * 12
+                            val octaveOffset = octaveBase - 48
                             triggeredNote = (data1 + octaveOffset).coerceIn(0, 127)
                         }
                     }

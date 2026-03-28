@@ -46,11 +46,17 @@ class GrooveboxViewModel(
         if (state.selectedTrackIndex != index) {
             val track = state.tracks[index]
             val isDrum = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM
-            state = if (isDrum) {
-                state.copy(selectedTrackIndex = index, gridMode = GridMode.GRID_4X4)
-            } else {
-                state.copy(selectedTrackIndex = index)
-            }
+            
+            // Re-sync active routings with the new track's engine type
+            val stripAssignments = state.engineTypeStripAssignments[track.engineType] ?: emptyList()
+            val knobAssignments = state.engineTypeKnobAssignments[track.engineType] ?: emptyList()
+
+            state = state.copy(
+                selectedTrackIndex = index,
+                stripRoutings = stripAssignments,
+                knobRoutings = knobAssignments,
+                gridMode = if (isDrum) GridMode.GRID_4X4 else state.gridMode
+            )
         }
     }
 
@@ -108,11 +114,14 @@ class GrooveboxViewModel(
         val stripAssignments = EngineType.values().associateWith { getDefaultStripAssignments(it) }
         val knobAssignments = EngineType.values().associateWith { getDefaultKnobAssignments(it) }
 
+        val firstTrackEngine = tracks[0].engineType
         return GrooveboxState(
             tracks = tracks, 
             tempo = 80.0f,
             engineTypeStripAssignments = stripAssignments,
-            engineTypeKnobAssignments = knobAssignments
+            engineTypeKnobAssignments = knobAssignments,
+            stripRoutings = stripAssignments[firstTrackEngine] ?: emptyList(),
+            knobRoutings = knobAssignments[firstTrackEngine] ?: emptyList()
         )
     }
 

@@ -175,12 +175,15 @@ void AudioEngine::initTrack(int i) {
         // state but we skip the hardcoded param defaults
         // Reset Engines to match params
         mTracks[i].subtractiveEngine.resetToDefaults();
+        mTracks[i].subtractiveEngine.allNotesOff();
         mTracks[i].fmEngine.resetToDefaults();
         mTracks[i].fmDrumEngine.resetToDefaults();
         mTracks[i].analogDrumEngine.resetToDefaults();
         mTracks[i].wavetableEngine.resetToDefaults();
         mTracks[i].audioInEngine.resetToDefaults();
         mTracks[i].soundFontEngine.allNotesOff();
+        mTracks[i].samplerEngine.allNotesOff();
+        mTracks[i].granularEngine.allNotesOff();
 
         // Apply loaded parameters to engines
         for (int p = 0; p < idx; ++p) {

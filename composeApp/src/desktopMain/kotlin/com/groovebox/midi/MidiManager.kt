@@ -13,6 +13,8 @@ actual class MidiManager(private val onMessageReceived: (ByteArray) -> Unit) {
     private val receivers = mutableListOf<Receiver>()
     private val transmitters = mutableListOf<Transmitter>()
     private val openDevices = mutableListOf<MidiDevice>()
+    private val openDeviceInfos = mutableSetOf<String>()
+    private var isClosed = false
 
     private fun logToUi(msg: String) {
         val lines = _midiLog.value.split("\n").takeLast(14).toMutableList()
@@ -21,26 +23,46 @@ actual class MidiManager(private val onMessageReceived: (ByteArray) -> Unit) {
     }
 
     init {
+        // Initial scan
+        scanDevices()
+        
+        // Background scan thread for hot-plugging
+        Thread {
+            while (!isClosed) {
+                try {
+                    Thread.sleep(5000)
+                    if (!isClosed) scanDevices()
+                } catch (e: Exception) {}
+            }
+        }.apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    fun scanDevices() {
         try {
             val infos = MidiSystem.getMidiDeviceInfo()
-            logToUi("Found ${infos.size} MIDI devices")
             
             infos.forEach { info ->
+                val deviceId = "${info.name}-${info.vendor}-${info.version}"
+                if (openDeviceInfos.contains(deviceId)) return@forEach
+                
                 try {
                     val device = MidiSystem.getMidiDevice(info)
                     // We want devices that can PROVIDE MIDI (transmitters)
                     if (device.maxTransmitters != 0) {
                         device.open()
                         openDevices.add(device)
+                        openDeviceInfos.add(deviceId)
                         
                         val transmitter = device.transmitter
                         transmitters.add(transmitter)
                         
                         val receiver = object : Receiver {
-                            override fun send(message: MidiMessage?, timeStamp: Long) {
-                                if (message is ShortMessage) {
-                                    val data = message.message
-                                    // val hex = data.joinToString(" ") { String.format("%02X", it) }
+                            override fun send(message: MidiMessage, timeStamp: Long) {
+                                val data = message.message
+                                if (data != null && data.isNotEmpty()) {
                                     onMessageReceived(data)
                                 }
                             }
@@ -51,13 +73,16 @@ actual class MidiManager(private val onMessageReceived: (ByteArray) -> Unit) {
                         
                         _deviceName.value = info.name
                         logToUi("Connected: ${info.name}")
+                    } else {
+                        // Log found devices even if they aren't transmitters
+                        // logToUi("Found: ${info.name} (No Input)")
                     }
                 } catch (e: Exception) {
                     // Skip devices we can't open
                 }
             }
         } catch (e: Exception) {
-            logToUi("Error: ${e.message}")
+            logToUi("Scan Error: ${e.message}")
         }
     }
 
@@ -66,11 +91,13 @@ actual class MidiManager(private val onMessageReceived: (ByteArray) -> Unit) {
     }
 
     actual fun close() {
+        isClosed = true
         transmitters.forEach { it.close() }
         receivers.forEach { it.close() }
         openDevices.forEach { it.close() }
         transmitters.clear()
         receivers.clear()
         openDevices.clear()
+        openDeviceInfos.clear()
     }
 }

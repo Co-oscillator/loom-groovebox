@@ -1,6 +1,13 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import java.util.Properties
 
+val versionPropsFile = project.file("../version.properties")
+val versionProps = Properties()
+if (versionPropsFile.exists()) {
+    versionProps.load(versionPropsFile.inputStream())
+}
+val appVersion = versionProps["VERSION_NAME"]?.toString() ?: "1.0.0"
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
@@ -51,10 +58,6 @@ android {
     sourceSets["main"].resources.srcDirs("src/commonMain/resources")
 
     defaultConfig {
-        val versionPropsFile = file("../version.properties")
-        val versionProps = Properties()
-        versionProps.load(versionPropsFile.inputStream())
-
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
     }
@@ -84,7 +87,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "LoomGroovebox"
-            packageVersion = "2.8.5"
+            packageVersion = appVersion
 
             macOS {
                 bundleID = "com.groovebox.loom"

@@ -374,6 +374,15 @@ class GrooveboxViewModel(
                 }
             }
             is MidiCommand.NextTrack -> { state = state.copy(selectedTrackIndex = (state.selectedTrackIndex + 1) % state.tracks.size) }
+            is MidiCommand.PreviousTrack -> { 
+                val newIdx = if (state.selectedTrackIndex == 0) state.tracks.size - 1 else state.selectedTrackIndex - 1
+                state = state.copy(selectedTrackIndex = newIdx) 
+            }
+            is MidiCommand.SelectTrack -> {
+                if (command.trackIdx in state.tracks.indices) {
+                    setSelectedTrack(command.trackIdx)
+                }
+            }
             is MidiCommand.ToggleMidiLearn -> { val nl = !state.midiLearnActive; state = state.copy(midiLearnActive = nl, midiLearnStep = if (nl) 1 else 0, midiLearnSelectedStrip = null) }
             is MidiCommand.MidiLearnSelect -> { if (state.midiLearnActive && state.midiLearnStep == 1) state = state.copy(midiLearnSelectedStrip = command.stripIdx, midiLearnStep = 2) }
             is MidiCommand.MacroValue -> { val mi = command.macroIdx; if (mi in state.macros.indices) { val nm = state.macros.toMutableList(); nm[mi] = nm[mi].copy(value = command.value); state = state.copy(macros = nm) } }

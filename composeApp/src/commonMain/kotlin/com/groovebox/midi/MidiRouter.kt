@@ -8,6 +8,8 @@ sealed class MidiCommand {
     data class ParameterChange(val trackIdx: Int, val parameterId: Int, val value: Float) : MidiCommand()
     data class Transport(val action: String) : MidiCommand() // "PLAY", "STOP", "RECORD"
     object NextTrack : MidiCommand()
+    object PreviousTrack : MidiCommand()
+    data class SelectTrack(val trackIdx: Int) : MidiCommand()
     object ToggleMidiLearn : MidiCommand()
     data class MidiLearnSelect(val stripIdx: Int) : MidiCommand()
     data class MacroValue(val macroIdx: Int, val value: Float) : MidiCommand()
@@ -35,6 +37,39 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
 
     fun processMidiMessage(message: ByteArray, state: com.groovebox.GrooveboxState) {
         if (message.isEmpty()) return
+        
+        var i = 0
+        while (i < message.size) {
+            val status = message[i].toInt() and 0xFF
+            val msgType = status and 0xF0
+            val midiChan = (status and 0x0F) + 1
+            
+            // Determine message length
+            val msgLen = when (status and 0xF0) {
+                0x80, 0x90, 0xA0, 0xB0, 0xE0 -> 3
+                0xC0, 0xD0 -> 2
+                0xF0 -> {
+                    // SysEx: Find F7 or end of buffer
+                    var sysExLen = 1
+                    while (i + sysExLen < message.size && (message[i + sysExLen].toInt() and 0xFF) != 0xF7) {
+                        sysExLen++
+                    }
+                    if (i + sysExLen < message.size) sysExLen++ // Include F7
+                    sysExLen
+                }
+                else -> 1 // System Real-Time or Unknown
+            }
+            
+            val remaining = message.size - i
+            val actualLen = if (msgLen <= remaining) msgLen else remaining
+            val currentMsg = message.copyOfRange(i, i + actualLen)
+            
+            processSingleMessage(currentMsg, state)
+            i += actualLen
+        }
+    }
+
+    private fun processSingleMessage(message: ByteArray, state: com.groovebox.GrooveboxState) {
         val status = message[0].toInt() and 0xFF
         val msgType = status and 0xF0
         val midiChan = (status and 0x0F) + 1
@@ -52,41 +87,39 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
 
         // Note On/Off: Check all tracks for channel matches
         if (msgType == 0x90 || msgType == 0x80) {
-            state.tracks.forEachIndexed { i, track ->
+            state.tracks.forEachIndexed { trackIdx, track ->
                 // --- MIDI TRIGGER LOGIC ---
-                // 1. Omni Mode (17): Only triggers if this is the selected track.
-                // 2. Specific Channel (1-16): Triggers even if unselected (Background MIDI).
-                var shouldTrigger = (track.midiInChannel == 17 && i == state.selectedTrackIndex) || 
+                var shouldTrigger = (track.midiInChannel == 17 && trackIdx == state.selectedTrackIndex) || 
                                    (track.midiInChannel in 1..16 && track.midiInChannel == midiChan)
+
+                // STUCK NOTE SAFETY
+                if (!shouldTrigger && (msgType == 0x80 || (msgType == 0x90 && data2 == 0))) {
+                    if (trackActiveNotes[trackIdx].containsKey(data1)) {
+                         shouldTrigger = true
+                    }
+                }
                 
-                // GHOST NOTE ISOLATION (UI Pads):
-                // Only apply isolation to Omni tracks or selected tracks to prevent UI crosstalk.
-                // If a user MANUALLY set a channel (1-16), we bypass isolation to give them full control.
-                if (shouldTrigger && track.midiInChannel == 17 && i != state.selectedTrackIndex && data1 in 24..83) {
+                if (shouldTrigger && track.midiInChannel == 17 && trackIdx != state.selectedTrackIndex && data1 in 24..83) {
                     shouldTrigger = false
                 }
 
-                // GHOST NOTE FILTER (LED Loopback):
-                // 1. Velocity 1-16 on any channel is reserved for LED color updates.
-                // 2. Any activity on Channel 10 (0x99) for the UI note range (24-83) is 
-                //    almost certainly loopback from EmpledManager background updates.
-                if (shouldTrigger && (msgType == 0x90 || msgType == 0x99)) {
+                if (shouldTrigger && (msgType == 0x90 || (msgType == 0x99))) {
                     val isLowVelocity = data2 in 1..16
                     val isUiRange = data1 in 24..83
                     val isChannel10 = (status and 0x0F) == 9
-                    
-                    if (isUiRange && (isLowVelocity || isChannel10)) {
-                        shouldTrigger = false
-                    }
+                    if (isUiRange && (isLowVelocity || isChannel10)) shouldTrigger = false
                 }
 
                 if (shouldTrigger) {
                     var triggeredNote = data1
 
-                    // EMP16 Bank A / 6x6 Remapping (ONLY in Bank 0)
+                    // REMAPPING BYPASS FOR EXTERNAL KEYBOARDS:
+                    // Only apply scale remapping if the user is in a Grid mode AND 
+                    // the velocity is high (UI pads send 127 usually, while keyboards vary).
+                    // More importantly: avoid remapping if it's an Omni track unless specifically using UI range.
                     val isDrum = track.engineType == com.groovebox.EngineType.FM_DRUM || track.engineType == com.groovebox.EngineType.ANALOG_DRUM
                     
-                    if (state.currentSequencerBank == 0 && i == state.selectedTrackIndex) {
+                    if (state.currentSequencerBank == 0 && trackIdx == state.selectedTrackIndex) {
                         val padIdx = when (state.gridMode) {
                             com.groovebox.GridMode.GRID_4X4 -> {
                                 when (data1) {
@@ -101,50 +134,65 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
                             else -> -1
                         }
 
-                        if (padIdx != -1) {
+                        // FIXED: Remapping priority - only apply if we have a valid padIdx 
+                        // AND we believe it's intended for pad control (e.g. EMP16 on specific channel).
+                        // For general keyboards (N25), we stay CHROMATIC but keep the OCTAVE shift.
+                        if (padIdx != -1 && (midiChan == 10 || midiChan == 16)) {
                             triggeredNote = if (isDrum) {
                                 60 + (padIdx % 16) 
                             } else {
                                 val scaleNotes = com.groovebox.ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, 48)
                                 scaleNotes.getOrElse(padIdx) { data1 }
                             }
+                        } else {
+                            val octaveOffset = state.rootNote - 48
+                            triggeredNote = (data1 + octaveOffset).coerceIn(0, 127)
                         }
                     }
                     
                     if (msgType == 0x90 && data2 > 0) {
-                        nativeLib.triggerNote(i, triggeredNote, data2)
-                        trackActiveNotes[i][data1] = triggeredNote
-                        if (i == state.selectedTrackIndex) {
-                             onCommand(MidiCommand.NoteTriggered(triggeredNote, data2))
-                        }
+                        nativeLib.triggerNote(trackIdx, triggeredNote, data2)
+                        trackActiveNotes[trackIdx][data1] = triggeredNote
+                        if (trackIdx == state.selectedTrackIndex) onCommand(MidiCommand.NoteTriggered(triggeredNote, data2))
                     } else if (msgType == 0x80 || (msgType == 0x90 && data2 == 0)) {
-                        val activeNote = trackActiveNotes[i].remove(data1) ?: triggeredNote
-                        nativeLib.releaseNote(i, activeNote)
-                        if (i == state.selectedTrackIndex) {
-                             onCommand(MidiCommand.NoteTriggered(activeNote, 0))
-                        }
+                        val activeNote = trackActiveNotes[trackIdx].remove(data1) ?: triggeredNote
+                        nativeLib.releaseNote(trackIdx, activeNote)
+                        if (trackIdx == state.selectedTrackIndex) onCommand(MidiCommand.NoteTriggered(activeNote, 0))
                     }
                 }
             }
             return
         }
 
-        if (msgType == 0xB0) { // Control Change (CC)
+        if (msgType == 0xB0) {
             handleCC(data1, data2, state)
         }
 
-        // --- AFTERTOUCH (Channel Pressure 0xD0) → Y-axis Modulation ---
+        if (msgType == 0xE0) {
+            val pbValue = (data1 or (data2 shl 7))
+            val normalizedPB = (pbValue - 8192) / 8192.0f
+            nativeLib.setPitchBend(state.selectedTrackIndex, normalizedPB)
+        }
+
+        if (msgType == 0xC0) {
+            // Donner N25: Program + Keys 0-9 usually send C0 00-09
+            // Shift mapping to match keyboard labels: Key '1' (C0 01) -> Track 1 (Index 0)
+            log("Program Change: $data1 (Mapped to ${data1 - 1})")
+            if (data1 in 1..8) {
+                onCommand(MidiCommand.SelectTrack(data1 - 1))
+            } else if (data1 == 0) {
+                // Potential fallback: map Key '0' to Track 1 or 8?
+                // For now, just log it.
+            }
+        }
+
         if (msgType == 0xD0) {
             val pressure = data1 / 127.0f
             val trackIdx = state.selectedTrackIndex
             val track = state.tracks.getOrNull(trackIdx) ?: return
             val modParamId = track.padModTargetId
-
-            if (modParamId >= 2000) {
-                nativeLib.setMacroValue(modParamId - 2000, pressure)
-            } else {
-                nativeLib.setParameter(trackIdx, modParamId, pressure)
-            }
+            if (modParamId >= 2000) nativeLib.setMacroValue(modParamId - 2000, pressure)
+            else nativeLib.setParameter(trackIdx, modParamId, pressure)
             nativeLib.setPadMod(trackIdx, pressure)
         }
     }
@@ -189,6 +237,9 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
             62 -> onCommand(MidiCommand.NextTrack)
             63 -> onCommand(MidiCommand.ToggleMidiLearn)
             
+            // All Sound Off (Donner N25 panic)
+            120 -> nativeLib.panic()
+
             in 10..11 -> {
                  val trackIdx = ccNumber - 10
                  nativeLib.setTrackVolume(trackIdx, normalizedValue)

@@ -1,5 +1,5 @@
 package com.groovebox.utils
 
 object Version {
-    const val APP_VERSION = "2.9.18"
+    const val APP_VERSION = "2.9.20"
 }

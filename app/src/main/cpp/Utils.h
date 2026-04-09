@@ -85,6 +85,11 @@ struct FastSine {
   }
 };
 
+static inline float fixDenormal(float value) {
+  if (std::abs(value) < 1e-15f) return 0.0f;
+  return value;
+}
+
 // T-SVF (Zero-Delay Feedback State Variable Filter)
 // Based on Andrew Simper's Trapezoidal integration method.
 // Extremely stable even at high frequencies and high resonance.
@@ -107,14 +112,8 @@ public:
     float v1 = mA1 * mSvfZ1 + mA2 * v3;
     float v2 = mSvfZ2 + mA2 * mSvfZ1 + mA3 * v3;
 
-    mSvfZ1 = 2.0f * v1 - mSvfZ1;
-    mSvfZ2 = 2.0f * v2 - mSvfZ2;
-
-    // Denormal snapping
-    if (std::abs(mSvfZ1) < 1e-9f)
-      mSvfZ1 = 0.0f;
-    if (std::abs(mSvfZ2) < 1e-9f)
-      mSvfZ2 = 0.0f;
+    mSvfZ1 = fixDenormal(2.0f * v1 - mSvfZ1);
+    mSvfZ2 = fixDenormal(2.0f * v2 - mSvfZ2);
 
     switch (type) {
     case LowPass:

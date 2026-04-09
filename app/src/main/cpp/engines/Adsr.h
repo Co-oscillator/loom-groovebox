@@ -2,6 +2,7 @@
 #define ADSR_H
 
 #include <cmath>
+#include "../Utils.h"
 
 enum class AdsrStage { Idle, Attack, Decay, Sustain, Release };
 
@@ -77,6 +78,7 @@ public:
       }
       break;
     }
+    mValue = fixDenormal(mValue);
     return mValue;
   }
 

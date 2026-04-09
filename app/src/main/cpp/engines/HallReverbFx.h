@@ -15,11 +15,7 @@ public:
 
   float process(float input, float feedback, float damp) {
     float readVal = mBuffer[mWritePos];
-    mFilterStore = (readVal * (1.0f - damp)) + (mFilterStore * damp);
-
-    // Anti-Denormal
-    if (std::abs(mFilterStore) < 1.0e-15f)
-      mFilterStore = 0.0f;
+    mFilterStore = fixDenormal((readVal * (1.0f - damp)) + (mFilterStore * damp));
 
     float output = readVal;
     float newVal = input + (mFilterStore * feedback);
@@ -61,11 +57,7 @@ public:
   }
 
   float process(float input) {
-    float bufOut = mBuffer[mWritePos];
-
-    // Anti-Denormal
-    if (std::abs(bufOut) < 1.0e-15f)
-      bufOut = 0.0f;
+    float bufOut = fixDenormal(mBuffer[mWritePos]);
 
     float output = -input + bufOut;
     float newVal = input + (bufOut * 0.5f);

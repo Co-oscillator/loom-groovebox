@@ -16,6 +16,9 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Share
+import com.groovebox.utils.SysexParser
+import com.groovebox.utils.DX7Voice
 import com.groovebox.GrooveboxState
 import com.groovebox.NativeLib
 import com.groovebox.EngineType
@@ -2075,6 +2078,8 @@ fun FmDrumParameters(viewModel: com.groovebox.GrooveboxViewModel, trackIndex: In
 fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, onRefresh: () -> Unit) {
     val track = state.tracks[trackIndex]
     var showPresetDrawer by remember { mutableStateOf(false) }
+    var showLoadDialog by remember { mutableStateOf(false) }
+    val themeColor = Color(0xFF00FF00) // Green for FM
 
     if (showPresetDrawer) {
         Dialog(
@@ -2201,8 +2206,19 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Import DX7 Sysex Button - disabled for now
-                            Spacer(modifier = Modifier.width(4.dp))
+                            // Import DX7 Sysex Button
+                            Button(
+                                onClick = {
+                                    // Use NativeFileDialog to find .syx files
+                                    showLoadDialog = true 
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = themeColor.copy(alpha=0.3f)),
+                                border = BorderStroke(1.dp, themeColor)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(20.dp), tint = themeColor)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("IMPORT SYSEX", color = themeColor)
+                            }
                             
                             Button(onClick = { showPresetDrawer = false }) {
                                 Text("Close")
@@ -2213,9 +2229,50 @@ fun FmParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (Grooveb
             }
         }
     }
+    
+    if (showLoadDialog) {
+        com.groovebox.ui.components.NativeFileDialog(
+            directory = java.io.File(nativeLib.getAppDataDir()),
+            onDismiss = { showLoadDialog = false },
+            state = state,
+            title = "Import DX7 Sysex (.syx)",
+            extensions = listOf("syx"),
+            onFileSelected = { path ->
+                if (path != null) {
+                    try {
+                        val data = java.io.File(path).readBytes()
+                        val voices = SysexParser.parse(data)
+                        if (voices.isNotEmpty()) {
+                            val newPresets = voices.map { v ->
+                                mapOf(
+                                    "name" to v.name,
+                                    "algorithm" to v.algorithm,
+                                    "feedback" to v.feedback,
+                                    "opLevels" to v.opLevels.toList(),
+                                    "opRatios" to v.opRatios.toList(),
+                                    "opAttack" to v.opAttack.toList(),
+                                    "opDecay" to v.opDecay.toList(),
+                                    "opSustain" to v.opSustain.toList(),
+                                    "opRelease" to v.opRelease.toList(),
+                                    "carrierMask" to v.carrierMask
+                                )
+                            }
+                            onStateChange(state.copy(importedFmPresets = state.importedFmPresets + newPresets))
+                            com.groovebox.ui.platformShowMessage("Imported ${voices.size} DX7 voices")
+                        } else {
+                            com.groovebox.ui.platformShowMessage("No valid DX7 voices found")
+                        }
+                    } catch (e: Exception) {
+                        com.groovebox.ui.platformShowMessage("Import Error: ${e.message}")
+                    }
+                }
+                showLoadDialog = false
+            }
+        )
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        val themeColor = Color(0xFF00FF00) // Green for FM
+        // themeColor moved to top
 
         // Helper contents
         val routingContent: @Composable ColumnScope.() -> Unit = {

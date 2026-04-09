@@ -130,18 +130,60 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
     val currentKnobAssignments = (state.engineTypeKnobAssignments as Any?) as? Map<EngineType, List<StripRouting>> ?: emptyMap()
     val knobAssignments = currentKnobAssignments.toMutableMap()
     
-    // Ensure all engines have default mappings if missing
+    // Ensure all engines have default mappings if missing or incorrectly mapped to Subtractive
+    val subtractiveDefaults = getDefaultStripAssignments(EngineType.SUBTRACTIVE)
+    val subtractiveKnobDefaults = getDefaultKnobAssignments(EngineType.SUBTRACTIVE)
+    
     EngineType.values().forEach { type ->
-        if (stripAssignments[type].isNullOrEmpty()) {
+        val currentStrips = stripAssignments[type]
+        val currentKnobs = knobAssignments[type]
+        
+        // Reset if empty OR if they appear to be a Subtractive leak (labels match exactly but engine is different)
+        // Subtractive labels are: Cutoff, Resonance, Filt Env Int, Detune
+        val subLabels = listOf("Cutoff", "Resonance", "Filt Env Int", "Detune")
+        val isStripLeak = type != EngineType.SUBTRACTIVE && currentStrips?.all { subLabels.contains(it.parameterName) } == true
+        
+        val subKnobLabels = listOf("Amp Atk", "Amp Rel", "Filt Atk", "Filt Rel")
+        val isKnobLeak = type != EngineType.SUBTRACTIVE && currentKnobs?.all { subKnobLabels.contains(it.parameterName) } == true
+
+        if (currentStrips.isNullOrEmpty() || (currentStrips.size >= 4 && isStripLeak)) {
             stripAssignments[type] = getDefaultStripAssignments(type)
         }
-        if (knobAssignments[type].isNullOrEmpty()) {
+        if (currentKnobs.isNullOrEmpty() || (currentKnobs.size >= 4 && isKnobLeak)) {
             knobAssignments[type] = getDefaultKnobAssignments(type)
         }
     }
 
     val loadedMasterVol = (state.masterVolume as Any?) as? Float ?: 0.8f
     val safeMasterVol = if (loadedMasterVol < 0.1f) 0.8f else loadedMasterVol
+
+    val selectedIdx = (state.selectedTrackIndex as Any?) as? Int ?: 0
+    val activeEngine = sanitizedTracks.getOrNull(selectedIdx)?.engineType ?: EngineType.SUBTRACTIVE
+    
+    // Fix top-level routings if they are leaked or empty
+    val currentTopStrips = (state.stripRoutings as Any?) as? List<StripRouting> ?: emptyList()
+    val subLabels = listOf("Cutoff", "Resonance", "Filt Env Int", "Detune")
+    val isTopStripLeak = activeEngine != EngineType.SUBTRACTIVE && currentTopStrips.size >= 4 && 
+                         currentTopStrips.take(4).all { subLabels.contains(it.parameterName) }
+    val isTopStripEmpty = currentTopStrips.all { it.parameterName.isNullOrEmpty() }
+    
+    val finalTopStrips = if (isTopStripLeak || isTopStripEmpty) {
+        stripAssignments[activeEngine] ?: getDefaultStripAssignments(activeEngine)
+    } else {
+        currentTopStrips
+    }
+
+    val currentTopKnobs = (state.knobRoutings as Any?) as? List<StripRouting> ?: emptyList()
+    val subKnobLabels = listOf("Amp Atk", "Amp Rel", "Filt Atk", "Filt Rel")
+    val isTopKnobLeak = activeEngine != EngineType.SUBTRACTIVE && currentTopKnobs.size >= 4 && 
+                        currentTopKnobs.take(4).all { subKnobLabels.contains(it.parameterName) }
+    val isTopKnobEmpty = currentTopKnobs.all { it.parameterName.isNullOrEmpty() }
+
+    val finalTopKnobs = if (isTopKnobLeak || isTopKnobEmpty) {
+        knobAssignments[activeEngine] ?: getDefaultKnobAssignments(activeEngine)
+    } else {
+        currentTopKnobs
+    }
 
     return state.copy(
         tracks = sanitizedTracks,
@@ -160,9 +202,9 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
         padPageCount = (state.padPageCount as Any?) as? Int ?: 1,
         currentPadPage = (state.currentPadPage as Any?) as? Int ?: 0,
         padColor = (state.padColor as Any?) as? Long ?: 0xFFBB86FC,
-        stripRoutings = (state.stripRoutings as Any?) as? List<StripRouting> ?: List(4) { i -> StripRouting(stripIndex = i) },
+        stripRoutings = finalTopStrips,
         stripValues = (state.stripValues as Any?) as? List<Float> ?: List(4) { 0.5f },
-        knobRoutings = (state.knobRoutings as Any?) as? List<StripRouting> ?: List(4) { i -> StripRouting(stripIndex = i + 4, parameterName = "Knob ${i+1}") },
+        knobRoutings = finalTopKnobs,
         knobValues = (state.knobValues as Any?) as? List<Float> ?: List(4) { 0.5f },
         heldNotes = (state.heldNotes as Any?) as? Set<Int> ?: emptySet(),
         selectedTrackIndex = (state.selectedTrackIndex as Any?) as? Int ?: 0,

@@ -297,6 +297,13 @@ class MainActivity : ComponentActivity() {
                 withContext(Dispatchers.Main) {
                     grooveboxState = finalState
                     isNativeInitialized = true
+                    
+                    // KEEP STATE IN SYNC WITH VIEWMODEL
+                    lifecycleScope.launch {
+                        snapshotFlow { viewModel.state }.collect {
+                            grooveboxState = it
+                        }
+                    }
                 }
             } catch (e: Throwable) {
                 Log.e("Groovebox", "FATAL: Background init failed: ${e.message}", e)
@@ -408,7 +415,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
-        if (!grooveboxState.isKeyboardModeEnabled) return super.onKeyDown(keyCode, event)
+        // ALWAYS use the ViewModel state directly for input handling to avoid stale state issues
+        val currentState = viewModel.state
+        if (!currentState.isKeyboardModeEnabled) return super.onKeyDown(keyCode, event)
 
         // Handle Metadata Shortcuts (Cmd/Ctrl + Arrows)
         val isMeta = event.isMetaPressed || event.isCtrlPressed
@@ -474,7 +483,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent): Boolean {
-        if (!grooveboxState.isKeyboardModeEnabled) return super.onKeyUp(keyCode, event)
+        val currentState = viewModel.state
+        if (!currentState.isKeyboardModeEnabled) return super.onKeyUp(keyCode, event)
         
         val padIndex = getPadIndexFromKeyCode(keyCode)
         if (padIndex != null) {

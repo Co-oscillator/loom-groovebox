@@ -74,7 +74,12 @@ actual class NativeLib {
     actual fun setFxChain(sourceFx: Int, destFx: Int) = nSetFxChain(sourceFx, destFx)
     actual fun fetchMidiEvents(): IntArray = nFetchMidiEvents()
     actual fun fetchEngineEvents(): IntArray = nFetchEngineEvents()
-    actual fun setAppDataDir(path: String) = nSetAppDataDir(path)
+    private var mAppDataDir: String = ""
+    actual fun setAppDataDir(path: String) {
+        mAppDataDir = path
+        nSetAppDataDir(path)
+    }
+    actual fun getAppDataDir(): String = mAppDataDir
     actual fun loadAppState() = nLoadAppState()
     actual fun getLastSamplePath(trackIndex: Int): String = nGetLastSamplePath(trackIndex)
     actual fun exportAudio(numRepeats: Int, path: String) = nExportAudio(numRepeats, path)

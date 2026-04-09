@@ -1,89 +1,148 @@
-
-> Task :app:checkVersion
-Target Version: 2.9.0 (Build 294)
-Version verification passed.
-
-> Task :app:preBuild
-> Task :app:preDebugBuild
-> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
 > Task :composeApp:preBuild UP-TO-DATE
-> Task :composeApp:preDebugBuild UP-TO-DATE
-> Task :composeApp:writeDebugAarMetadata UP-TO-DATE
-> Task :app:checkDebugAarMetadata UP-TO-DATE
-> Task :composeApp:processDebugNavigationResources UP-TO-DATE
-> Task :app:processDebugNavigationResources UP-TO-DATE
-> Task :app:compileDebugNavigationResources UP-TO-DATE
-> Task :app:generateDebugResValues UP-TO-DATE
-> Task :composeApp:generateDebugResValues UP-TO-DATE
-> Task :composeApp:generateDebugResources UP-TO-DATE
-> Task :composeApp:packageDebugResources UP-TO-DATE
-> Task :app:mapDebugSourceSetPaths UP-TO-DATE
-> Task :app:generateDebugResources UP-TO-DATE
-> Task :app:mergeDebugResources UP-TO-DATE
-> Task :app:packageDebugResources UP-TO-DATE
-> Task :app:parseDebugLocalResources UP-TO-DATE
-> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
-> Task :app:extractDeepLinksDebug UP-TO-DATE
-> Task :composeApp:extractDeepLinksDebug UP-TO-DATE
-> Task :composeApp:processDebugManifest UP-TO-DATE
-> Task :app:processDebugMainManifest UP-TO-DATE
-> Task :app:processDebugManifest UP-TO-DATE
-> Task :app:processDebugManifestForPackage UP-TO-DATE
-> Task :composeApp:compileDebugLibraryResources UP-TO-DATE
-> Task :composeApp:parseDebugLocalResources UP-TO-DATE
-> Task :composeApp:generateDebugRFile UP-TO-DATE
-> Task :composeApp:compileDebugKotlinAndroid UP-TO-DATE
-> Task :composeApp:javaPreCompileDebug UP-TO-DATE
-> Task :composeApp:compileDebugJavaWithJavac NO-SOURCE
-> Task :app:javaPreCompileDebug UP-TO-DATE
-> Task :app:mergeDebugShaders UP-TO-DATE
-> Task :app:compileDebugShaders NO-SOURCE
-> Task :app:generateDebugAssets UP-TO-DATE
-> Task :composeApp:mergeDebugShaders UP-TO-DATE
-> Task :composeApp:compileDebugShaders NO-SOURCE
-> Task :composeApp:generateDebugAssets UP-TO-DATE
-> Task :composeApp:mergeDebugAssets UP-TO-DATE
-> Task :app:mergeDebugAssets UP-TO-DATE
-> Task :app:compressDebugAssets UP-TO-DATE
-> Task :composeApp:processDebugJavaRes UP-TO-DATE
-> Task :app:checkDebugDuplicateClasses UP-TO-DATE
-> Task :app:desugarDebugFileDependencies UP-TO-DATE
-> Task :app:mergeExtDexDebug UP-TO-DATE
-> Task :composeApp:bundleLibRuntimeToDirDebug
-> Task :app:configureCMakeDebug[arm64-v8a]
-> Task :composeApp:bundleLibCompileToJarDebug
-> Task :app:processDebugResources
+> Task :composeApp:preReleaseBuild UP-TO-DATE
+> Task :composeApp:generateReleaseResValues UP-TO-DATE
+> Task :composeApp:generateReleaseResources UP-TO-DATE
+> Task :composeApp:packageReleaseResources UP-TO-DATE
+> Task :composeApp:processReleaseNavigationResources UP-TO-DATE
+> Task :composeApp:parseReleaseLocalResources UP-TO-DATE
+> Task :composeApp:generateReleaseRFile UP-TO-DATE
 
-> Task :app:buildCMakeDebug[arm64-v8a] FAILED
-C/C++: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/arm64-v8a'
-C/C++: /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/f093e26276d7b910d8175b4c4ab0849f/transformed/jetified-oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -flto -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/cpp/AudioEngine.cpp'
-C/C++: /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/cpp/AudioEngine.cpp:3324:34: error: no member named 'hasActiveVoices' in 'SoundFontEngine'
-C/C++:  3324 |   else if (track.soundFontEngine.hasActiveVoices()) anyVoiceActive = true;
-C/C++:       |            ~~~~~~~~~~~~~~~~~~~~~ ^
-C/C++: 1 error generated.
+> Task :composeApp:compileReleaseKotlinAndroid
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2233:5 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2233:8 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2233:9 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2233:23 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2233:25 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:5 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:11 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:12 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:32 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:34 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:45 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:46 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:54 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:55 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:56 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:57 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:59 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:60 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:62 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2434:1 Expecting a top level declaration
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:23:22 Conflicting import, imported name 'EngineType' is ambiguous
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:24:22 Conflicting import, imported name 'EngineType' is ambiguous
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2214:87 Unresolved reference: themeColor
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2215:61 Unresolved reference: themeColor
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2217:52 Unresolved reference: Share
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2217:126 Unresolved reference: themeColor
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2219:62 Unresolved reference: themeColor
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2233:25 Functions which invoke @Composable functions must be marked with the @Composable annotation
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2233:25 Conflicting overloads: public fun `<no name provided>`(): Unit defined in com.groovebox.ui.views in file ParametersScreen.kt, public fun `<no name provided>`(): Unit defined in com.groovebox.ui.views in file ParametersScreen.kt
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2233:25 Function declaration must have a name
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2234:37 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2236:13 No value passed for parameter 'directory'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2236:13 No value passed for parameter 'onDismiss'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2236:13 No value passed for parameter 'state'
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2256:29 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2256:43 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2256:74 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2265:17 Unresolved reference: showLoadDialog
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:62 Functions which invoke @Composable functions must be marked with the @Composable annotation
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:62 Conflicting overloads: public fun `<no name provided>`(): Unit defined in com.groovebox.ui.views in file ParametersScreen.kt, public fun `<no name provided>`(): Unit defined in com.groovebox.ui.views in file ParametersScreen.kt
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2270:62 Function declaration must have a name
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2276:41 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2276:48 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2276:63 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2278:40 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2278:47 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2278:62 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2279:42 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2279:49 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2279:64 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2282:40 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2282:47 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2282:62 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2283:42 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2283:49 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2283:64 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2289:33 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2289:46 Unresolved reference: trackIndex
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2291:41 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2291:48 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2291:63 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2292:40 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2292:47 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2292:62 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2295:40 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2295:47 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2295:62 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2301:41 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2302:35 Unresolved reference: trackIndex
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2303:25 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2303:39 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2304:25 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2304:49 Unresolved reference: trackIndex
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2316:43 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2316:50 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2316:65 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2317:42 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2317:49 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2317:64 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2320:42 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2320:49 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2320:64 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2321:42 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2321:49 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2321:64 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2326:9 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2333:29 Unresolved reference: showPresetDrawer
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2342:66 Unresolved reference: track
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2355:9 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2356:65 @Composable invocations can only happen from the context of a @Composable function
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2370:37 Unresolved reference: track
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2371:38 Unresolved reference: track
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2395:29 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2395:43 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2395:63 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2395:89 Cannot infer a type for this parameter. Please specify it explicitly.
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2395:94 Cannot infer a type for this parameter. Please specify it explicitly.
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2396:44 Unresolved reference: trackIndex
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2399:29 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2399:52 Unresolved reference: trackIndex
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2399:87 Unresolved reference: track
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2399:129 Unresolved reference: track
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2400:29 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2400:52 Unresolved reference: trackIndex
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2400:86 Unresolved reference: track
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2400:127 Unresolved reference: track
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2418:51 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2418:58 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2418:73 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2419:55 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2419:62 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2419:77 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2423:56 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2423:63 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2423:78 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2424:56 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2424:63 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2424:78 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2427:56 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2427:63 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2427:78 Unresolved reference: nativeLib
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2428:56 Unresolved reference: state
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2428:63 Unresolved reference: onStateChange
+e: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/composeApp/src/commonMain/kotlin/com/groovebox/ui/views/ParametersScreen.kt:2428:78 Unresolved reference: nativeLib
+
+> Task :composeApp:compileReleaseKotlinAndroid FAILED
 
 [Incubating] Problems report is available at: file:///Users/danielmiller/Documents/Code%20Projects/Loom%20Groovebox/build/reports/problems/problems-report.html
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
-Execution failed for task ':app:buildCMakeDebug[arm64-v8a]'.
-> com.android.ide.common.process.ProcessException: ninja: Entering directory `/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/arm64-v8a'
-  [1/2] Building CXX object CMakeFiles/native-lib.dir/AudioEngine.cpp.o
-  FAILED: CMakeFiles/native-lib.dir/AudioEngine.cpp.o 
-  /Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/Users/danielmiller/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_lib_EXPORTS -isystem /Users/danielmiller/.gradle/caches/8.13/transforms/f093e26276d7b910d8175b4c4ab0849f/transformed/jetified-oboe-1.9.0/prefab/modules/oboe/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O3 -ffast-math -flto -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/native-lib.dir/AudioEngine.cpp.o -MF CMakeFiles/native-lib.dir/AudioEngine.cpp.o.d -o CMakeFiles/native-lib.dir/AudioEngine.cpp.o -c '/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/cpp/AudioEngine.cpp'
-  /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/src/main/cpp/AudioEngine.cpp:3324:34: error: no member named 'hasActiveVoices' in 'SoundFontEngine'
-   3324 |   else if (track.soundFontEngine.hasActiveVoices()) anyVoiceActive = true;
-        |            ~~~~~~~~~~~~~~~~~~~~~ ^
-  1 error generated.
-  ninja: build stopped: subcommand failed.
-  
-  C++ build system [build] failed while executing:
-      /Users/danielmiller/Library/Android/sdk/cmake/3.22.1/bin/ninja \
-        -C \
-        "/Users/danielmiller/Documents/Code Projects/Loom Groovebox/app/.cxx/Debug/6j5u5229/arm64-v8a" \
-        native-lib
-    from /Users/danielmiller/Documents/Code Projects/Loom Groovebox/app
+Execution failed for task ':composeApp:compileReleaseKotlinAndroid'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
 
 * Try:
 > Run with --stacktrace option to get the stack trace.
@@ -97,5 +156,5 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD FAILED in 1s
-42 actionable tasks: 6 executed, 36 up-to-date
+BUILD FAILED in 3s
+7 actionable tasks: 1 executed, 6 up-to-date

@@ -303,7 +303,9 @@ public:
       }
 
       float envVal = mUseEnvelope ? v.ampEnv.nextValue() : 1.0f;
-      if (envVal < 0.0001f && mUseEnvelope && !v.ampEnv.isActive()) {
+      bool deactive = mUseEnvelope ? (envVal < 0.0001f && !v.ampEnv.isActive()) : !v.isNoteHeld;
+      
+      if (deactive) {
         v.active = false;
         continue;
       }

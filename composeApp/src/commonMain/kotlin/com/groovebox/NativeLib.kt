@@ -73,6 +73,7 @@ expect class NativeLib() {
     fun fetchMidiEvents(): IntArray
     fun fetchEngineEvents(): IntArray
     fun setAppDataDir(path: String)
+    fun getAppDataDir(): String
     fun loadAppState()
     fun getLastSamplePath(trackIndex: Int): String
     fun exportAudio(numRepeats: Int, path: String)

@@ -48,8 +48,10 @@ class GrooveboxViewModel(
             val isDrum = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM
             
             // Re-sync active routings with the new track's engine type
-            val stripAssignments = state.engineTypeStripAssignments[track.engineType] ?: emptyList()
-            val knobAssignments = state.engineTypeKnobAssignments[track.engineType] ?: emptyList()
+            val stripAssignments = state.engineTypeStripAssignments[track.engineType] 
+                ?: com.groovebox.utils.getDefaultStripAssignments(track.engineType)
+            val knobAssignments = state.engineTypeKnobAssignments[track.engineType] 
+                ?: com.groovebox.utils.getDefaultKnobAssignments(track.engineType)
 
             state = state.copy(
                 selectedTrackIndex = index,

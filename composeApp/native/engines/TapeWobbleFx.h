@@ -34,7 +34,7 @@ public:
   }
 
   // Process stereo block (linked wobble)
-  void processStereo(float inL, float inR, float &outL, float &outR,
+  void processSampleStereo(float inL, float inR, float &outL, float &outR,
                      float sampleRate) {
     // Shared modulation update (once per stereo pair)
     mPhase += (2.0f * M_PI * mRate) / sampleRate;
@@ -66,9 +66,24 @@ public:
     float wetL = inL * (1.0f - mMix) + tapL * mMix;
     float wetR = inR * (1.0f - mMix) + tapR * mMix;
 
-    // Return delta (Wet - Dry) for additive mixer
+  // Return delta (Wet - Dry) for additive mixer
     outL = wetL - inL;
     outR = wetR - inR;
+  }
+
+  void processStereo(float inL, float inR, float &outL, float &outR,
+                     float sampleRate) {
+    processSampleStereo(inL, inR, outL, outR, sampleRate);
+  }
+
+  // v3.1 Block processing
+  void processBlockStereo(float *inOutL, float *inOutR, int numFrames, float sampleRate) {
+    for (int i = 0; i < numFrames; ++i) {
+      float outL = 0.0f, outR = 0.0f;
+      processSampleStereo(inOutL[i], inOutR[i], outL, outR, sampleRate);
+      inOutL[i] = outL;
+      inOutR[i] = outR;
+    }
   }
 
   // Mono fallback (unused but kept for API compat if needed)

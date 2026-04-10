@@ -100,7 +100,7 @@ public:
     mResonance = mTargetResonance;
   }
 
-  void processStereo(float inL, float inR, float &outL, float &outR,
+  void processSampleStereo(float inL, float inR, float &outL, float &outR,
                      float sampleRate = 48000.0f) {
     if (!std::isfinite(inL))
       inL = 0.0f;
@@ -266,11 +266,34 @@ public:
 
     outL = std::max(-1.0f, std::min(1.0f, filteredL * mMix));
     outR = std::max(-1.0f, std::min(1.0f, filteredR * mMix));
+  }
 
-    // Silence tracking
+  void processStereo(float inL, float inR, float &outL, float &outR,
+                     float sampleRate = 48000.0f) {
+    processSampleStereo(inL, inR, outL, outR, sampleRate);
     if (std::abs(outL) < 1e-9f && std::abs(outR) < 1e-9f) {
       if (mSilentCounter < 48000)
         mSilentCounter++;
+    } else {
+      mSilentCounter = 0;
+    }
+  }
+
+  // v3.1 Block processing
+  void processBlockStereo(float *inOutL, float *inOutR, int numFrames, float sampleRate = 48000.0f) {
+    float peak = 0.0f;
+    for (int i = 0; i < numFrames; ++i) {
+      float outL = 0.0f, outR = 0.0f;
+      processSampleStereo(inOutL[i], inOutR[i], outL, outR, sampleRate);
+      inOutL[i] = outL;
+      inOutR[i] = outR;
+      float mag = std::max(std::abs(outL), std::abs(outR));
+      if (mag > peak) peak = mag;
+    }
+    
+    if (peak < 1e-9f) {
+      if (mSilentCounter < 48000)
+        mSilentCounter += numFrames;
     } else {
       mSilentCounter = 0;
     }

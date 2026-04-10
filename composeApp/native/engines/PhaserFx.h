@@ -25,7 +25,7 @@ public:
     mPhase = 0.0f;
   }
 
-  float process(float input, float sampleRate) {
+  float processSample(float input, float sampleRate) {
     mPhase += (2.0f * M_PI * mRate) / sampleRate;
     if (mPhase > 2.0f * M_PI)
       mPhase -= 2.0f * M_PI;
@@ -49,6 +49,16 @@ public:
 
     mLastOutput = x;
     return input * (1.0f - mMix) + std::tanh(x) * mMix; // Correct Dry/Wet Mix
+  }
+
+  void processBlock(float *inOut, int numFrames, float sampleRate) {
+    for (int i = 0; i < numFrames; ++i) {
+      inOut[i] = processSample(inOut[i], sampleRate);
+    }
+  }
+
+  float process(float input, float sampleRate) {
+    return processSample(input, sampleRate);
   }
 
 private:

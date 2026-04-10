@@ -37,7 +37,7 @@ public:
     mResonance = resonance;
   }
 
-  float process(float input, float sampleRate) {
+  float processSample(float input, float sampleRate) {
     // Control rate update (every 16 samples)
     if (mControlCounter++ % 16 == 0) {
       // 1. LFO Calculation (Control Rate)
@@ -92,6 +92,16 @@ public:
     TSvf::Type type =
         (mMode == FilterLfoMode::LowPass) ? TSvf::LowPass : TSvf::HighPass;
     return mSvf.process(input, type);
+  }
+
+  void processBlock(float *inOut, int numFrames, float sampleRate) {
+    for (int i = 0; i < numFrames; ++i) {
+      inOut[i] = processSample(inOut[i], sampleRate);
+    }
+  }
+
+  float process(float input, float sampleRate) {
+    return processSample(input, sampleRate);
   }
 
   void reset(float sampleRate) {

@@ -477,6 +477,10 @@ public:
   float mFxFeedbacksL[18] = {0.0f};
   float mFxFeedbacksR[18] = {0.0f};
 
+  // v3.1 Block Buffers (pre-allocated to avoid malloc on audio thread)
+  std::vector<float> mFxBusBlockL[18];
+  std::vector<float> mFxBusBlockR[18];
+
   // FX Split Filter LFO Effects (Slots 9/10)
   FilterLfoFx mHpLfoL{FilterLfoMode::HighPass};
   FilterLfoFx mHpLfoR{FilterLfoMode::HighPass};

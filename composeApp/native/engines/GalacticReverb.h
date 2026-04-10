@@ -146,7 +146,7 @@ public:
     mModPhase = 0.0f;
   }
 
-  void processStereoWet(float inL, float inR, float &outL, float &outR) {
+  void processSampleStereoWet(float inL, float inR, float &outL, float &outR) {
     if (!std::isfinite(inL) || !std::isfinite(inR)) {
       // If input is bad, we MUST clear the tank, otherwise it stays broken
       // forever.
@@ -273,11 +273,33 @@ public:
 
     outL = wetL;
     outR = wetR;
+  }
 
-    // Silence tracking
-    if (std::abs(wetL) < 1e-9f && std::abs(wetR) < 1e-9f) {
+  void processStereoWet(float inL, float inR, float &outL, float &outR) {
+    processSampleStereoWet(inL, inR, outL, outR);
+    if (std::abs(outL) < 1e-9f && std::abs(outR) < 1e-9f) {
       if (mSilentCounter < 48000)
         mSilentCounter++;
+    } else {
+      mSilentCounter = 0;
+    }
+  }
+
+  // v3.1 Block processing
+  void processBlockStereoWet(float *inOutL, float *inOutR, int numFrames) {
+    float peak = 0.0f;
+    for (int i = 0; i < numFrames; ++i) {
+      float outL = 0.0f, outR = 0.0f;
+      processSampleStereoWet(inOutL[i], inOutR[i], outL, outR);
+      inOutL[i] = outL;
+      inOutR[i] = outR;
+      float mag = std::max(std::abs(outL), std::abs(outR));
+      if (mag > peak) peak = mag;
+    }
+    
+    if (peak < 1e-9f) {
+      if (mSilentCounter < 48000)
+        mSilentCounter += numFrames;
     } else {
       mSilentCounter = 0;
     }

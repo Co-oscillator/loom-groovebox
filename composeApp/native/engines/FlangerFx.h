@@ -11,7 +11,7 @@ public:
     mBuffer.resize(44100, 0.0f); // 1 sec buffer
   }
 
-  float process(float input, float sampleRate) {
+  float processSample(float input, float sampleRate) {
     if (mMix <= 0.001f)
       return 0.0f; // Return 0 if not active (send effect logic)
     // Actually, if it's an insert, we might want to return input, but this is a
@@ -61,6 +61,16 @@ public:
       mWritePos = 0;
 
     return delayed * mMix;
+  }
+
+  void processBlock(float *inOut, int numFrames, float sampleRate) {
+    for (int i = 0; i < numFrames; ++i) {
+      inOut[i] = processSample(inOut[i], sampleRate);
+    }
+  }
+
+  float process(float input, float sampleRate) {
+    return processSample(input, sampleRate);
   }
 
   void setParameters(float rate, float depth, float feedback, float mix) {

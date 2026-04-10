@@ -16,7 +16,7 @@ public:
   void setRate(float v) { setDownsample(v); }
   void setMix(float v) { mMix = v; }
 
-  float process(float input) {
+  float processSample(float input) {
     // Parameter Smoothing
     mSmoothedBits += 0.01f * (mBits - mSmoothedBits);
     mSmoothedRate += 0.01f * (mDownsample - mSmoothedRate);
@@ -44,6 +44,16 @@ public:
 
     // Insert Logic: Return crushed - input
     return (crushed * mMix) - input;
+  }
+
+  void processBlock(float *inOut, int numFrames) {
+    for (int i = 0; i < numFrames; ++i) {
+      inOut[i] = processSample(inOut[i]);
+    }
+  }
+
+  float process(float input) {
+    return processSample(input);
   }
 
 private:

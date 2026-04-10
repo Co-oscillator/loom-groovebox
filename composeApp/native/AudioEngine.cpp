@@ -663,7 +663,15 @@ void AudioEngine::triggerNoteLocked(int trackIndex, int note, int velocity,
         track.fmEngine.releaseNote(note);
         track.samplerEngine.releaseNote(note);
         track.wavetableEngine.releaseNote(note);
-        track.soundFontEngine.noteOff(note);
+        
+      track.soundFontEngine.noteOff(note);
+      
+      // Fix: Add ALL engines to releaseNoteLocked and Retriggerings
+      track.granularEngine.releaseNote(note);
+      track.fmDrumEngine.releaseNote(note);
+      // analogDrumEngine doesn't need releaseNote, but call it for safety/future compat
+      track.analogDrumEngine.releaseNote(note);
+
       }
     }
 
@@ -1903,7 +1911,15 @@ void AudioEngine::releaseNoteLocked(int trackIndex, int note,
       track.wavetableEngine.releaseNote(note);
       track.analogDrumEngine.releaseNote(note);
       track.audioInEngine.releaseNote(note);
+      
       track.soundFontEngine.noteOff(note);
+      
+      // Fix: Add ALL engines to releaseNoteLocked and Retriggerings
+      track.granularEngine.releaseNote(note);
+      track.fmDrumEngine.releaseNote(note);
+      // analogDrumEngine doesn't need releaseNote, but call it for safety/future compat
+      track.analogDrumEngine.releaseNote(note);
+
     }
   }
 }
@@ -3702,39 +3718,56 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
     }
   }
 
-  for (int i = 0; i < numFrames; ++i) {
 
-    // Safe ring-buffer read with 2048 samples of latency for stability
+  // Block-Based FX Processing Setup
+  int safeNumFrames = std::min((int)numFrames, 1024);
+
+  // Buffers for dry mix and sidechain
+  float mixedSampleL_arr[1024] = {0.0f};
+  float mixedSampleR_arr[1024] = {0.0f};
+  float sidechain_arr[1024] = {0.0f};
+  float spreadL_arr[1024] = {0.0f};
+  float spreadR_arr[1024] = {0.0f};
+  float wetSampleL_arr[1024] = {0.0f};
+  float wetSampleR_arr[1024] = {0.0f};
+
+  // 1. Initialize FX Buses with Feedback from previous block
+  const float denormalBias = 1e-15f;
+  for (int b = 0; b < 18; ++b) {
+    if (mFxBusBlockL[b].size() < safeNumFrames) mFxBusBlockL[b].resize(safeNumFrames, 0.0f);
+    if (mFxBusBlockR[b].size() < safeNumFrames) mFxBusBlockR[b].resize(safeNumFrames, 0.0f);
+    
+    // Fill first sample with feedback
+    mFxBusBlockL[b][0] = mFxFeedbacksL[b] + denormalBias;
+    mFxBusBlockR[b][0] = mFxFeedbacksR[b] + denormalBias;
+    // Clear the rest
+    for (int i = 1; i < safeNumFrames; ++i) {
+      mFxBusBlockL[b][i] = denormalBias;
+      mFxBusBlockR[b][i] = denormalBias;
+    }
+    // Clear feedback state
+    mFxFeedbacksL[b] = 0.0f;
+    mFxFeedbacksR[b] = 0.0f;
+  }
+
+  // --- PHASE 1: GENERATE DRY SIGNAL & FX SENDS ---
+  for (int i = 0; i < safeNumFrames; ++i) {
     uint32_t writePos = mInputWritePtr.load();
     int32_t distance = static_cast<int32_t>(writePos - mInputReadPtr);
     if (distance < 128 || distance > 8000) {
-      mInputReadPtr = writePos - 2048; // Resync if definitely out of bounds
+      mInputReadPtr = writePos - 2048; 
     }
-    float inputSample = mInputRingBuffer[mInputReadPtr % 8192];
+    float inputSample = mInputRingBuffer[mInputReadPtr & 8191];
     mInputReadPtr++;
 
     float mixedSampleL = 0.0f;
     float mixedSampleR = 0.0f;
-    float sidechainSignal = 0.0f;
-    float fxBusesL[18];
-    float fxBusesR[18];
-    // Denormal Bias (1e-15f) helps prevent CPU spikes on nearly-silent audio
-    const float denormalBias = 1e-15f;
-
-    for (int b = 0; b < 18; ++b) {
-      // Load feedback from previous sample (Backward Chaining)
-      fxBusesL[b] = mFxFeedbacksL[b] + denormalBias;
-      fxBusesR[b] = mFxFeedbacksR[b] + denormalBias;
-      // Clear for next accumulation
-      mFxFeedbacksL[b] = 0.0f;
-      mFxFeedbacksR[b] = 0.0f;
-    }
 
     for (int t = 0; t < (int)mTracks.size(); ++t) {
       Track &track = mTracks[t];
-      track.gainReduction = 1.0f; // Reset per frame
+      track.gainReduction = 1.0f;
 
-      if (!track.isActive && track.mSilenceFrames > 2400) { // 50ms at 48k
+      if (!track.isActive && track.mSilenceFrames > 2400) {
         track.follower.process(0.0f);
         continue;
       }
@@ -3744,92 +3777,57 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         shouldMute = true;
       }
 
-      // Update smoothed parameters only when active (saves CPU on inactive
-      // tracks)
       if (std::abs(track.volume - track.smoothedVolume) > 0.0001f) {
         track.smoothedVolume += 0.01f * (track.volume - track.smoothedVolume);
       }
       for (int f = 0; f < 18; ++f) {
         if (std::abs(track.fxSends[f] - track.smoothedFxSends[f]) > 0.0001f) {
-          track.smoothedFxSends[f] +=
-              0.01f * (track.fxSends[f] - track.smoothedFxSends[f]);
+          track.smoothedFxSends[f] += 0.01f * (track.fxSends[f] - track.smoothedFxSends[f]);
+        }
+      }
+      for (int f = 0; f < 18; ++f) {
+        if (std::abs(mFxMixLevels[f] - track.fxMix[f]) > 0.0001f) {
+          track.fxMix[f] += 0.01f * (mFxMixLevels[f] - track.fxMix[f]);
         }
       }
 
-      float rawSampleL = 0.0f, rawSampleR = 0.0f;
-      switch (track.engineType) {
-      case 0:
-        rawSampleL = rawSampleR = track.subtractiveEngine.render();
-        break;
-      case 1:
-        rawSampleL = rawSampleR = track.fmEngine.render();
-        break;
-      case 2:
-        rawSampleL = rawSampleR =
-            track.samplerEngine.render(fxBusesL, fxBusesR);
-        break;
-      case 3:
-        track.granularEngine.render(&rawSampleL, &rawSampleR);
-        break;
-      case 4:
-        rawSampleL = rawSampleR = track.wavetableEngine.render();
-        break;
-      case 5:
-        rawSampleL = rawSampleR = track.fmDrumEngine.render();
-        break;
-      case 6:
-        rawSampleL = rawSampleR = track.analogDrumEngine.render();
-        break;
-      case 8: // AUDIO IN
-        rawSampleL = rawSampleR = track.audioInEngine.render(inputSample);
-        break;
-      case 9: // SOUNDFONT
-        track.soundFontEngine.render(&rawSampleL, &rawSampleR, 1);
-        break;
-      }
+      float rawSampleL = 0.0f;
+      float rawSampleR = 0.0f;
 
-      if (!std::isfinite(rawSampleL))
-        rawSampleL = 0.0f;
-      if (!std::isfinite(rawSampleR))
-        rawSampleR = 0.0f;
+      if (track.engineType == 0) {
+        rawSampleL = track.subtractiveEngine.process(mSampleRate);
+        rawSampleR = rawSampleL;
+      } else if (track.engineType == 1) {
+        rawSampleL = track.fmEngine.process(mSampleRate);
+        rawSampleR = rawSampleL;
+      } else if (track.engineType == 2) {
+        track.samplerEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
+      } else if (track.engineType == 3) {
+        track.granularEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
+      } else if (track.engineType == 4) {
+        track.wavetableEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
+      } else if (track.engineType == 5) {
+        track.fmDrumEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
+      } else if (track.engineType == 6) {
+        track.analogDrumEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
+      } else if (track.engineType == 8) {
+        track.audioInEngine.processStereo(inputSample, rawSampleL, rawSampleR, mSampleRate);
+      } else if (track.engineType == 9) {
+        track.soundFontEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
+      }
 
       float monoSum = (rawSampleL + rawSampleR) * 0.5f;
 
-      // Silence Detection (Tightened)
-      if (std::abs(monoSum) < 0.0001f) {
-        track.mSilenceFrames++;
-        if (track.mSilenceFrames > 2400) {
-          bool activeVoices = false;
-          for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
-            if (track.mActiveNotes[v].active) {
-              activeVoices = true;
-              break;
-            }
-          }
-          if (track.mPhysicallyHeldNoteCount == 0 && !activeVoices) {
-            track.isActive = false;
-            track.mSilenceFrames = 0;
-          }
+      if (t == mSidechainSourceTrack) {
+        if (mSidechainSourceDrumIdx == -1 || track.lastTriggeredDrumIndex == mSidechainSourceDrumIdx) {
+          sidechain_arr[i] = monoSum * track.smoothedVolume;
         }
-      } else {
-        track.mSilenceFrames = 0;
       }
 
-      float panVal = track.pan;
-      if (std::abs(panVal - track.smoothedPan) > 0.0001f) {
-        track.smoothedPan += 0.005f * (panVal - track.smoothedPan);
-        // Update cached pan coefficients only when smoothed pan changes
-        float angle = track.smoothedPan * (float)M_PI * 0.5f;
-        track.panL = cosf(angle);
-        track.panR = sinf(angle);
-      }
+      rawSampleL = softLimit(rawSampleL);
+      rawSampleR = softLimit(rawSampleR);
 
-      // (Moved smoothedVolume update to top of loop)
-
-      float finalVol = track.smoothedVolume * track.gainReduction;
-
-      // Pre-Fader Signal calculation (applies Gain Reduction and Punch, but
-      // NOT Track Volume)
+      float finalVol = track.smoothedVolume;
       float preFaderL = rawSampleL;
       float preFaderR = rawSampleR;
 
@@ -3839,16 +3837,10 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
         preFaderR *= punchScale;
         preFaderL = fast_tanh(preFaderL);
         preFaderR = fast_tanh(preFaderR);
-
-        // Apply 1.25x makeup gain to ensure it's louder than standard
-        // saturated output
         float makeupGain = 1.25f;
         preFaderL *= makeupGain;
         preFaderR *= makeupGain;
-
         track.mPunchCounter--;
-        // rawSampleL/R updated here to reflect the saturation for the final
-        // mix
         rawSampleL = preFaderL;
         rawSampleR = preFaderR;
       }
@@ -3857,30 +3849,22 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       preFaderR *= track.gainReduction;
 
       float trackDryKill = 0.0f;
-      bool skipTrackSends =
-          (track.engineType == 2 && track.samplerEngine.isSliceLockEnabled());
+      bool skipTrackSends = (track.engineType == 2 && track.samplerEngine.isSliceLockEnabled());
 
       for (int f = 0; f < 18; ++f) {
         if (track.smoothedFxSends[f] > 0.001f) {
-          // Per-track mix balance
           float wetAmount = track.smoothedFxSends[f] * track.fxMix[f];
-
           if (!skipTrackSends && !shouldMute) {
-            fxBusesL[f] += preFaderL * wetAmount;
-            fxBusesR[f] += preFaderR * wetAmount;
+            mFxBusBlockL[f][i] += preFaderL * wetAmount;
+            mFxBusBlockR[f][i] += preFaderR * wetAmount;
           }
-
-          // Accumulate dry kill for insert-style behavior
-          if (wetAmount > trackDryKill)
-            trackDryKill = wetAmount;
+          if (wetAmount > trackDryKill) trackDryKill = wetAmount;
         }
       }
 
       float dryScale = 1.0f - trackDryKill;
-      if (dryScale < 0.0f)
-        dryScale = 0.0f;
+      if (dryScale < 0.0f) dryScale = 0.0f;
 
-      // (Punch already applied to rawSampleL/R above)
       float trackOutputL = rawSampleL * finalVol * dryScale;
       float trackOutputR = rawSampleR * finalVol * dryScale;
 
@@ -3892,221 +3876,282 @@ void AudioEngine::renderStereo(float *outBuffer, int numFrames) {
       mixedSampleL += trackOutputL;
       mixedSampleR += trackOutputR;
 
+      
       track.follower.process(monoSum);
-    }
 
-    float currentSampleL = mixedSampleL;
-    float currentSampleR = mixedSampleR;
-    float wetSampleL = 0.0f;
-    float wetSampleR = 0.0f;
-    float spreadL = 0.0f, spreadR = 0.0f;
-
-    auto routeFx = [&](int index, float valL, float valR,
-                       bool isDelta = false) {
-      // CRITICAL SAFETY CHECK: Block NaNs/Infs from FX
-      if (!std::isfinite(valL) || !std::isfinite(valR)) {
-        // potential TODO: Reset the FX that caused this?
-        return;
+      // Silence Detection
+      if (std::abs(monoSum) < 0.0001f) {
+        track.mSilenceFrames++;
+        if (track.mSilenceFrames > 2400) {
+          bool activeVoices = false;
+          for (int v = 0; v < 8; ++v) {
+            if (track.mActiveNotes[v].active) {
+              activeVoices = true;
+              break;
+            }
+          }
+          if (track.mPhysicallyHeldNoteCount == 0 && !activeVoices && !mIsPlaying) {
+            track.isActive = false;
+            track.mSilenceFrames = 0;
+          }
+        }
+      } else {
+        track.mSilenceFrames = 0;
       }
 
-      int dest = mFxChainDest[index];
-      float outL, outR;
+    }
+    
+    mixedSampleL_arr[i] = mixedSampleL;
+    mixedSampleR_arr[i] = mixedSampleR;
+  } // End Phase 1
 
-      // Calculate Full Wet Output (Recover from Delta if needed)
+  // --- PHASE 2: BLOCK FX PROCESSING ---
+  auto routeFxBlock = [&](int index, bool isDelta, float* outBufL, float* outBufR) {
+    int dest = mFxChainDest[index];
+    
+    for (int i = 0; i < safeNumFrames; ++i) {
+      if (!std::isfinite(outBufL[i]) || !std::isfinite(outBufR[i])) {
+        outBufL[i] = outBufR[i] = 0.0f; 
+      }
+      
+      float outL, outR;
       if (isDelta) {
-        outL = (fxBusesL[index] + valL) * mFxMixLevels[index];
-        outR = (fxBusesR[index] + valR) * mFxMixLevels[index];
+        outL = (mFxBusBlockL[index][i] + outBufL[i]) * mFxMixLevels[index];
+        outR = (mFxBusBlockR[index][i] + outBufR[i]) * mFxMixLevels[index];
       } else {
-        outL = valL * mFxMixLevels[index];
-        outR = valR * mFxMixLevels[index];
+        outL = outBufL[i] * mFxMixLevels[index];
+        outR = outBufR[i] * mFxMixLevels[index];
       }
 
       if (dest >= 0 && dest < 18) {
-        // Serial Chaining
-        // Determine Direction based on Hardcoded Execution Order
-        // IDs: 0, 1, 9, 10, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 17
-        const int order[18] = {0, 1, 4,  5,  6,  7,  8,  9,  10,
-                               2, 3, 11, 12, 15, 16, 13, 14, 17};
+        const int order[18] = {0, 1, 4, 5, 6, 7, 8, 9, 10, 2, 3, 11, 12, 15, 16, 13, 14, 17};
         bool isForward = order[dest] > order[index];
 
         if (isForward) {
-          fxBusesL[dest] += outL; // Pass Full Signal (Unity Gain)
-          fxBusesR[dest] += outR;
+          mFxBusBlockL[dest][i] += outL;
+          mFxBusBlockR[dest][i] += outR;
         } else {
-          // Backward Chain -> Use Feedback Buffer for Next Sample
-          mFxFeedbacksL[dest] += outL;
-          mFxFeedbacksR[dest] += outR;
+          // Backward pass via 1-block delay (capture last sample for next block)
+          if (i == safeNumFrames - 1) {
+            mFxFeedbacksL[dest] += outL;
+            mFxFeedbacksR[dest] += outR;
+          }
         }
       } else {
-        // Main Mix: Add to accumulator
-        wetSampleL += outL;
-        wetSampleR += outR;
-      }
-    };
-
-    // Serial Chain Processing - Skip if bus is idle
-    if (std::abs(fxBusesL[0]) > 0.00001f || std::abs(fxBusesR[0]) > 0.00001f)
-      routeFx(0, mOverdriveFxL.process(fxBusesL[0]),
-              mOverdriveFxR.process(fxBusesR[0]),
-              false); // Insert Mode (Not Delta)
-
-    if (std::abs(fxBusesL[1]) > 0.00001f || std::abs(fxBusesR[1]) > 0.00001f)
-      routeFx(1, mBitcrusherFxL.process(fxBusesL[1]),
-              mBitcrusherFxR.process(fxBusesR[1]),
-              false); // Insert Mode (Not Delta)
-
-    if (std::abs(fxBusesL[9]) > 0.00001f || std::abs(fxBusesR[9]) > 0.00001f) {
-      float hpL = mHpLfoL.process(fxBusesL[9], sampleRate);
-      mHpLfoR.syncFrom(mHpLfoL);
-      float hpR = mHpLfoR.process(fxBusesR[9], sampleRate);
-      routeFx(9, hpL, hpR);
-    }
-    // LP LFO (Slot 10) - Send-based processing
-    if (std::abs(fxBusesL[10]) > 0.00001f ||
-        std::abs(fxBusesR[10]) > 0.00001f) {
-      float lpL = mLpLfoL.process(fxBusesL[10], sampleRate);
-      mLpLfoR.syncFrom(mLpLfoL);
-      float lpR = mLpLfoR.process(fxBusesR[10], sampleRate);
-      routeFx(10, lpL, lpR);
-    }
-
-    if (std::abs(fxBusesL[2]) > 0.00001f || std::abs(fxBusesR[2]) > 0.00001f) {
-      routeFx(2, mChorusFxL.process(fxBusesL[2], sampleRate),
-              mChorusFxR.process(fxBusesR[2], sampleRate));
-    }
-
-    if (std::abs(fxBusesL[3]) > 0.00001f || std::abs(fxBusesR[3]) > 0.00001f) {
-      routeFx(3, mPhaserFxL.process(fxBusesL[3], sampleRate),
-              mPhaserFxR.process(fxBusesR[3], sampleRate));
-    }
-
-    if (std::abs(fxBusesL[4]) > 0.00001f || std::abs(fxBusesR[4]) > 0.00001f) {
-      // Use new Stereo Process API
-      float wL = 0, wR = 0;
-      mTapeWobbleFx.processStereo(fxBusesL[4], fxBusesR[4], wL, wR, sampleRate);
-      routeFx(4, wL, wR, true); // Delta Mode
-    }
-
-    if (std::abs(fxBusesL[5]) > 1.0e-12f || std::abs(fxBusesR[5]) > 1.0e-12f ||
-        !mDelayFx.isSilent()) {
-      float dL = 0, dR = 0;
-      mDelayFx.processStereo(fxBusesL[5], fxBusesR[5], dL, dR, sampleRate);
-      int dest = mFxChainDest[5];
-      if (dest >= 0 && dest < 17) {
-        fxBusesL[dest] += dL * mFxMixLevels[5];
-        fxBusesR[dest] += dR * mFxMixLevels[5];
-      } else {
-        spreadL += dL;
-        spreadR += dR;
+        wetSampleL_arr[i] += outL;
+        wetSampleR_arr[i] += outR;
       }
     }
+  };
 
-    if (std::abs(fxBusesL[6]) > 1.0e-12f || std::abs(fxBusesR[6]) > 1.0e-12f ||
-        !mReverbFx.isSilent()) { // Use isSilent gate
-      float rL = 0, rR = 0;
-      mReverbFx.processStereoWet(fxBusesL[6], fxBusesR[6], rL, rR);
-      int dest = mFxChainDest[6];
-      if (dest >= 0 && dest < 17) {
-        fxBusesL[dest] += rL * mFxMixLevels[6];
-        fxBusesR[dest] += rR * mFxMixLevels[6];
-      } else {
-        spreadL += rL;
-        spreadR += rR;
+  // FX 0: Overdrive
+  {
+    float tmpL[1024], tmpR[1024];
+    for (int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[0][i]; tmpR[i] = mFxBusBlockR[0][i]; }
+    mOverdriveFxL.processBlock(tmpL, safeNumFrames);
+    mOverdriveFxR.processBlock(tmpR, safeNumFrames);
+    routeFxBlock(0, false, tmpL, tmpR);
+  }
+
+  // FX 1: Bitcrusher
+  {
+    float tmpL[1024], tmpR[1024];
+    for (int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[1][i]; tmpR[i] = mFxBusBlockR[1][i]; }
+    mBitcrusherFxL.processBlock(tmpL, safeNumFrames);
+    mBitcrusherFxR.processBlock(tmpR, safeNumFrames);
+    routeFxBlock(1, false, tmpL, tmpR);
+  }
+
+  // FX 9: HP LFO
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[9][i]; tmpR[i] = mFxBusBlockR[9][i]; }
+    mHpLfoL.processBlock(tmpL, safeNumFrames, mSampleRate);
+    mHpLfoR.syncFrom(mHpLfoL);
+    mHpLfoR.processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(9, false, tmpL, tmpR);
+  }
+
+  // FX 10: LP LFO
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[10][i]; tmpR[i] = mFxBusBlockR[10][i]; }
+    mLpLfoL.processBlock(tmpL, safeNumFrames, mSampleRate);
+    mLpLfoR.syncFrom(mLpLfoL);
+    mLpLfoR.processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(10, false, tmpL, tmpR);
+  }
+
+  // FX 2: Chorus
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[2][i]; tmpR[i] = mFxBusBlockR[2][i]; }
+    mChorusFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
+    mChorusFxR.processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(2, false, tmpL, tmpR);
+  }
+
+  // FX 3: Phaser
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[3][i]; tmpR[i] = mFxBusBlockR[3][i]; }
+    mPhaserFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
+    mPhaserFxR.processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(3, false, tmpL, tmpR);
+  }
+
+  // FX 4: Tape Wobble
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[4][i]; tmpR[i] = mFxBusBlockR[4][i]; }
+    mTapeWobbleFx.processBlockStereo(tmpL, tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(4, true, tmpL, tmpR); // Delta Mode
+  }
+
+  // FX 5: Delay
+  if (!mDelayFx.isSilent()) {
+    float dL[1024], dR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { dL[i] = mFxBusBlockL[5][i]; dR[i] = mFxBusBlockR[5][i]; }
+    mDelayFx.processBlockStereo(dL, dR, safeNumFrames, mSampleRate);
+    int dest = mFxChainDest[5];
+    if (dest >= 0 && dest < 17) {
+      for(int i=0; i<safeNumFrames; ++i) {
+        mFxBusBlockL[dest][i] += dL[i] * mFxMixLevels[5];
+        mFxBusBlockR[dest][i] += dR[i] * mFxMixLevels[5];
+      }
+      // Note: Backward chaining handled via loop if applicable
+    } else {
+      for(int i=0; i<safeNumFrames; ++i) {
+        spreadL_arr[i] += dL[i];
+        spreadR_arr[i] += dR[i];
       }
     }
+  }
 
-    if (std::abs(fxBusesL[7]) > 0.00001f || std::abs(fxBusesR[7]) > 0.00001f) {
-      routeFx(
-          7, mSlicerFxL.process(fxBusesL[7], mSampleCount + i, mSamplesPerStep),
-          mSlicerFxR.process(fxBusesR[7], mSampleCount + i, mSamplesPerStep),
-          false); // Standard Mix
+  // FX 6: Reverb
+  if (!mReverbFx.isSilent()) {
+    float rL[1024], rR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { rL[i] = mFxBusBlockL[6][i]; rR[i] = mFxBusBlockR[6][i]; }
+    mReverbFx.processBlockStereoWet(rL, rR, safeNumFrames);
+    int dest = mFxChainDest[6];
+    if (dest >= 0 && dest < 17) {
+      for(int i=0; i<safeNumFrames; ++i) {
+        mFxBusBlockL[dest][i] += rL[i] * mFxMixLevels[6];
+        mFxBusBlockR[dest][i] += rR[i] * mFxMixLevels[6];
+      }
+    } else {
+      for(int i=0; i<safeNumFrames; ++i) {
+        spreadL_arr[i] += rL[i];
+        spreadR_arr[i] += rR[i];
+      }
     }
+  }
 
-    if (std::abs(fxBusesL[8]) > 0.00001f || std::abs(fxBusesR[8]) > 0.00001f) {
-      routeFx(8, mCompressorFx.process(fxBusesL[8], sidechainSignal),
-              mCompressorFx.process(fxBusesR[8], sidechainSignal));
+  // FX 7: Slicer (Requires mSampleCount per sample)
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) {
+      tmpL[i] = mSlicerFxL.process(mFxBusBlockL[7][i], mSampleCount + i, mSamplesPerStep);
+      tmpR[i] = mSlicerFxR.process(mFxBusBlockR[7][i], mSampleCount + i, mSamplesPerStep);
     }
+    routeFxBlock(7, false, tmpL, tmpR);
+  }
 
-    if (std::abs(fxBusesL[11]) > 0.00001f ||
-        std::abs(fxBusesR[11]) > 0.00001f) {
-      float fL, fR;
-      fL = mFlangerFxL.process(fxBusesL[11], sampleRate);
-      fR = mFlangerFxR.process(fxBusesR[11], sampleRate);
-      routeFx(11, fL, fR, true); // Delta Mode (Wet-only return)
+  // FX 8: Compressor (Requires sidechain)
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[8][i]; tmpR[i] = mFxBusBlockR[8][i]; }
+    mCompressorFx.processBlock(tmpL, sidechain_arr, safeNumFrames);
+    // Duplicate compressor for right? Or mono shared state? Current code used `mCompressorFx.process(R)`
+    // So we use mCompressorFx for right as well
+    mCompressorFx.processBlock(tmpR, sidechain_arr, safeNumFrames);
+    routeFxBlock(8, false, tmpL, tmpR);
+  }
+
+  // FX 11: Flanger
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[11][i]; tmpR[i] = mFxBusBlockR[11][i]; }
+    mFlangerFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
+    mFlangerFxR.processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(11, true, tmpL, tmpR); // Delta Mode
+  }
+
+  // FX 12: FilterPedal 0
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[12][i]; tmpR[i] = mFxBusBlockR[12][i]; }
+    mFilterPedalL[0].processBlock(tmpL, safeNumFrames, mSampleRate);
+    mFilterPedalR[0].processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(12, false, tmpL, tmpR);
+  }
+
+  // FX 15: FilterPedal 1
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[15][i]; tmpR[i] = mFxBusBlockR[15][i]; }
+    mFilterPedalL[1].processBlock(tmpL, safeNumFrames, mSampleRate);
+    mFilterPedalR[1].processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(15, false, tmpL, tmpR);
+  }
+
+  // FX 16: FilterPedal 2
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[16][i]; tmpR[i] = mFxBusBlockR[16][i]; }
+    mFilterPedalL[2].processBlock(tmpL, safeNumFrames, mSampleRate);
+    mFilterPedalR[2].processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(16, false, tmpL, tmpR);
+  }
+
+  // FX 13: Tape Echo
+  if (!mTapeEchoFxL.isSilent() || !mTapeEchoFxR.isSilent() || true) {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { 
+      tmpL[i] = mFxBusBlockL[13][i] + 1.0e-18f; 
+      tmpR[i] = mFxBusBlockR[13][i] + 1.0e-18f; 
     }
+    mTapeEchoFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
+    mTapeEchoFxR.processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(13, false, tmpL, tmpR);
+  }
 
-    // Filter 1 (Slot 12)
-    if (std::abs(fxBusesL[12]) > 0.00001f ||
-        std::abs(fxBusesR[12]) > 0.00001f) {
-      float sL = mFilterPedalL[0].process(fxBusesL[12], sampleRate);
-      float sR = mFilterPedalR[0].process(fxBusesR[12], sampleRate);
-      routeFx(12, sL, sR, false); // Wet
-    }
+  // FX 14: Octaver
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[14][i]; tmpR[i] = mFxBusBlockR[14][i]; }
+    mOctaverFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
+    mOctaverFxR.processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(14, false, tmpL, tmpR);
+  }
 
-    // Filter 2 (Slot 15)
-    if (std::abs(fxBusesL[15]) > 0.00001f ||
-        std::abs(fxBusesR[15]) > 0.00001f) {
-      float sL = mFilterPedalL[1].process(fxBusesL[15], sampleRate);
-      float sR = mFilterPedalR[1].process(fxBusesR[15], sampleRate);
-      routeFx(15, sL, sR, false); // Wet
-    }
+  // FX 17: Eq5Band
+  {
+    float tmpL[1024], tmpR[1024];
+    for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[17][i]; tmpR[i] = mFxBusBlockR[17][i]; }
+    mEq5BandFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
+    mEq5BandFxR.processBlock(tmpR, safeNumFrames, mSampleRate);
+    routeFxBlock(17, false, tmpL, tmpR);
+  }
 
-    // Filter 3 (Slot 16)
-    if (std::abs(fxBusesL[16]) > 0.00001f ||
-        std::abs(fxBusesR[16]) > 0.00001f) {
-      float sL = mFilterPedalL[2].process(fxBusesL[16], sampleRate);
-      float sR = mFilterPedalR[2].process(fxBusesR[16], sampleRate);
-      routeFx(16, sL, sR, false); // Wet
-    }
+  // --- PHASE 3: MASTER SUMMING ---
+  for (int i = 0; i < safeNumFrames; ++i) {
+    float finalL = mixedSampleL_arr[i] + wetSampleL_arr[i] + spreadL_arr[i];
+    float finalR = mixedSampleR_arr[i] + wetSampleR_arr[i] + spreadR_arr[i];
 
-    if (std::abs(fxBusesL[13]) > 0.00001f ||
-        std::abs(fxBusesR[13]) > 0.00001f || !mTapeEchoFxL.isSilent() ||
-        !mTapeEchoFxR.isSilent()) {
-      // Anti-Denormal DC Offset for Echo Loop
-      float dc = 1.0e-18f;
-      routeFx(13, mTapeEchoFxL.process(fxBusesL[13] + dc, sampleRate),
-              mTapeEchoFxR.process(fxBusesR[13] + dc, sampleRate));
-    }
+    if (!std::isfinite(finalL)) finalL = 0.0f;
+    if (!std::isfinite(finalR)) finalR = 0.0f;
 
-    if (std::abs(fxBusesL[14]) > 0.00001f ||
-        std::abs(fxBusesR[14]) > 0.00001f) {
-      routeFx(14, mOctaverFxL.process(fxBusesL[14], sampleRate),
-              mOctaverFxR.process(fxBusesR[14], sampleRate));
-    }
+    if (finalL > 1.0f) finalL = fast_tanh(finalL);
+    else if (finalL < -1.0f) finalL = fast_tanh(finalL);
 
-    if (std::abs(fxBusesL[17]) > 0.00001f ||
-        std::abs(fxBusesR[17]) > 0.00001f) {
-      routeFx(17, mEq5BandFxL.process(fxBusesL[17], sampleRate),
-              mEq5BandFxR.process(fxBusesR[17], sampleRate));
-    }
+    if (finalR > 1.0f) finalR = fast_tanh(finalR);
+    else if (finalR < -1.0f) finalR = fast_tanh(finalR);
 
-    float finalL = (mixedSampleL + wetSampleL + spreadL);
-    float finalR = (mixedSampleR + wetSampleR + spreadR);
-
-    if (!std::isfinite(finalL))
-      finalL = 0.0f;
-    if (!std::isfinite(finalR))
-      finalR = 0.0f;
-
-    // NOTE: HP LFO (9) and LP LFO (10) are now ONLY processed via sends
-    // (see routeFx calls above). Master insert was removed to prevent
-    // double-processing and "track grabbing" issues.
-
-    // Final Limiter / Soft Clip
-    if (finalL > 1.0f)
-      finalL = fast_tanh(finalL);
-    else if (finalL < -1.0f)
-      finalL = fast_tanh(finalL);
-
-    if (finalR > 1.0f)
-      finalR = fast_tanh(finalR);
-    else if (finalR < -1.0f)
-      finalR = fast_tanh(finalR);
-
-    // Final Master Volume
     outBuffer[i * 2] = finalL * mMasterVolume;
     outBuffer[i * 2 + 1] = finalR * mMasterVolume;
   }
+
 }
 
 // Reset Punch Active flags for all tracks after processing the block

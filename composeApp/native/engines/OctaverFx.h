@@ -15,7 +15,7 @@ public:
     mBuffer.resize(8192, 0.0f); // ~180ms circular buffer
   }
 
-  float process(float input, float sampleRate) {
+  float processSample(float input, float sampleRate) {
     if (!std::isfinite(input))
       input = 0.0f;
     if (mMix <= 0.001f)
@@ -158,6 +158,16 @@ public:
     if (!std::isfinite(out))
       out = 0.0f;
     return input * (1.0f - mMix) + out * mMix;
+  }
+
+  void processBlock(float *inOut, int numFrames, float sampleRate) {
+    for (int i = 0; i < numFrames; ++i) {
+      inOut[i] = processSample(inOut[i], sampleRate);
+    }
+  }
+
+  float process(float input, float sampleRate) {
+    return processSample(input, sampleRate);
   }
 
   void setParameters(float mix, float detune, float unison, float mode) {

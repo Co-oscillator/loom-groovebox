@@ -21,7 +21,7 @@ public:
     mSmoothedMix = mMix;
   }
 
-  float process(float input, float sampleRate) {
+  float processSample(float input, float sampleRate) {
     if (!std::isfinite(input))
       input = 0.0f;
 
@@ -146,14 +146,6 @@ public:
 
     float output = (echo * mSmoothedMix);
 
-    // Silence tracking
-    if (std::abs(output) < 1e-9f) {
-      if (mSilentCounter < 48000)
-        mSilentCounter++;
-    } else {
-      mSilentCounter = 0;
-    }
-
     float wet = output;
     if (!std::isfinite(wet))
       wet = 0.0f;
@@ -161,6 +153,36 @@ public:
     if (mSmoothedMix > 0.999f)
       dry = 0.0f; // Force dry kill at max mix
     return dry + wet;
+  }
+
+  // Legacy single-sample process (with per-sample silence tracking)
+  float process(float input, float sampleRate) {
+    float out = processSample(input, sampleRate);
+    if (std::abs(out) < 1e-9f) {
+      if (mSilentCounter < 48000)
+        mSilentCounter++;
+    } else {
+      mSilentCounter = 0;
+    }
+    return out;
+  }
+
+  // v3.1: Block processing (with per-block peak tracking)
+  void processBlock(float *inOut, int numFrames, float sampleRate) {
+    float peak = 0.0f;
+    for (int i = 0; i < numFrames; ++i) {
+      float out = processSample(inOut[i], sampleRate);
+      inOut[i] = out;
+      float absOut = std::abs(out);
+      if (absOut > peak) peak = absOut;
+    }
+    
+    if (peak < 1e-9f) {
+      if (mSilentCounter < 48000)
+        mSilentCounter += numFrames;
+    } else {
+      mSilentCounter = 0;
+    }
   }
 
   bool isSilent() const { return mSilentCounter >= 48000; }

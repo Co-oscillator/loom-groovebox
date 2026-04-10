@@ -16,7 +16,7 @@ public:
   void setLevel(float level) { mLevel = level; }
   void setMix(float mix) { mMix = mix; }
 
-  float process(float input) {
+  float processSample(float input) {
     // 1. Tighten Bass (150Hz HP)
     mHpState += 0.15f * (input - mHpState);
     float x = (input - mHpState) * mDrive;
@@ -49,6 +49,16 @@ public:
     float out = mLastOutput * mLevel * 2.1f * mMix;
     // RETURNS (WET - INPUT) for Insert Behavior in Parallel Chain
     return std::tanh(out) - input;
+  }
+
+  void processBlock(float *inOut, int numFrames) {
+    for (int i = 0; i < numFrames; ++i) {
+      inOut[i] = processSample(inOut[i]);
+    }
+  }
+
+  float process(float input) {
+    return processSample(input);
   }
 
   void setDistortion(float dist) { mDist = dist; }

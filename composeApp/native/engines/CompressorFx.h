@@ -17,7 +17,7 @@ public:
   }
   void setMakeup(float dB) { mMakeup = powf(10.0f, dB / 20.0f); }
 
-  float process(float input, float sidechain) {
+  float processSample(float input, float sidechain) {
     // Level detection on sidechain signal
     float absSide = std::abs(sidechain);
 
@@ -56,6 +56,16 @@ public:
     float out = input * gain * mMakeup;
     // Soft clip at 0dB to prevent harsh digital distortion
     return std::tanh(out);
+  }
+
+  void processBlock(float *inOut, const float *sidechain, int numFrames) {
+    for (int i = 0; i < numFrames; ++i) {
+      inOut[i] = processSample(inOut[i], sidechain[i]);
+    }
+  }
+
+  float process(float input, float sidechain) {
+    return processSample(input, sidechain);
   }
 
 private:

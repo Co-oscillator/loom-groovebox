@@ -57,7 +57,7 @@ public:
 
   void setMix(float mix) { mMix = mix; }
 
-  float process(float input, float sampleRate) {
+  float processSample(float input, float sampleRate) {
     if (!std::isfinite(input))
       return 0.0f;
     if (sampleRate <= 0)
@@ -69,6 +69,16 @@ public:
     }
 
     return input * (1.0f - mMix) + out * mMix;
+  }
+
+  void processBlock(float *inOut, int numFrames, float sampleRate) {
+    for (int i = 0; i < numFrames; ++i) {
+      inOut[i] = processSample(inOut[i], sampleRate);
+    }
+  }
+
+  float process(float input, float sampleRate) {
+    return processSample(input, sampleRate);
   }
 
   void clear() {

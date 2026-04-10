@@ -313,7 +313,9 @@ public:
 
     float parameters[2500] = {0.0f};
     float appliedParameters[2500] = {0.0f}; // Values after P-locks and Mods
-    std::bitset<2500> mModulatedParams;     // Tracking for reset logic
+    // v3.0: Compact modulation tracking (replaces bitset<2500>)
+    int mModulatedIds[32];     // Parameter IDs modulated last block
+    int mModulatedCount = 0;   // Count of modulated params
 
     struct RecordingNote {
       int note;

@@ -557,31 +557,33 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
     }
 
     // 1. Legato / Retrigger Check
+    // v3.0: Consolidated — single pass handles legato tie, retrigger, and voice
+    // release. Prevents double-decrement of mGlobalVoiceCount.
     for (int i = 0; i < AudioEngineCore::Track::MAX_POLYPHONY; ++i) {
-      if (track.mActiveNotes[i].active && track.mActiveNotes[i].note == note &&
-          track.mActiveNotes[i].durationRemaining > 512) {
+      if (track.mActiveNotes[i].active && track.mActiveNotes[i].note == note) {
         float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
         float trackSamplesPerStep =
             samplesPerStep / std::max(0.01f, track.mClockMultiplier);
 
-        // Only tie if gate is explicitly long (legato)
-        if (gate > 0.9f) {
+        // Only tie if gate is explicitly long (legato) AND note has remaining
+        // time
+        // v3.0: Require gate >= 1.0f (user specifically configured tie) to
+        // avoid accidental infinite ties when Humanize jitter overlaps default 0.95f gates.
+        if (gate >= 1.0f && track.mActiveNotes[i].durationRemaining > 512) {
           track.mActiveNotes[i].durationRemaining =
               trackSamplesPerStep * (gate + 0.05f); // Overlap for tie
           return; // Skip re-triggering (Legato)
-        } else {
-          // Retriggering: Cut it off and restart.
-          track.mActiveNotes[i].active = false;
-          mGlobalVoiceCount--;
-
-          // RATCHET/RETRIGGER FIX: Explicitly release on engines for crisp
-          // attack
-          track.subtractiveEngine.releaseNote(note);
-          track.fmEngine.releaseNote(note);
-          track.samplerEngine.releaseNote(note);
-          track.wavetableEngine.releaseNote(note);
-          track.soundFontEngine.noteOff(note);
         }
+
+        // Retriggering: Deactivate slot and release on engines for crisp attack
+        track.mActiveNotes[i].active = false;
+        mGlobalVoiceCount = std::max(0, mGlobalVoiceCount - 1);
+
+        track.subtractiveEngine.releaseNote(note);
+        track.fmEngine.releaseNote(note);
+        track.samplerEngine.releaseNote(note);
+        track.wavetableEngine.releaseNote(note);
+        track.soundFontEngine.noteOff(note);
       }
     }
 
@@ -599,42 +601,55 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
     track.isActive = true;
     track.mSilenceFrames = 0;
 
-    // RATCHET FIX (v2.2.1): If same note is already playing on this track,
-    // ensure the engine stops it before we re-trigger for crisp attack.
-    for (int i = 0; i < AudioEngineCore::Track::MAX_POLYPHONY; ++i) {
-      if (track.mActiveNotes[i].active && track.mActiveNotes[i].note == note) {
-        track.mActiveNotes[i].active = false;
-        mGlobalVoiceCount--;
-        // Inform engines to stop existing note for crisp re-trigger
-        track.subtractiveEngine.releaseNote(note);
-        track.fmEngine.releaseNote(note);
-        track.samplerEngine.releaseNote(note);
-        track.wavetableEngine.releaseNote(note);
-      }
-    }
-
     if (punch) {
       track.mPunchCounter = static_cast<int>(mSampleRate * 0.05f); // 50ms spike
     }
 
-    // 3. Allocate Voice (under Global Cap)
-    if (mGlobalVoiceCount < 64) {
+    // 3. Allocate Voice (find free slot, or steal oldest if at cap)
+    // v3.0: CRITICAL — we MUST allocate a tracking slot for every engine
+    // trigger. Without a slot, the note-off timer never fires, and the
+    // engine voice gets stuck in Sustain forever ("envelope ignored").
+    int allocIdx = -1;
+    for (int i = 0; i < AudioEngineCore::Track::MAX_POLYPHONY; ++i) {
+      if (!track.mActiveNotes[i].active) {
+        allocIdx = i;
+        break;
+      }
+    }
+    // If no free slot, steal the one with the least remaining time
+    if (allocIdx == -1) {
+      double minRemaining = 1e18;
       for (int i = 0; i < AudioEngineCore::Track::MAX_POLYPHONY; ++i) {
-        if (!track.mActiveNotes[i].active) {
-          track.mActiveNotes[i].active = true;
-          track.mActiveNotes[i].note = note;
-          mGlobalVoiceCount++;
-          if (isSequencerTrigger) {
-            float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
-            float trackSamplesPerStep =
-                samplesPerStep / std::max(0.01f, track.mClockMultiplier);
-            track.mActiveNotes[i].durationRemaining =
-                trackSamplesPerStep * gate;
-          } else {
-            track.mActiveNotes[i].durationRemaining = 9999998.0f;
-          }
-          break;
+        if (track.mActiveNotes[i].durationRemaining < minRemaining) {
+          minRemaining = track.mActiveNotes[i].durationRemaining;
+          allocIdx = i;
         }
+      }
+      if (allocIdx >= 0) {
+        // Release the stolen voice on engines
+        int stolenNote = track.mActiveNotes[allocIdx].note;
+        track.subtractiveEngine.releaseNote(stolenNote);
+        track.fmEngine.releaseNote(stolenNote);
+        track.samplerEngine.releaseNote(stolenNote);
+        track.wavetableEngine.releaseNote(stolenNote);
+        track.soundFontEngine.noteOff(stolenNote);
+        // Slot was already active, don't increment voice count
+      }
+    } else {
+      mGlobalVoiceCount++;
+    }
+
+    if (allocIdx >= 0) {
+      track.mActiveNotes[allocIdx].active = true;
+      track.mActiveNotes[allocIdx].note = note;
+      if (isSequencerTrigger) {
+        float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
+        float trackSamplesPerStep =
+            samplesPerStep / std::max(0.01f, track.mClockMultiplier);
+        track.mActiveNotes[allocIdx].durationRemaining =
+            trackSamplesPerStep * gate;
+      } else {
+        track.mActiveNotes[allocIdx].durationRemaining = 9999998.0f;
       }
     }
 
@@ -1735,8 +1750,8 @@ void AudioEngineCore::releaseNoteLocked(int trackIndex, int note,
         if (track.mActiveNotes[i].active &&
             track.mActiveNotes[i].note == note) {
           track.mActiveNotes[i].active = false;
-          mGlobalVoiceCount--;
-          break;
+          mGlobalVoiceCount = std::max(0, mGlobalVoiceCount - 1);
+          // Do NOT break, release all voices for this note to be safe
         }
       }
       if (mIsRecording && mIsPlaying && !isSequencerTrigger) {
@@ -2201,8 +2216,12 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
           if (track.mActiveNotes[i].active) {
             track.mActiveNotes[i].durationRemaining -= framesToDo;
             if (track.mActiveNotes[i].durationRemaining <= 0) {
-              releaseNoteLocked(t, track.mActiveNotes[i].note, true);
+              int noteToRelease = track.mActiveNotes[i].note;
+              // v3.0: Deactivate BEFORE calling release to prevent
+              // releaseNoteLocked from double-decrementing via its own scan
               track.mActiveNotes[i].active = false;
+              mGlobalVoiceCount = std::max(0, mGlobalVoiceCount - 1);
+              releaseNoteLocked(t, noteToRelease, true);
             }
           }
         }
@@ -2269,10 +2288,24 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
       if (tr.isActive)
         activeTracks++;
 
-    LOGD("AudioEngineCore Stats: ActiveTracks=%d, MasterVol=%.2f, "
+    // v3.0: Periodic voice count reconciliation (self-heal any drift)
+    int actualVoiceCount = 0;
+    for (const auto &tr : mTracks) {
+      for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
+        if (tr.mActiveNotes[v].active)
+          actualVoiceCount++;
+      }
+    }
+    if (mGlobalVoiceCount != actualVoiceCount) {
+      LOGD("VoiceCount DRIFT: reported=%d actual=%d — correcting",
+           mGlobalVoiceCount.load(), actualVoiceCount);
+      mGlobalVoiceCount = actualVoiceCount;
+    }
+
+    LOGD("AudioEngineCore Stats: ActiveTracks=%d, Voices=%d, MasterVol=%.2f, "
          "SampleRate=%.1f, "
          "BlockPeak=%.4f, MaxPeak=%.4f",
-         activeTracks, mMasterVolume, (float)mSampleRate, currentPeak, maxPeak);
+         activeTracks, mGlobalVoiceCount.load(), mMasterVolume, (float)mSampleRate, currentPeak, maxPeak);
 
     // Extra debug: track states
     for (int t = 0; t < 8; ++t) {
@@ -2589,7 +2622,10 @@ void AudioEngineCore::setRouting(int destTrack, int sourceTrack, int source,
 void AudioEngineCore::applyModulations() {
   for (int t = 0; t < (int)mTracks.size(); ++t) {
     auto &track = mTracks[t];
-    std::bitset<2500> currentModulated;
+
+    // v3.0: Compact modulation tracking (replaces bitset<2500> scan)
+    int currentModIds[32];
+    int currentModCount = 0;
 
     const RoutingEntry *mods;
     int count;
@@ -2651,38 +2687,61 @@ void AudioEngineCore::applyModulations() {
         srcValue = 0.0f;
 
       // Apply to Destination
+      int destId = -1;
       if (mod.destination == ModDestination::Parameter &&
           mod.destParamId >= 0 && mod.destParamId < 2500) {
-        float baseVal = track.parameters[mod.destParamId];
-        float effectiveVal = baseVal + (srcValue * mod.amount);
-        track.appliedParameters[mod.destParamId] = effectiveVal;
-        currentModulated.set(mod.destParamId);
-
-        if (std::isfinite(effectiveVal)) {
-          updateEngineParameter(t, mod.destParamId, effectiveVal);
-        }
+        destId = mod.destParamId;
       } else if (mod.destination == ModDestination::FilterCutoff) {
-        float baseVal = track.parameters[112];
+        destId = 112;
+      }
+
+      if (destId >= 0) {
+        float baseVal = track.parameters[destId];
         float effectiveVal = baseVal + (srcValue * mod.amount);
-        track.appliedParameters[112] = effectiveVal;
-        currentModulated.set(112);
-        if (std::isfinite(effectiveVal)) {
-          updateEngineParameter(t, 112, effectiveVal);
+        // v3.0: NaN guard
+        if (!std::isfinite(effectiveVal))
+          effectiveVal = baseVal;
+        track.appliedParameters[destId] = effectiveVal;
+        updateEngineParameter(t, destId, effectiveVal);
+
+        // Track this modulated ID (avoid duplicates)
+        if (currentModCount < 32) {
+          bool found = false;
+          for (int k = 0; k < currentModCount; ++k) {
+            if (currentModIds[k] == destId) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            currentModIds[currentModCount++] = destId;
+          }
         }
       }
     }
 
-    // Reset parameters that are no longer modulated
-    if (track.mModulatedParams.any()) {
-      for (int id = 0; id < 2500; ++id) {
-        if (track.mModulatedParams.test(id) && !currentModulated.test(id)) {
-          float baseVal = track.parameters[id];
-          track.appliedParameters[id] = baseVal;
-          updateEngineParameter(t, id, baseVal);
+    // Reset parameters that were modulated last block but not this block
+    for (int p = 0; p < track.mModulatedCount; ++p) {
+      int prevId = track.mModulatedIds[p];
+      bool stillModulated = false;
+      for (int k = 0; k < currentModCount; ++k) {
+        if (currentModIds[k] == prevId) {
+          stillModulated = true;
+          break;
         }
       }
+      if (!stillModulated) {
+        float baseVal = track.parameters[prevId];
+        track.appliedParameters[prevId] = baseVal;
+        updateEngineParameter(t, prevId, baseVal);
+      }
     }
-    track.mModulatedParams = currentModulated;
+
+    // Store current modulated set for next block
+    track.mModulatedCount = currentModCount;
+    for (int k = 0; k < currentModCount; ++k) {
+      track.mModulatedIds[k] = currentModIds[k];
+    }
   }
 }
 

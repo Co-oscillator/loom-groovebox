@@ -311,6 +311,27 @@ Check out the latest features in action on the [Loom Audio YouTube Channel](http
 - **Latency**: Audio buffers are automatically tuned; manually adjustable in settings for ultra-low latency hardware.
 - **Build**: Built with Android Studio using NDK 27+ and CMake.
 
+---
+
+## Development Roadmap
+
+### v3.0 — Stability & Performance (Current)
+- **Envelope Fix**: Resolved voice count drift causing sequencer notes to ignore ADSR envelopes after extended playback. Consolidated duplicate retrigger logic and added periodic voice count reconciliation.
+- **Sampler Quality**: Eliminated digital crackling during Pitch/Speed parameter changes by adding minimum pitch smoothing (~5ms) and improving cubic interpolation boundary clamping.
+- **SoundFont Quality**: Fixed crackling during preset toggling by clearing stale audio buffers on preset change, splitting L/R filters to prevent state corruption, and adding a crossfade ramp.
+- **Crash Prevention**: Replaced O(2500) bitset modulation scan with compact O(N) tracked-ID array. Added NaN guards to prevent crash propagation during rapid LFO modulation.
+- **SoundFont UI**: Added Prev/Next (◀/▶) buttons for quick preset auditioning.
+- **Settings Reorder**: Reorganized settings screen: Project → Interface → MIDI Input → MIDI Monitor → Assignable Controls → Panic → Credits.
+
+### v3.1 — CPU Optimization (Planned)
+- **Block-Based FX Processing**: Refactor all FX classes to process 64-frame blocks instead of per-sample. Expected to reduce FX CPU usage by 30-50% through improved cache locality, fewer function calls, and SIMD vectorization potential.
+  - Add `processBlock(float* buf, int numFrames)` to each FX class
+  - Restructure `routeFx` lambda from per-sample serial chaining to block-level chaining
+  - Convert FX idle detection from per-sample `std::abs` checks to per-block peak detection
+  - Adjust feedback buffers (`mFxFeedbacksL/R`) for block-level backward chaining
+- **Render Pipeline**: Accumulate per-track output into per-bus buffers before FX processing, enabling batch FX application.
+- **ARM NEON**: Investigate explicit SIMD intrinsics for hot paths (mixing, gain application, filter processing).
+
 ## License
 Loom Groovebox is licensed under the **GNU GPL v3**. 
 (See included LICENSE file for full text).

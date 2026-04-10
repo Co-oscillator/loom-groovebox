@@ -2599,6 +2599,41 @@ fun SoundFontParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
                     Button(onClick = { showPresetMenu = true }, modifier = Modifier.height(28.dp), contentPadding = PaddingValues(horizontal = 8.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha=0.1f)), border = BorderStroke(1.dp, Color.Magenta.copy(alpha=0.5f))) {
                         Text("PRESET", fontSize = 10.sp, color = Color.Magenta)
                     }
+
+                    // v3.0: Prev/Next preset navigation buttons
+                    Button(
+                        onClick = {
+                            val currentIdx = track.soundFontPresetIndex
+                            val newIdx = if (currentIdx <= 0) presetCount - 1 else currentIdx - 1
+                            nativeLib.setSoundFontPreset(trackIndex, newIdx)
+                            val name = nativeLib.getSoundFontPresetName(trackIndex, newIdx)
+                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> if (idx == trackIndex) t.copy(soundFontPresetIndex = newIdx, soundFontPresetName = name) else t }))
+                        },
+                        modifier = Modifier.height(28.dp).width(28.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha=0.1f)),
+                        border = BorderStroke(1.dp, Color.Magenta.copy(alpha=0.3f))
+                    ) {
+                        Text("◀", fontSize = 12.sp, color = Color.Magenta)
+                    }
+
+                    Button(
+                        onClick = {
+                            val currentIdx = track.soundFontPresetIndex
+                            val newIdx = if (currentIdx >= presetCount - 1) 0 else currentIdx + 1
+                            nativeLib.setSoundFontPreset(trackIndex, newIdx)
+                            val name = nativeLib.getSoundFontPresetName(trackIndex, newIdx)
+                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> if (idx == trackIndex) t.copy(soundFontPresetIndex = newIdx, soundFontPresetName = name) else t }))
+                        },
+                        modifier = Modifier.height(28.dp).width(28.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha=0.1f)),
+                        border = BorderStroke(1.dp, Color.Magenta.copy(alpha=0.3f))
+                    ) {
+                        Text("▶", fontSize = 12.sp, color = Color.Magenta)
+                    }
                 }
             }
         }

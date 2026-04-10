@@ -20,7 +20,8 @@ public:
         mSampleRate(other.mSampleRate), mBufferPos(other.mBufferPos),
         mBufferFrames(other.mBufferFrames), mMutex(std::move(other.mMutex)),
         mEnvelope(std::move(other.mEnvelope)),
-        mFilter(std::move(other.mFilter)), mAttack(other.mAttack),
+        mFilterL(std::move(other.mFilterL)),
+        mFilterR(std::move(other.mFilterR)), mAttack(other.mAttack),
         mDecay(other.mDecay), mSustain(other.mSustain),
         mRelease(other.mRelease), mCutoff(other.mCutoff),
         mResonance(other.mResonance), mFilterMode(other.mFilterMode) {
@@ -42,7 +43,8 @@ public:
       mBufferFrames = other.mBufferFrames;
       mMutex = std::move(other.mMutex);
       mEnvelope = std::move(other.mEnvelope);
-      mFilter = std::move(other.mFilter);
+      mFilterL = std::move(other.mFilterL);
+      mFilterR = std::move(other.mFilterR);
       mAttack = other.mAttack;
       mDecay = other.mDecay;
       mSustain = other.mSustain;
@@ -77,7 +79,8 @@ public:
   void setSampleRate(float sr) {
     mSampleRate = sr;
     mEnvelope.setSampleRate(sr);
-    mFilter.setParams(mCutoff * 10000.0f, mResonance, sr);
+    mFilterL.setParams(mCutoff * 10000.0f, mResonance, sr);
+    mFilterR.setParams(mCutoff * 10000.0f, mResonance, sr);
     if (mTsf) {
       tsf_set_output(mTsf, TSF_STEREO_INTERLEAVED, (int)sr, 0.0f);
     }
@@ -91,6 +94,10 @@ public:
       if (mTsf && presetIndex >= 0 && presetIndex < tsf_get_presetcount(mTsf)) {
         tsf_note_off_all(mTsf);
         tsf_channel_set_presetindex(mTsf, 0, presetIndex);
+        // v3.0: Clear stale buffer and trigger fade to prevent crackling
+        memset(mInternalBuffer, 0, sizeof(mInternalBuffer));
+        mBufferPos = 128; // Force fresh render on next call
+        mPresetFadeCounter = mPresetFadeLength; // Start fade-in ramp
       }
     }
   }
@@ -157,9 +164,16 @@ public:
         float sL = mInternalBuffer[mBufferPos * 2];
         float sR = mInternalBuffer[mBufferPos * 2 + 1];
 
-        // Filter processing
-        left[i] = mFilter.process(sL, (TSvf::Type)mFilterMode) * env;
-        right[i] = mFilter.process(sR, (TSvf::Type)mFilterMode) * env;
+        // v3.0: Apply preset change fade-in ramp to prevent clicks
+        float presetFade = 1.0f;
+        if (mPresetFadeCounter > 0) {
+          presetFade = 1.0f - ((float)mPresetFadeCounter / (float)mPresetFadeLength);
+          mPresetFadeCounter--;
+        }
+
+        // v3.0: Separate L/R filters to prevent state corruption
+        left[i] = mFilterL.process(sL, (TSvf::Type)mFilterMode) * env * presetFade;
+        right[i] = mFilterR.process(sR, (TSvf::Type)mFilterMode) * env * presetFade;
 
         mBufferPos++;
       }
@@ -211,10 +225,12 @@ public:
         mRelease = value;
       } else if (id == 112 || id == 1) { // Forced Cutoff
         mCutoff = value;
-        mFilter.setParams(mCutoff * 10000.0f, mResonance, mSampleRate);
+        mFilterL.setParams(mCutoff * 10000.0f, mResonance, mSampleRate);
+        mFilterR.setParams(mCutoff * 10000.0f, mResonance, mSampleRate);
       } else if (id == 113 || id == 2) { // Forced Resonance
         mResonance = 0.7f + value * 5.0f;
-        mFilter.setParams(mCutoff * 10000.0f, mResonance, mSampleRate);
+        mFilterL.setParams(mCutoff * 10000.0f, mResonance, mSampleRate);
+        mFilterR.setParams(mCutoff * 10000.0f, mResonance, mSampleRate);
       } else if (id == 20) { // Filter Mode
         mFilterMode = (int)(value * 3.99f);
       } else if (id == 150) { // Reverb Send -> CC 91
@@ -261,9 +277,14 @@ private:
   int mBufferFrames = 128;
   std::unique_ptr<std::mutex> mMutex;
 
+  // v3.0: Preset change fade ramp (~2ms at 48kHz)
+  int mPresetFadeCounter = 0;
+  static const int mPresetFadeLength = 96;
+
   // New Bolt-on Components
   Adsr mEnvelope;
-  TSvf mFilter;
+  TSvf mFilterL; // v3.0: Separate L/R filters
+  TSvf mFilterR;
   float mAttack = 0.01f, mDecay = 0.1f, mSustain = 1.0f, mRelease = 0.2f;
   float mCutoff = 1.0f, mResonance = 0.7f;
   int mFilterMode = 0;

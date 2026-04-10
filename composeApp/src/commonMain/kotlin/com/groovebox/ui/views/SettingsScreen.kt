@@ -53,296 +53,7 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
     var mappingStripIndex by remember { mutableStateOf(-1) }
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         
-        // MIDI STATUS & LINKS OVERLAY
-        if (midiManager != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).height(intrinsicSize = IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Left Half: MIDI Monitor
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.6f)),
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    border = BorderStroke(1.dp, Color.DarkGray)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("MIDI MONITOR", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Device: ${midiManager?.deviceName?.value}",
-                            color = Color.Yellow,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = midiManager?.midiLog?.value ?: "".takeLast(500),
-                            color = Color.Red,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            softWrap = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Black)
-                                .padding(4.dp)
-                                .height(80.dp)
-                                .verticalScroll(rememberScrollState())
-                        )
-                    }
-                }
-
-                // Right Half: Social Links
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.2f)),
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp).fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("RESOURCES", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("v${state.appVersion}", style = MaterialTheme.typography.labelSmall, color = Color.Cyan.copy(alpha = 0.7f))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        OutlinedButton(
-                            onClick = {
-                                // platformOpenUrl("https://www.youtube.com/@LoomGroovebox")
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
-                            border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f))
-                        ) {
-                            Text("YouTube", fontWeight = FontWeight.Bold)
-                        }
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        OutlinedButton(
-                            onClick = {
-                                // platformOpenUrl("https://github.com/Co-oscillator/loom-groovebox")
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
-                        ) {
-                            Text("GitHub", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-        Button(
-            onClick = {
-                // PANIC / RESET AUDIO ENGINE
-                nativeLib.stop()
-                nativeLib.init() 
-                // nativeLib.setAppDataDir(...) // Managed by engine/platform
-                syncNativeState(state, nativeLib)
-                nativeLib.start()
-                platformShowMessage("Audio Engine Reset")
-            },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha=0.7f))
-        ) {
-            Text("RESET AUDIO ENGINE (PANIC)", color = Color.White, fontWeight = FontWeight.Bold)
-        }
-
-        var showCreditsDialog by remember { mutableStateOf(false) }
-        Button(
-            onClick = { showCreditsDialog = true },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Magenta.copy(alpha=0.3f)),
-            border = BorderStroke(1.dp, Color.Magenta.copy(alpha=0.5f))
-        ) {
-            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Magenta)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Credits & Privacy Policy", color = Color.Magenta, fontWeight = FontWeight.SemiBold)
-        }
-
-        if (showCreditsDialog) {
-            SoundFontCreditsDialog(onDismiss = { showCreditsDialog = false })
-        }
-
-        // Interface Settings
-        Text("Interface", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("UI Layout Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val modes = listOf("Auto", "Phone", "Tablet")
-                    modes.forEachIndexed { index, label ->
-                        val isSelected = state.uiLayoutMode == index
-                        OutlinedButton(
-                            onClick = { onStateChange(state.copy(uiLayoutMode = index)) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (isSelected) Color.Cyan.copy(alpha = 0.2f) else Color.Transparent,
-                                contentColor = if (isSelected) Color.Cyan else Color.Gray
-                            ),
-                            border = BorderStroke(1.dp, if (isSelected) Color.Cyan else Color.Gray)
-                        ) {
-                            Text(label, fontSize = 12.sp, maxLines = 1)
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Show CPU Monitor", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                    Switch(
-                        checked = state.showCpuMonitor,
-                        onCheckedChange = { onStateChange(state.copy(showCpuMonitor = it)) }
-                    )
-                }
-
-                if (LocalPlatformInfo.current.platform == "macos") {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text("Performance Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                            Text("Enables visual cues for pointer interactions", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                        }
-                        Switch(
-                            checked = state.isPerformanceMode,
-                            onCheckedChange = { onStateChange(state.copy(isPerformanceMode = it)) }
-                        )
-                    }
-                }
-
-                if (LocalPlatformInfo.current.platform == "android") {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text("Keyboard Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                            Text("Use physical keyboard for notes & octaves", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                        }
-                        Switch(
-                            checked = state.isKeyboardModeEnabled,
-                            onCheckedChange = { 
-                                val newState = state.copy(isKeyboardModeEnabled = it)
-                                if (!it && state.gridMode == com.groovebox.GridMode.MAC_KEYS) {
-                                    onStateChange(newState.copy(gridMode = com.groovebox.GridMode.GRID_4X4))
-                                } else {
-                                    onStateChange(newState)
-                                }
-                            }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("MIDI Pad Gestures", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        val xAttn = state.padXAttenuation ?: 1.0f
-                        Text("X-Axis (Pitch) Attn: ${(xAttn * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
-                        Slider(
-                            value = xAttn,
-                            onValueChange = { onStateChange(state.copy(padXAttenuation = it)) },
-                            valueRange = 0f..1f
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        val yAttn = state.padYAttenuation ?: 1.0f
-                        Text("Y-Axis (Mod) Attn: ${(yAttn * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
-                        Slider(
-                            value = yAttn,
-                            onValueChange = { onStateChange(state.copy(padYAttenuation = it)) },
-                            valueRange = 0f..1f
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column {
-                        Text("Invert MIDI Pad Y-axis", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                        Text("Flips the vertical modulation mapping", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                    }
-                    Switch(
-                        checked = state.invertPadY,
-                        onCheckedChange = { onStateChange(state.copy(invertPadY = it)) }
-                    )
-                }
-            }
-        }
-
-
-        // MIDI Input Channels
-        Text("MIDI Input Config", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("Assign specific channels for background playback", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                state.tracks.forEachIndexed { i, track ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("T${i+1}: ${track.engineType.name.replace("_", " ")}", modifier = Modifier.weight(1.5f), color = Color.White, style = MaterialTheme.typography.bodySmall)
-                        
-                        var expanded by remember { mutableStateOf(false) }
-                        Box(modifier = Modifier.weight(1f)) {
-                            Surface(
-                                onClick = { expanded = true },
-                                color = Color.DarkGray,
-                                shape = RoundedCornerShape(4.dp),
-                                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
-                            ) {
-                                Text(
-                                    text = if (track.midiInChannel == 17) "OMNI (All)" else "CH ${track.midiInChannel}",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).fillMaxWidth(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (track.midiInChannel == 17) Color.Cyan else Color.Yellow
-                                )
-                            }
-                            
-                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("OMNI (All)") },
-                                    onClick = {
-                                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                            if (idx == i) t.copy(midiInChannel = 17) else t 
-                                        }))
-                                        expanded = false
-                                    }
-                                )
-                                (1..16).forEach { ch ->
-                                    DropdownMenuItem(
-                                        text = { Text("Channel $ch") },
-                                        onClick = {
-                                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
-                                                if (idx == i) t.copy(midiInChannel = ch) else t 
-                                            }))
-                                            expanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    if (i < 7) Divider(color = Color.Gray.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 2.dp))
-                }
-            }
-        }
-
+        // ====== 1. PROJECT SAVE/LOAD ======
         // Project Management Cluster
         Text("Project", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
         val scope = rememberCoroutineScope()
@@ -679,6 +390,269 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
         }
         Text("Clears all MIDI assignments, LFOs, Macros, Routings and Pedal arrangements.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
 
+        // ====== 2. UI / INTERFACE ======
+
+        // Interface Settings
+        Text("Interface", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("UI Layout Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val modes = listOf("Auto", "Phone", "Tablet")
+                    modes.forEachIndexed { index, label ->
+                        val isSelected = state.uiLayoutMode == index
+                        OutlinedButton(
+                            onClick = { onStateChange(state.copy(uiLayoutMode = index)) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (isSelected) Color.Cyan.copy(alpha = 0.2f) else Color.Transparent,
+                                contentColor = if (isSelected) Color.Cyan else Color.Gray
+                            ),
+                            border = BorderStroke(1.dp, if (isSelected) Color.Cyan else Color.Gray)
+                        ) {
+                            Text(label, fontSize = 12.sp, maxLines = 1)
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Show CPU Monitor", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                    Switch(
+                        checked = state.showCpuMonitor,
+                        onCheckedChange = { onStateChange(state.copy(showCpuMonitor = it)) }
+                    )
+                }
+
+                if (LocalPlatformInfo.current.platform == "macos") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Performance Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                            Text("Enables visual cues for pointer interactions", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+                        Switch(
+                            checked = state.isPerformanceMode,
+                            onCheckedChange = { onStateChange(state.copy(isPerformanceMode = it)) }
+                        )
+                    }
+                }
+
+                if (LocalPlatformInfo.current.platform == "android") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Keyboard Mode", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                            Text("Use physical keyboard for notes & octaves", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+                        Switch(
+                            checked = state.isKeyboardModeEnabled,
+                            onCheckedChange = { 
+                                val newState = state.copy(isKeyboardModeEnabled = it)
+                                if (!it && state.gridMode == com.groovebox.GridMode.MAC_KEYS) {
+                                    onStateChange(newState.copy(gridMode = com.groovebox.GridMode.GRID_4X4))
+                                } else {
+                                    onStateChange(newState)
+                                }
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("MIDI Pad Gestures", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        val xAttn = state.padXAttenuation ?: 1.0f
+                        Text("X-Axis (Pitch) Attn: ${(xAttn * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
+                        Slider(
+                            value = xAttn,
+                            onValueChange = { onStateChange(state.copy(padXAttenuation = it)) },
+                            valueRange = 0f..1f
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        val yAttn = state.padYAttenuation ?: 1.0f
+                        Text("Y-Axis (Mod) Attn: ${(yAttn * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
+                        Slider(
+                            value = yAttn,
+                            onValueChange = { onStateChange(state.copy(padYAttenuation = it)) },
+                            valueRange = 0f..1f
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column {
+                        Text("Invert MIDI Pad Y-axis", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                        Text("Flips the vertical modulation mapping", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    }
+                    Switch(
+                        checked = state.invertPadY,
+                        onCheckedChange = { onStateChange(state.copy(invertPadY = it)) }
+                    )
+                }
+            }
+        }
+
+        // ====== 3. MIDI INPUT ======
+
+        // MIDI Input Channels
+        Text("MIDI Input Config", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("Assign specific channels for background playback", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                state.tracks.forEachIndexed { i, track ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("T${i+1}: ${track.engineType.name.replace("_", " ")}", modifier = Modifier.weight(1.5f), color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        
+                        var expanded by remember { mutableStateOf(false) }
+                        Box(modifier = Modifier.weight(1f)) {
+                            Surface(
+                                onClick = { expanded = true },
+                                color = Color.DarkGray,
+                                shape = RoundedCornerShape(4.dp),
+                                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    text = if (track.midiInChannel == 17) "OMNI (All)" else "CH ${track.midiInChannel}",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).fillMaxWidth(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (track.midiInChannel == 17) Color.Cyan else Color.Yellow
+                                )
+                            }
+                            
+                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("OMNI (All)") },
+                                    onClick = {
+                                        onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                            if (idx == i) t.copy(midiInChannel = 17) else t 
+                                        }))
+                                        expanded = false
+                                    }
+                                )
+                                (1..16).forEach { ch ->
+                                    DropdownMenuItem(
+                                        text = { Text("Channel $ch") },
+                                        onClick = {
+                                            onStateChange(state.copy(tracks = state.tracks.mapIndexed { idx, t -> 
+                                                if (idx == i) t.copy(midiInChannel = ch) else t 
+                                            }))
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (i < 7) Divider(color = Color.Gray.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 2.dp))
+                }
+            }
+        }
+
+        // ====== 4. MIDI MONITOR ======
+        // MIDI STATUS & LINKS OVERLAY
+        if (midiManager != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).height(intrinsicSize = IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Left Half: MIDI Monitor
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.6f)),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    border = BorderStroke(1.dp, Color.DarkGray)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("MIDI MONITOR", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Device: ${midiManager?.deviceName?.value}",
+                            color = Color.Yellow,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = midiManager?.midiLog?.value ?: "".takeLast(500),
+                            color = Color.Red,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            softWrap = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black)
+                                .padding(4.dp)
+                                .height(80.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+                }
+
+                // Right Half: Social Links
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.2f)),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp).fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("RESOURCES", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("v${state.appVersion}", style = MaterialTheme.typography.labelSmall, color = Color.Cyan.copy(alpha = 0.7f))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        OutlinedButton(
+                            onClick = {
+                                // platformOpenUrl("https://www.youtube.com/@LoomGroovebox")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                            border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f))
+                        ) {
+                            Text("YouTube", fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        OutlinedButton(
+                            onClick = {
+                                // platformOpenUrl("https://github.com/Co-oscillator/loom-groovebox")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+                        ) {
+                            Text("GitHub", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+        // ====== 5. ASSIGNABLE CONTROLS ======
         Text("Assignable Controls (MIDI Learn)", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
         Spacer(modifier = Modifier.height(8.dp))
         
@@ -771,6 +745,41 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                     Text(param)
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        // ====== 6. PANIC / RESET ======
+        Button(
+            onClick = {
+                // PANIC / RESET AUDIO ENGINE
+                nativeLib.stop()
+                nativeLib.init() 
+                // nativeLib.setAppDataDir(...) // Managed by engine/platform
+                syncNativeState(state, nativeLib)
+                nativeLib.start()
+                platformShowMessage("Audio Engine Reset")
+            },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha=0.7f))
+        ) {
+            Text("RESET AUDIO ENGINE (PANIC)", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+        // ====== 7. CREDITS & PRIVACY ======
+
+        var showCreditsDialog by remember { mutableStateOf(false) }
+        Button(
+            onClick = { showCreditsDialog = true },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Magenta.copy(alpha=0.3f)),
+            border = BorderStroke(1.dp, Color.Magenta.copy(alpha=0.5f))
+        ) {
+            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Magenta)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Credits & Privacy Policy", color = Color.Magenta, fontWeight = FontWeight.SemiBold)
+        }
+
+        if (showCreditsDialog) {
+            SoundFontCreditsDialog(onDismiss = { showCreditsDialog = false })
         }
     }
 }

@@ -79,10 +79,19 @@ public:
       readPos += bufSizeVal;
 
     // Hermite Interpolation (4-point)
+    int bufSize = (int)mBuffer.size();
     int i1 = (int)readPos;
-    int i2 = (i1 + 1) % mBuffer.size();
-    int i3 = (i2 + 1) % mBuffer.size();
-    int i0 = (i1 - 1 + mBuffer.size()) % mBuffer.size();
+    // v3.0: CRITICAL FIX — floating point addition (readPos += bufSizeVal)
+    // can round up to EXACTLY bufSizeVal if readPos was a very small negative
+    // number. This prevents out-of-bounds array access.
+    if (i1 >= bufSize)
+      i1 -= bufSize;
+    if (i1 < 0)
+      i1 += bufSize;
+
+    int i2 = (i1 + 1) % bufSize;
+    int i3 = (i2 + 1) % bufSize;
+    int i0 = (i1 - 1 + bufSize) % bufSize;
 
     float frac = readPos - (float)i1;
 

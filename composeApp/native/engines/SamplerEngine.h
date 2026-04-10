@@ -183,8 +183,8 @@ public:
   inline float getCubicInterpolatedSample(const std::vector<float> &buf,
                                           double pos) {
     int size = (int)buf.size();
-    if (size == 0)
-      return 0.0f;
+    if (size < 2)
+      return (size == 1) ? buf[0] : 0.0f;
 
     int idx1 = static_cast<int>(pos);
     float frac = static_cast<float>(pos - idx1);
@@ -192,10 +192,10 @@ public:
     if (idx1 < 0 || idx1 >= size)
       return 0.0f;
 
-    // We need 4 points: idx0, idx1, idx2, idx3
-    int idx0 = (idx1 > 0) ? idx1 - 1 : idx1;
-    int idx2 = (idx1 + 1 < size) ? idx1 + 1 : idx1;
-    int idx3 = (idx1 + 2 < size) ? idx1 + 2 : idx2;
+    // v3.0: Strict boundary clamping to prevent OOB reads near trim edges
+    int idx0 = std::max(0, idx1 - 1);
+    int idx2 = std::min(size - 1, idx1 + 1);
+    int idx3 = std::min(size - 1, idx1 + 2);
 
     return cubicInterpolation(buf[idx0], buf[idx1], buf[idx2], buf[idx3], frac);
   }
@@ -794,10 +794,15 @@ public:
       }
       activeCount++;
 
-      if (mGlide > 0.001f) {
-        float glideTimeSamples = mGlide * mSampleRate * 0.5f;
-        float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
-        v.pitchRatio += (v.targetPitchRatio - v.pitchRatio) * glideAlpha;
+      // v3.0: Always apply minimum pitch smoothing (~5ms at 48kHz) to prevent
+      // clicks from abrupt pitch/speed parameter changes, even with glide=0.
+      float smoothingAlpha =
+          (mGlide > 0.001f)
+              ? (1.0f / (mGlide * mSampleRate * 0.5f + 1.0f))
+              : (1.0f / (0.005f * mSampleRate + 1.0f)); // ~5ms minimum
+      float diff = v.targetPitchRatio - v.pitchRatio;
+      if (std::abs(diff) > 0.0001f) {
+        v.pitchRatio += diff * smoothingAlpha;
       } else {
         v.pitchRatio = v.targetPitchRatio;
       }

@@ -303,7 +303,8 @@ extern "C" JNIEXPORT jint JNICALL Java_com_groovebox_NativeLib_nGetCurrentStep(
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetArpConfig(
     JNIEnv *env, jobject thiz, jint track_index, jint mode, jint octaves,
     jint inversion, jboolean is_latched, jboolean is_mutated,
-    jobjectArray rhythms, jintArray sequence, jfloatArray gate_lengths, jfloat probability) {
+    jobjectArray rhythms, jintArray sequence, jfloatArray gate_lengths, jfloat probability,
+    jfloat weird) {
   if (engine) {
     std::vector<std::vector<bool>> rhythmVecs;
     if (rhythms != nullptr) {
@@ -342,8 +343,16 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetArpConfig(
     }
 
     engine->getCore().setArpConfig(track_index, mode, octaves, inversion, is_latched,
-                         is_mutated, rhythmVecs, seqVec, gateVec, probability, 0.0f);
+                         is_mutated, rhythmVecs, seqVec, gateVec, probability, weird);
   }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_nCopyArpeggiator(JNIEnv *env, jobject thiz,
+                                              jint src_track, jint dest_track,
+                                              jboolean live) {
+  if (engine)
+    engine->getCore().copyArpeggiator(src_track, dest_track, live);
 }
 
 extern "C" JNIEXPORT void JNICALL

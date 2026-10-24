@@ -51,6 +51,7 @@ actual class NativeLib {
     actual fun getStepSubStep(trackIndex: Int, stepIndex: Int, drumIndex: Int): Float = nGetStepSubStep(trackIndex, stepIndex, drumIndex)
     actual fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray, probability: Float, weird: Float) = 
         nSetArpConfig(trackIndex, mode, octaves, inversion, isLatched, isMutated, rhythms, sequence, gateLengths, probability, weird)
+    actual fun copyArpeggiator(sourceTrack: Int, destTrack: Int, live: Boolean) = nCopyArpeggiator(sourceTrack, destTrack, live)
     actual fun setChordProgConfig(trackIndex: Int, enabled: Boolean, mood: Int, complexity: Int) = nSetChordProgConfig(trackIndex, enabled, mood, complexity)
     actual fun setScaleConfig(rootNote: Int, intervals: IntArray) = nSetScaleConfig(rootNote, intervals)
     actual fun getGranularPlayheads(trackIndex: Int): FloatArray = nGetGranularPlayheads(trackIndex)
@@ -163,6 +164,7 @@ actual class NativeLib {
     private external fun nGetStepVelocity(trackIndex: Int, stepIndex: Int, drumIndex: Int): Float
     private external fun nGetStepSubStep(trackIndex: Int, stepIndex: Int, drumIndex: Int): Float
     private external fun nSetArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray, probability: Float, weird: Float)
+    private external fun nCopyArpeggiator(sourceTrack: Int, destTrack: Int, live: Boolean)
     private external fun nSetChordProgConfig(trackIndex: Int, enabled: Boolean, mood: Int, complexity: Int)
     private external fun nSetScaleConfig(rootNote: Int, intervals: IntArray)
     private external fun nGetGranularPlayheads(trackIndex: Int): FloatArray

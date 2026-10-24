@@ -112,6 +112,10 @@ public:
                     const std::vector<int> &sequence,
                     const std::vector<float> &gateLengths,
                     float probability, float weird);
+  // Copy arp settings from srcTrack to destTrack.
+  // live == true clones the RNG seed and held notes (Clone live);
+  // live == false copies settings with a fresh seed (Copy settings).
+  void copyArpeggiator(int srcTrack, int destTrack, bool live);
   void setChordProgConfig(int trackIndex, bool enabled, int mood,
                           int complexity);
   void setScaleConfig(int rootNote, const std::vector<int> &intervals);
@@ -592,6 +596,8 @@ public:
 
   int mSidechainSourceTrack = -1;
   int mSidechainSourceDrumIdx = -1;
+  // Tracks cloned live from another track (for note-off propagation).
+  int mArpCloneSource[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
   std::atomic<float> mMasterVolume{0.8f};
   bool mIsFloatFormat = true; // Assume Float, but verify at stream open
   float mFxMixLevels[18] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,

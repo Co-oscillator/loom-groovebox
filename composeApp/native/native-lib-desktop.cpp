@@ -366,6 +366,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetArpConfig(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_nCopyArpeggiator(JNIEnv *env, jobject thiz,
+                                              jint src_track, jint dest_track,
+                                              jboolean live) {
+  if (engine)
+    engine->getCore().copyArpeggiator(src_track, dest_track, live);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_groovebox_NativeLib_nPanic(JNIEnv *env, jobject thiz) {
   if (engine)
     engine->getCore().panic();

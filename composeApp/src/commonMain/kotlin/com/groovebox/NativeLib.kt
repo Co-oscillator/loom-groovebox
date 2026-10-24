@@ -49,6 +49,7 @@ expect class NativeLib() {
     fun getStepVelocity(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Float
     fun getStepSubStep(trackIndex: Int, stepIndex: Int, drumIndex: Int = -1): Float
     fun setArpConfig(trackIndex: Int, mode: Int, octaves: Int, inversion: Int, isLatched: Boolean, isMutated: Boolean, rhythms: Array<BooleanArray>, sequence: IntArray, gateLengths: FloatArray, probability: Float, weird: Float)
+    fun copyArpeggiator(sourceTrack: Int, destTrack: Int, live: Boolean)
     fun setChordProgConfig(trackIndex: Int, enabled: Boolean, mood: Int, complexity: Int)
     fun setScaleConfig(rootNote: Int, intervals: IntArray)
     fun getGranularPlayheads(trackIndex: Int): FloatArray

@@ -198,6 +198,20 @@ Add to `ArpSettingsSheet`:
 #### 2.4 Semantics to decide
 
 - Keep the source running (Loom Pi behaviour, good for layering) or stop it (handoff)? Recommend keeping it running, with the two action modes above.
+
+#### 2.5 Status: implemented (v3.2.19)
+
+Shipped in `composeApp`:
+
+- `Arpeggiator::copyFrom(other, live)` and `Arpeggiator::reseed()`.
+  - `live == true` copies the RNG stream, held notes, sequence, chord progression, step/note index and multipliers **without** calling `updateSequence()`, so the cloned stream stays in phase.
+  - `live == false` reseeds, clears held/sequence/chord state, resets position, then rebuilds the sequence.
+- `AudioEngineCore::copyArpeggiator(src, dest, live)` flushes the destination's sounding voices, copies rate/division/triplet/clock multiplier, resets `mArpCountdown` and the physical-hold count, and tracks live clones in `mArpCloneSource[8]` so note-offs on the source stop non-latched clones. Latched clones keep running.
+- JNI `nCopyArpeggiator(src, dest, live)` in both native entry points, wired through `NativeLib` expect/actual.
+- UI: **COPY SETTINGS** / **CLONE LIVE** buttons in `ArpSettingsSheet`, each opening an 8-track destination picker (source excluded, disabled tracks marked). Clone live re-enables the destination track in Kotlin and native.
+- Kotlin state copies `arpConfig`, `mutatedNotes` and `clockMultiplier`; native copies rate/division/triplet/clock multiplier too, so both sides stay in sync.
+
+Known follow-ups: `StateUtils` re-pushes `setArpConfig` for every track on project load, which resets a live clone (expected, but worth documenting); no confirmation toast yet.
 - Copy RNG seed for deterministic "random" patterns, or keep divergent streams? Recommend copying the seed in "Copy settings" so both sound identical at first.
 - Destination currently holding notes → send note-offs before applying the clone.
 

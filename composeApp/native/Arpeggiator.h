@@ -303,6 +303,71 @@ public:
     mNoteIndex = 0;
   }
 
+  // Copy configuration from another arpeggiator.
+  //   live == false (Copy settings): fresh RNG stream, destination waits for
+  //     its next gesture. Held/latched notes are not transferred.
+  //   live == true (Clone live): copies the RNG stream, held/latched notes and
+  //     playback position so the destination can layer immediately.
+  void copyFrom(const Arpeggiator &other, bool live) {
+    mMode = other.mMode;
+    mOctaves = other.mOctaves;
+    mInversion = other.mInversion;
+    mStrum = other.mStrum;
+    mIsLatched = other.mIsLatched;
+    mIsMutated = other.mIsMutated;
+    mRhythms = other.mRhythms;
+    mRandomSequence = other.mRandomSequence;
+    mGateLengths = other.mGateLengths;
+    mIsChordProgEnabled = other.mIsChordProgEnabled;
+    mChordProgMood = other.mChordProgMood;
+    mChordProgComplexity = other.mChordProgComplexity;
+    mRootNote = other.mRootNote;
+    mScaleIntervals = other.mScaleIntervals;
+    mProbability = other.mProbability;
+    mWeird = other.mWeird;
+
+    if (live) {
+      mRng = other.mRng;
+      mHeldNotes = other.mHeldNotes;
+      mSequence = other.mSequence;
+      mGeneratedChordProgression = other.mGeneratedChordProgression;
+      mLastHarmonicStep = other.mLastHarmonicStep;
+      mStep = other.mStep;
+      mNoteIndex = other.mNoteIndex;
+      mRateMultiplier = other.mRateMultiplier;
+      mSpeedMultiplier = other.mSpeedMultiplier;
+      mHasDropsInCurrentGesture = other.mHasDropsInCurrentGesture;
+      mIsWeirdInCurrentGesture = other.mIsWeirdInCurrentGesture;
+      mDroppedNotes = other.mDroppedNotes;
+      mIsWaitingForNewGesture = other.mIsWaitingForNewGesture;
+      // Keep the copied sequence/RNG intact: do not call updateSequence(),
+      // which would consume the cloned RNG stream.
+      return;
+    }
+
+    reseed();
+    mHeldNotes.clear();
+    mSequence.clear();
+    mGeneratedChordProgression.clear();
+    mLastHarmonicStep = -1;
+    mStep = 0;
+    mNoteIndex = 0;
+    mIsWaitingForNewGesture = false;
+    mRateMultiplier = 1.0f;
+    mSpeedMultiplier = 1.0f;
+    mHasDropsInCurrentGesture = false;
+    mIsWeirdInCurrentGesture = false;
+    mDroppedNotes.clear();
+    updateSequence();
+  }
+
+  // Start a fresh random stream (used by Copy settings).
+  void reseed() {
+    mRng.seed(static_cast<uint32_t>(
+        std::chrono::high_resolution_clock::now().time_since_epoch().count() ^
+        std::random_device{}()));
+  }
+
 private:
   ArpMode mMode;
   int mStep;

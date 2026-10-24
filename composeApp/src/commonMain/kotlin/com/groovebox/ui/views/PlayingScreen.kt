@@ -1090,6 +1090,8 @@ fun ArpSettingsSheet(
     onStateChange: (GrooveboxState) -> Unit,
     nativeLib: NativeLib
 ) {
+    var copyDialogLive by remember { mutableStateOf<Boolean?>(null) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (isOpen) {
             Box(
@@ -1126,7 +1128,31 @@ fun ArpSettingsSheet(
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
+                    // Copy arp setup to another track.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { copyDialogLive = false },
+                            modifier = Modifier.weight(1f).height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            Text("COPY SETTINGS", fontSize = 10.sp, maxLines = 1)
+                        }
+                        OutlinedButton(
+                            onClick = { copyDialogLive = true },
+                            modifier = Modifier.weight(1f).height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFB74D))
+                        ) {
+                            Text("CLONE LIVE", fontSize = 10.sp, maxLines = 1)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     val allModes = ArpMode.values().filter { it != ArpMode.OFF }
                     val row1 = allModes.take(5)
                     val row2 = allModes.drop(5)
@@ -1660,7 +1686,115 @@ fun ArpSettingsSheet(
                 }
             }
         }
+
+        copyDialogLive?.let { live ->
+            ArpCopyTargetDialog(
+                live = live,
+                sourceTrackIndex = state.selectedTrackIndex,
+                state = state,
+                onDismiss = { copyDialogLive = null },
+                onConfirm = { destTrack ->
+                    copyDialogLive = null
+                    val source = state.tracks[state.selectedTrackIndex]
+                    val newTracks = state.tracks.mapIndexed { i, t ->
+                        if (i == destTrack) {
+                            t.copy(
+                                arpConfig = source.arpConfig,
+                                mutatedNotes = source.mutatedNotes,
+                                clockMultiplier = source.clockMultiplier,
+                                isDisabled = if (live) false else t.isDisabled,
+                                isActive = if (live) true else t.isActive
+                            )
+                        } else t
+                    }
+                    onStateChange(state.copy(tracks = newTracks))
+                    // Native copy must run after the state update is dispatched;
+                    // onStateChange only stores Kotlin state and never resyncs
+                    // the engine, so this cannot be overwritten.
+                    nativeLib.copyArpeggiator(state.selectedTrackIndex, destTrack, live)
+                    if (live) {
+                        nativeLib.setTrackDisabled(destTrack, false)
+                        nativeLib.setTrackActive(destTrack, true)
+                    }
+                }
+            )
+        }
     }
+
+@Composable
+fun ArpCopyTargetDialog(
+    live: Boolean,
+    sourceTrackIndex: Int,
+    state: GrooveboxState,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    val engineNames = listOf(
+        "SUB", "FM", "SAMP", "GRAN", "WAVE",
+        "FM DRM", "AN DRM", "MIDI", "AUDIO", "SFONT"
+    )
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .width(340.dp)
+                .fillMaxHeight(0.8f)
+                .clip(RoundedCornerShape(16.dp)),
+            color = Color(0xFF1E1E1E),
+            tonalElevation = 8.dp
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    if (live) "CLONE LIVE TO" else "COPY SETTINGS TO",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (live) Color(0xFFFFB74D) else Color.White
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    if (live)
+                        "Copies the running arp, including its random seed and held notes. The source keeps playing."
+                    else
+                        "Copies the arp setup with a fresh random seed. The destination starts on its next gesture.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    state.tracks.forEachIndexed { idx, t ->
+                        if (idx == sourceTrackIndex) return@forEachIndexed
+                        val name = engineNames.getOrElse(t.engineType.ordinal) { "TRK" }
+                        OutlinedButton(
+                            onClick = { onConfirm(idx) },
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
+                        ) {
+                            Text(
+                                "Track ${idx + 1}",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Start
+                            )
+                            Text(
+                                name + if (t.isDisabled) " (off)" else "",
+                                color = if (t.isDisabled) Color.Gray else getEngineColor(t.engineType),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        }
+    }
+}
 
 @OptIn(androidx.compose.animation.ExperimentalAnimationApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable

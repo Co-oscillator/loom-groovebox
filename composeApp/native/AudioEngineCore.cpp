@@ -1796,6 +1796,15 @@ void AudioEngineCore::releaseNoteLocked(int trackIndex, int note,
         if (track.mPhysicallyHeldNoteCount <= 0) {
           track.mPhysicallyHeldNoteCount = 0;
           track.arpeggiator.onAllPhysicallyReleased();
+          // Stop live clones layered from this track when the source gesture
+          // ends (latched clones intentionally keep running).
+          if (!track.arpeggiator.isLatched()) {
+            for (int d = 0; d < (int)mTracks.size(); ++d) {
+              if (d != trackIndex && mArpCloneSource[d] == trackIndex) {
+                mTracks[d].arpeggiator.onAllPhysicallyReleased();
+              }
+            }
+          }
         }
         if (track.arpeggiator.getMode() != ArpMode::OFF) {
           track.arpeggiator.removeNote(note);
@@ -2932,6 +2941,52 @@ void AudioEngineCore::setArpConfig(int trackIndex, int mode, int octaves,
   }
 }
 
+void AudioEngineCore::copyArpeggiator(int srcTrack, int destTrack, bool live) {
+  std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (srcTrack < 0 || srcTrack >= (int)mTracks.size() ||
+      destTrack < 0 || destTrack >= (int)mTracks.size() ||
+      srcTrack == destTrack) {
+    return;
+  }
+
+  Track &src = mTracks[srcTrack];
+  Track &dest = mTracks[destTrack];
+
+  // Stop anything already sounding on the destination so a live clone does not
+  // stack on top of stale voices from the old setup.
+  for (int i = 0; i < Track::MAX_POLYPHONY; ++i) {
+    if (dest.mActiveNotes[i].active) {
+      const int n = dest.mActiveNotes[i].note;
+      dest.subtractiveEngine.releaseNote(n);
+      dest.fmEngine.releaseNote(n);
+      dest.samplerEngine.releaseNote(n);
+      dest.fmDrumEngine.releaseNote(n);
+      dest.granularEngine.releaseNote(n);
+      dest.wavetableEngine.releaseNote(n);
+      dest.analogDrumEngine.releaseNote(n);
+      dest.soundFontEngine.noteOff(n);
+      dest.mActiveNotes[i].active = false;
+    }
+  }
+
+  dest.arpeggiator.copyFrom(src.arpeggiator, live);
+  dest.mArpRate = src.mArpRate;
+  dest.mArpDivisionMode = src.mArpDivisionMode;
+  dest.mArpTriplet = src.mArpTriplet;
+  dest.mClockMultiplier = src.mClockMultiplier;
+  dest.mArpCountdown = 0.0;
+  dest.mPhysicallyHeldNoteCount = 0;
+
+  if (live) {
+    // Releases are propagated from the source, so the destination starts with
+    // a clean physical-hold count and its own gestures behave normally.
+    dest.isActive = true;
+    mArpCloneSource[destTrack] = srcTrack;
+  } else {
+    mArpCloneSource[destTrack] = -1;
+  }
+}
+
 void AudioEngineCore::setChordProgConfig(int trackIndex, bool enabled, int mood,
                                      int complexity) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
@@ -2940,7 +2995,6 @@ void AudioEngineCore::setChordProgConfig(int trackIndex, bool enabled, int mood,
                                                        complexity);
   }
 }
-
 void AudioEngineCore::setScaleConfig(int rootNote,
                                  const std::vector<int> &intervals) {
   std::lock_guard<std::recursive_mutex> lock(mLock);

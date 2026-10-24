@@ -193,9 +193,9 @@ actual fun NativeFileDialog(
                                     "samples", "granular", "recordings" -> listOf("wav")
                                     "sessions" -> listOf("gbx")
                                     "soundfonts" -> listOf("sf2", "sf3", "SF2", "SF3")
-                                    "presets" -> listOf("gbp")
+                                    "presets" -> listOf("gbp", "syx", "SYX")
                                     "sequences" -> listOf("gbs", "mid", "midi")
-                                    else -> listOf("wav")
+                                    else -> extensions.ifEmpty { listOf("wav") }
                                 }
                                 refreshKey++ 
                             },
@@ -221,7 +221,8 @@ actual fun NativeFileDialog(
                         onClick = { 
                            // Launch for all audio or wildcard if unknown. 
                            // Wavetables might be .wav, Soundfonts .sf2
-                           val mime = if (extensions.contains("sf2")) "*/*" else "audio/*"
+                           // v3.2.06: Support .syx and .sf2 in system picker
+                           val mime = if (extensions.contains("sf2") || extensions.contains("syx")) "*/*" else "audio/*"
                            systemLauncher.launch(mime)
                         },
                         modifier = Modifier.fillMaxWidth().height(36.dp),

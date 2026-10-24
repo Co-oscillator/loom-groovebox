@@ -186,7 +186,8 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
         performanceManager = AudioPerformanceManager(this)
-        performanceManager.startSession()
+        // DEFERRED: performanceManager.startSession() moved to lazy UI loop 
+        // to prevent boot-time crash loop on Pixel 10.
 
         nativeLib.setAppDataDir(getExternalFilesDir(null)?.absolutePath ?: filesDir.absolutePath)
         
@@ -351,7 +352,7 @@ class MainActivity : ComponentActivity() {
                 GrooveboxTheme {
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (isNativeInitialized) {
-                            MainScreen(empledManager, nativeLib, viewModel, midiManager, onRecordingSourceChange = ::handleRecordingSourceChange) { viewModel.onStateChange(it) }
+                            MainScreen(performanceManager, empledManager, nativeLib, viewModel, midiManager, onRecordingSourceChange = ::handleRecordingSourceChange) { viewModel.onStateChange(it) }
                             
                             // RETRY HANDSHAKE after UI load
                             LaunchedEffect(Unit) {
@@ -603,6 +604,7 @@ fun SplashScreen(statusText: String) {
 
 @Composable
 fun MainScreen(
+    performanceManager: AudioPerformanceManager,
     empledManager: EmpledManager,
     nativeLib: NativeLib,
     viewModel: GrooveboxViewModel,

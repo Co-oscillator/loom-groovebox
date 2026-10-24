@@ -21,7 +21,11 @@ kotlin {
         }
     }
     
-    jvm("desktop")
+    jvm("desktop") {
+        compilations.all {
+            kotlinOptions.jvmTarget = "11"
+        }
+    }
     
     sourceSets {
         val commonMain by getting {
@@ -106,4 +110,35 @@ compose.desktop {
         }
         jvmArgs += "-Djava.library.path=\$APPDIR:\$APPDIR/resources"
     }
+}
+
+// ── Version sync ──────────────────────────────────────────────────────────────
+// Writes Version.kt from version.properties before Kotlin compilation.
+// Declared here (in composeApp) so Gradle sees it as a proper peer of the
+// compile tasks rather than an implicit cross-module dependency.
+val syncVersionKt by tasks.registering {
+    val propsFile = rootProject.file("version.properties")
+    val ktFile = project.file("src/commonMain/kotlin/com/groovebox/utils/Version.kt")
+
+    inputs.file(propsFile)
+    outputs.file(ktFile)
+
+    doLast {
+        val props = Properties()
+        props.load(propsFile.inputStream())
+        val versionName = props["VERSION_NAME"] as String? ?: "1.0.0"
+        ktFile.writeText(
+            "package com.groovebox.utils\n\n" +
+            "// AUTO-GENERATED — do not edit. Source of truth: version.properties\n" +
+            "object Version {\n" +
+            "    const val APP_VERSION = \"" + versionName + "\"\n" +
+            "}\n"
+        )
+        println("Version.kt synced to $versionName")
+    }
+}
+
+// Make every Kotlin compile task depend on syncVersionKt
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    dependsOn(syncVersionKt)
 }

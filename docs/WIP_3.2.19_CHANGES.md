@@ -1,8 +1,25 @@
-# Uncommitted Loom Groovebox changes (v3.2.19 WIP)
+# Loom Groovebox v3.2.19 changes (committed)
 
-HEAD: `4fbdcd4` (v3.1.0 + branch cleanup). Working tree: 46 modified + 4 untracked source files. Build artifacts are now untracked.
+Status: **committed and pushed** on `main` as `ec1f313`, `1b2af58`, `e434618`, `1516382`.
 
-This is mostly one coherent **v3.2.19 audio-performance refactor**, plus a parallel legacy/Pi tree and some debug scripts. Review before committing.
+This was one coherent **v3.2.19 audio-performance refactor**, plus a parallel legacy/Pi tree and some debug scripts.
+
+## Commit layout
+
+| Commit | Contents |
+|---|---|
+| `ec1f313` | build: CMake repoint, legacy JNI packaging, version 3.2.19 |
+| `1b2af58` | chore: delete stale `app/src/main/cpp` duplicate |
+| `e434618` | perf(native): Oboe host + lock-free core, block-render DSP |
+| `1516382` | feat(ui): track disable, track levels, native probability, playhead sync |
+
+Pre-commit fixes applied:
+
+- Added desktop `actual fun setTrackProbability` + `nSetTrackProbability` JNI.
+- Restored playhead sync in `pollEngineState()`.
+- Deleted the broken legacy `app/src/main/cpp` tree.
+
+Not committed (intentionally, still untracked): `scratch.py`, `setup_pi.sh` (destructive).
 
 ## 1. Native core refactor
 
@@ -29,9 +46,9 @@ This is mostly one coherent **v3.2.19 audio-performance refactor**, plus a paral
 - PlayingScreen: multi-touch fix (`down.id`); ParametersScreen: record-button rewrite with 150 ms cool-off.
 - StateUtils sanitizes/syncs `isDisabled`; Version.kt generated from `version.properties`.
 
-**Bugs to fix before committing:**
-- `MainScreen` removed `updateCurrentStep(...)`, so the sequencer playhead may be frozen.
-- `desktopMain/NativeLib.kt` is missing `actual fun setTrackProbability` (expect/actual compile error).
+**Bugs fixed before committing:**
+- Playhead sync restored in `GrooveboxViewModel.pollEngineState()` via `getCurrentStep()`.
+- `desktopMain/NativeLib.kt` now has `actual fun setTrackProbability` + JNI symbol.
 
 ## 4. Android platform
 
@@ -39,7 +56,7 @@ This is mostly one coherent **v3.2.19 audio-performance refactor**, plus a paral
 - `MainActivity` comments out `performanceManager.startSession()` (Pixel 10 boot crash); the parameter is passed but unused, so ADPF is effectively off.
 - `NativeFileDialog` accepts `.syx`.
 - `AudioPerformanceManager` adds `startSession(tids)`/`updateTids()` but `updateTids` is never called.
-- `app/src/main/cpp` is the legacy duplicate tree; its `native-lib.cpp` has an unbalanced brace at line 108 and will not compile.
+- `app/src/main/cpp` (legacy duplicate tree) has been deleted; the build uses `composeApp/native`.
 
 ## 5. Build/config/scripts
 
@@ -49,16 +66,16 @@ This is mostly one coherent **v3.2.19 audio-performance refactor**, plus a paral
 - `scratch.py`: one-off brace checker.
 - `setup_pi.sh`: **destructive** (`rm -rf "$HOME/.git"`) and hard-codes a Pi path.
 
-## Recommended commit grouping
+## Commit grouping (as landed)
 
-1. **build:** CMake repoint, lib rename, legacy packaging, version sync, bump 3.2.19.
-2. **native core:** AudioEngine→Oboe host + AudioEngineCore split, JNI rename, DenormalDisabler, UISnapshot, atomics/wait-free render.
-3. **dsp:** block-render APIs, polyBLEP, lock-free wavetable/granular, saturation change (call out audible changes).
-4. **feat(ui):** track disable, track levels, native probability, multi-touch and record-button fixes.
-5. **cleanup:** delete `app/src/main/cpp`, remove debug scripts, fix desktop `setTrackProbability`, restore playhead updates.
+1. **build:** CMake repoint, legacy packaging, version sync, bump 3.2.19.
+2. **cleanup:** delete `app/src/main/cpp`.
+3. **native core + DSP:** AudioEngine→Oboe host + AudioEngineCore split, JNI rename, DenormalDisabler, UISnapshot, block-render DSP.
+4. **feat(ui):** track disable, track levels, native probability, playhead sync, multi-touch and record-button fixes.
 
-## Do not commit as-is
+## Left untracked (not committed)
 
-- `fix_jni.py`, `scratch.py`, `setup_pi.sh`.
-- The legacy `app/src/main/cpp` tree (delete or move to a Pi branch).
-- Anything with the frozen playhead or missing desktop `actual`.
+- `scratch.py` — one-off brace checker.
+- `setup_pi.sh` — **destructive** (`rm -rf "$HOME/.git"`) and hard-codes a Pi path.
+- `fix_jni.py` — tracked but left unmodified (stale API).
+

@@ -70,3 +70,6 @@ UserManual.pdf
 56: UserManual.pdf
 57:
 58: *.hprof
+
+# Nested native build output
+composeApp/native/build/

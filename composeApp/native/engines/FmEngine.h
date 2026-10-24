@@ -1132,6 +1132,9 @@ public:
     float mixedOutput = 0.0f;
     int activeCount = 0;
 
+    // v3.1.41: Pre-calculate block-rate parameters
+    float bendFactor = powf(2.0f, mPitchBend / 12.0f);
+
     for (auto &v : mVoices) {
       if (!v.active)
         continue;
@@ -1620,17 +1623,85 @@ public:
       v.lastOp5Out = o[5];
 
       float cutoffNormalized = std::max(0.001f, std::min(0.999f, mCutoff));
-      if (v.controlCounter++ % 16 == 0) {
+      if (v.controlCounter++ % 32 == 0) {
+        // v3.1.41: Cache expensive powf calculation
         float freq = 20.0f * powf(900.0f, cutoffNormalized);
         v.svf.setParams(freq, 0.7f + mResonance * 4.0f, mSampleRate);
       }
+      // v3.2.0: Headroom scaling (0.7f)
       float filtered =
-          v.svf.process(out * v.amplitude * mEnv, (TSvf::Type)mFilterMode);
+          v.svf.process(out * v.amplitude * mEnv * 0.7f, (TSvf::Type)mFilterMode);
       mixedOutput += fast_tanh(filtered);
     }
     if (activeCount > 1)
       mixedOutput *= 0.7f;
     return mixedOutput;
+  }
+
+  // v3.2.5: Brutally Optimized Block Rendering with Algorithm Hoisting
+  void render(float *outL, float *outR, int numFrames) {
+    if (!isActive()) return;
+
+    if (mAlgorithm == 0) {
+        // Optimized path for Alg 1 (Serial)
+        int activeIndices[16];
+        int activeCount = 0;
+        for (int i = 0; i < 16; ++i) if (mVoices[i].active) activeIndices[activeCount++] = i;
+        
+        const float activeMixScale = (activeCount > 1) ? 0.7f : 1.0f;
+        const float headroom = 0.7f;
+        const float modScale = mBrightness;
+        const float velModScaleBase = 0.6f;
+
+        for (int v_idx = 0; v_idx < activeCount; ++v_idx) {
+            Voice &v = mVoices[activeIndices[v_idx]];
+            
+            // Hoist per-block updates
+            if (mGlide > 0.001f) {
+                float glideAlpha = (float)numFrames / (mGlide * mSampleRate * 0.5f + numFrames);
+                v.frequency += (v.targetFrequency - v.frequency) * glideAlpha;
+            } else v.frequency = v.targetFrequency;
+
+            for (int i = 0; i < 6; ++i) v.operators[i].setFrequency(v.frequency, mOpRatios[i], mSampleRate);
+            
+            float velModScale = 1.0f - (velModScaleBase * (1.0f - v.amplitude));
+            float cutoffNormalized = std::max(0.001f, std::min(0.999f, mCutoff));
+            v.svf.setParams(20.0f * powf(900.0f, cutoffNormalized), 0.7f + mResonance * 4.0f, mSampleRate);
+
+            for (int f = 0; f < numFrames; ++f) {
+                float mEnv = v.masterEnv.nextValue();
+                if (mEnv < 0.0001f && !v.masterEnv.isActive()) { v.active = false; break; }
+                
+                float fbIn = fast_tanh((v.op5FeedbackHistory + v.lastOp5Out) * 0.5f * (1.0f + mFeedbackDrive * 3.0f)) * mFeedback;
+                float pitchMod = 1.0f + (v.pitchEnv * mPitchSweepAmount);
+                v.pitchEnv *= (1.0f - v.pitchEnvDecay);
+
+                float o5 = v.operators[5].nextSample(fbIn, pitchMod) * velModScale * mOpLevels[5];
+                float o4 = v.operators[4].nextSample(o5 * modScale, pitchMod) * velModScale * mOpLevels[4];
+                float o3 = v.operators[3].nextSample(o4 * modScale, pitchMod) * velModScale * mOpLevels[3];
+                float o2 = v.operators[2].nextSample(o3 * modScale, pitchMod) * velModScale * mOpLevels[2];
+                float o1 = v.operators[1].nextSample(o2 * modScale, pitchMod) * velModScale * mOpLevels[1];
+                float o0 = v.operators[0].nextSample(o1 * modScale, pitchMod) * mOpLevels[0];
+                
+                float out = 0.0f;
+                if (mCarrierMask & 1) out += o0; if (mCarrierMask & 2) out += o1;
+                if (mCarrierMask & 4) out += o2; if (mCarrierMask & 8) out += o3;
+                if (mCarrierMask & 16) out += o4; if (mCarrierMask & 32) out += o5;
+
+                v.op5FeedbackHistory = v.lastOp5Out; v.lastOp5Out = o5;
+                float s = fast_tanh(v.svf.process(out * v.amplitude * mEnv * headroom, (TSvf::Type)mFilterMode)) * activeMixScale;
+                outL[f] += s; outR[f] += s;
+                v.controlCounter++;
+            }
+        }
+    } else {
+        // Fallback to scalar rendering for other algorithms
+        for (int i = 0; i < numFrames; ++i) {
+            float s = render();
+            outL[i] += s;
+            outR[i] += s;
+        }
+    }
   }
 
   bool isActive() const {

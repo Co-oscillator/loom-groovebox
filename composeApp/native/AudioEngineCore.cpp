@@ -1,6 +1,7 @@
 #define TSF_IMPLEMENTATION
 #include "AudioEngineCore.h"
 #include "WavFileUtils.h" // New
+#include "DenormalDisabler.h"
 #include "engines/BitcrusherFx.h"
 #include <fstream>
 #include <sstream>
@@ -17,6 +18,8 @@
 
 #if defined(__i386__) || defined(__x86_64__)
 #include <xmmintrin.h>
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
 #endif
 
 #undef LOG_TAG
@@ -36,16 +39,15 @@ struct FastRandom {
 static inline float softLimit(float x) {
   if (std::isnan(x))
     return 0.0f;
-  // Soft-Knee Limiter (Linear until -3dB, then smooth curve to 0dB)
-  // -3dB = 0.707
+  // Soft-Knee Limiter (Linear until -1dB, then smooth curve to 0dB)
+  // v3.1.43: Raised knee from 0.707 to 0.9 for more headroom
   float absX = std::abs(x);
-  if (absX < 0.707f)
+  if (absX < 0.9f)
     return x;
 
-  // Soft compression above -3dB: x = sign(x) * (0.707 + (1.0 - 0.707) *
-  // fast_tanh((absX - 0.707) / (1.0 - 0.707)))
-  float extended = (absX - 0.707f) / 0.293f;
-  float limited = 0.707f + 0.293f * fast_tanh(extended);
+  // Soft compression above -1dB:
+  float extended = (absX - 0.9f) / 0.1f;
+  float limited = 0.9f + 0.1f * fast_tanh(extended);
   return (x > 0) ? limited : -limited;
 }
 
@@ -59,6 +61,15 @@ AudioEngineCore::AudioEngineCore() {
     mFxBusBlockL[i].resize(1024, 0.0f);
     mFxBusBlockR[i].resize(1024, 0.0f);
   }
+  mMixedSampleL.resize(1024, 0.0f);
+  mMixedSampleR.resize(1024, 0.0f);
+  mSidechainBuffer.resize(1024, 0.0f);
+  mSpreadL.resize(1024, 0.0f);
+  mSpreadR.resize(1024, 0.0f);
+  mWetSampleL.resize(1024, 0.0f);
+  mWetSampleR.resize(1024, 0.0f);
+  mRecordingScratchBuffer.resize(1024, 0.0f);
+
 
   // FX Slot Filters (Slots 9/10)
   mHpLfoL.setMode(1); // HP
@@ -198,16 +209,16 @@ void AudioEngineCore::initTrack(int i) {
     }
   }
 
-  // Clear all parameters and FX sends to prevent ghost states (Phantom Panning)
-  std::fill(std::begin(mTracks[i].parameters), std::end(mTracks[i].parameters),
-            0.0f);
-  std::fill(std::begin(mTracks[i].appliedParameters),
-            std::end(mTracks[i].appliedParameters), 0.0f);
-  std::fill(std::begin(mTracks[i].fxSends), std::end(mTracks[i].fxSends), 0.0f);
-  std::fill(std::begin(mTracks[i].smoothedFxSends),
-            std::end(mTracks[i].smoothedFxSends), 0.0f);
-  std::fill(std::begin(mTracks[i].fxMix), std::end(mTracks[i].fxMix),
-            1.0f); // Default to Unity!
+  // Clear all parameters and FX sends using atomic-safe loops
+  for (int j = 0; j < 2500; ++j) {
+      mTracks[i].parameters[j] = 0.0f;
+      mTracks[i].appliedParameters[j] = 0.0f;
+  }
+  for (int j = 0; j < 18; ++j) {
+      mTracks[i].fxSends[j].store(0.0f);
+      mTracks[i].smoothedFxSends[j] = 0.0f;
+      mTracks[i].fxMix[j].store(1.0f); // Default to Unity!
+  }
 
   // Initialize defaults
   mTracks[i].subtractiveEngine.setSustain(1.0f);
@@ -534,7 +545,7 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
       static int trigLog = 0;
       if (trigLog++ % 50 == 0 ||
           trackIndex == 1) { // ALWAYS log FM (T1) for now
-        float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
+        float samplesPerStep = (15.0f * mSampleRate.load(std::memory_order_relaxed)) / std::max(1.0f, mBpm.load(std::memory_order_relaxed));
         float effectiveMultiplier = std::max(0.01f, track.mClockMultiplier);
         float trackSamplesPerStep = samplesPerStep / effectiveMultiplier;
         LOGD(
@@ -564,7 +575,7 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
     // release. Prevents double-decrement of mGlobalVoiceCount.
     for (int i = 0; i < AudioEngineCore::Track::MAX_POLYPHONY; ++i) {
       if (track.mActiveNotes[i].active && track.mActiveNotes[i].note == note) {
-        float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
+        float samplesPerStep = (15.0f * mSampleRate.load(std::memory_order_relaxed)) / std::max(1.0f, mBpm.load(std::memory_order_relaxed));
         float trackSamplesPerStep =
             samplesPerStep / std::max(0.01f, track.mClockMultiplier);
 
@@ -604,10 +615,10 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
             ? 440.0f
             : 440.0f * powf(2.0f, (note - 69 + track.mPitchBend) / 12.0f);
     track.currentFrequency = freq;
-    track.subtractiveEngine.setFrequency(freq, mSampleRate);
-    track.fmEngine.setFrequency(freq, mSampleRate);
-    track.wavetableEngine.setFrequency(freq, mSampleRate);
-    track.analogDrumEngine.setSampleRate(mSampleRate);
+    track.subtractiveEngine.setFrequency(freq, mSampleRate.load(std::memory_order_relaxed));
+    track.fmEngine.setFrequency(freq, mSampleRate.load(std::memory_order_relaxed));
+    track.wavetableEngine.setFrequency(freq, mSampleRate.load(std::memory_order_relaxed));
+    track.analogDrumEngine.setSampleRate(mSampleRate.load(std::memory_order_relaxed));
 
     track.isActive = true;
     track.mSilenceFrames = 0;
@@ -654,7 +665,7 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
       track.mActiveNotes[allocIdx].active = true;
       track.mActiveNotes[allocIdx].note = note;
       if (isSequencerTrigger) {
-        float samplesPerStep = (15.0f * mSampleRate) / std::max(1.0f, mBpm);
+        float samplesPerStep = (15.0f * mSampleRate.load(std::memory_order_relaxed)) / std::max(1.0f, mBpm.load(std::memory_order_relaxed));
         float trackSamplesPerStep =
             samplesPerStep / std::max(0.01f, track.mClockMultiplier);
         track.mActiveNotes[allocIdx].durationRemaining =
@@ -702,9 +713,20 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
     bool arpActive = track.arpeggiator.getMode() != ArpMode::OFF;
 
     if (mIsRecording && mIsPlaying && (!isSequencerTrigger || isArpTrigger)) {
+      // Don't re-record a note if the current step already has content
+      // (prevents loop accumulation: each loop would double the note count)
+      int currentStepIdx = track.sequencer.getCurrentStepIndex();
+      bool stepAlreadyHasNote = false;
+      if (isArpTrigger) {
+        const auto &steps = track.sequencer.getSteps();
+        if (currentStepIdx < (int)steps.size() && steps[currentStepIdx].active) {
+          stepAlreadyHasNote = true;
+        }
+      }
+
       if (isPhysicalNote && arpActive) {
         // Do not record physical presses if Arp is handling them
-      } else {
+      } else if (!stepAlreadyHasNote) {
         double phase = (double)mSampleCount / (mSamplesPerStep + 0.001);
         // MICROTIMING FIX: Always record to current step with precise offset
         int stepOffset = 0;
@@ -773,10 +795,15 @@ void AudioEngineCore::setParameter(int trackIndex, int parameterId, float value,
 }
 
 void AudioEngineCore::setParameterPreview(int trackIndex, int parameterId,
-                                      float value) {
-  // Preview only: Update engine directly without modifying base parameters
-  // This is used during P-lock editing so knob changes don't affect the track
-  updateEngineParameter(trackIndex, parameterId, value);
+                                          float value) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::PARAM_PREVIEW;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = parameterId;
+  cmd.value = value;
+
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
 }
 
 void AudioEngineCore::updateEngineParameter(int trackIndex, int parameterId,
@@ -857,15 +884,14 @@ void AudioEngineCore::updateEngineParameter(int trackIndex, int parameterId,
 
   // Specific Logic for Global / Sends
   if (parameterId >= 2000 &&
-      parameterId <
-          2180) { // Covers all 18 FX slots (0-17, including 5-Band EQ)
+      parameterId < 2180) { // Covers all 18 FX slots (0-17, including 5-Band EQ)
     int fxIndex = (parameterId - 2000) / 10;
     int subId = (parameterId - 2000) % 10;
     if (fxIndex >= 0 && fxIndex < 18) {
       if (subId == 0) {
-        track.fxSends[fxIndex] = value;
+        track.fxSends[fxIndex].store(value);
       } else if (subId == 1) {
-        track.fxMix[fxIndex] = 1.0f; // FORCE UNITY (Ignore 0.0 from sync)
+        track.fxMix[fxIndex].store(1.0f); // FORCE UNITY (Ignore 0.0 from sync)
       }
     }
     return;
@@ -875,12 +901,12 @@ void AudioEngineCore::updateEngineParameter(int trackIndex, int parameterId,
   if (parameterId < 100) {
     switch (parameterId) {
     case 0:
-      track.volume = std::max(0.001f, value);
+      track.volume.store(std::max(0.001f, value));
       break;
     case 9:
-      track.pan = std::max(0.0f, std::min(value, 1.0f));
+      track.pan.store(std::max(0.0f, std::min(value, 1.0f)));
       {
-        float angle = track.pan * (float)M_PI * 0.5f;
+        float angle = track.pan.load() * (float)M_PI * 0.5f;
         track.panL = cosf(angle);
         track.panR = sinf(angle);
       }
@@ -1202,6 +1228,12 @@ void AudioEngineCore::processCommands() {
                               cmd.immediate);
       }
       break;
+    case AudioCommand::PARAM_PREVIEW:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        updateEngineParameter(cmd.trackIndex, cmd.data1, cmd.value,
+                              cmd.immediate);
+      }
+      break;
     case AudioCommand::GLOBAL_PARAM_SET:
       updateGlobalParameter(cmd.data1, cmd.value);
       break;
@@ -1229,6 +1261,17 @@ void AudioEngineCore::processCommands() {
     case AudioCommand::SET_TRACK_ACTIVE:
       if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size())
         mTracks[cmd.trackIndex].isActive = cmd.bValue;
+      break;
+    case AudioCommand::SET_TRACK_DISABLED:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        mTracks[cmd.trackIndex].isDisabled = cmd.bValue;
+        if (cmd.bValue) {
+           mTracks[cmd.trackIndex].isActive = false;
+           for (int v = 0; v < 8; ++v) {
+               mTracks[cmd.trackIndex].mActiveNotes[v].active = false;
+           }
+        }
+      }
       break;
     case AudioCommand::SET_TEMPO:
       mBpm = cmd.value;
@@ -1362,6 +1405,11 @@ void AudioEngineCore::processCommands() {
       if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
         mTracks[cmd.trackIndex].chainLength =
             std::max(1, std::min(16, cmd.data1));
+      }
+      break;
+    case AudioCommand::SET_TRACK_PROBABILITY:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        mTracks[cmd.trackIndex].sequenceProbability = cmd.value;
       }
       break;
     case AudioCommand::SET_CHAIN_SLOT:
@@ -1681,10 +1729,10 @@ void AudioEngineCore::updateGlobalParameter(int parameterId, float value) {
       }
       break;
     case 3: // 5-Band EQ (Slot 17)
-      if (subId >= 0 && subId < 5) {
+      if (subId >= 0 && subId < 5) { // Band Gains 0-4
         mEq5BandFxL.setBandGain(subId, (value - 0.5f) * 48.0f); // +/- 24dB
         mEq5BandFxR.setBandGain(subId, (value - 0.5f) * 48.0f);
-      } else if (subId == 9) { // MIX
+      } else if (subId == 9) { // MIX Level
         mEq5BandFxL.setMix(value);
         mEq5BandFxR.setMix(value);
         mFxMixLevels[17] = 1.0f;
@@ -1776,10 +1824,10 @@ void AudioEngineCore::releaseNoteLocked(int trackIndex, int note,
                 ((double)mSampleCount / (mSamplesPerStep + 0.001));
             double startPos = (double)it->startGlobalStep + it->startOffset;
 
-            // Handle wrap-around (if currentPos < startPos)
+            // Handle wrap-around
             if (currentPos < startPos) {
-              currentPos +=
-                  static_cast<double>(mPatternLength > 0 ? mPatternLength : 16);
+              // Fix: Use 4096 as the global wrapping point for step counters
+              currentPos += 4096.0;
             }
 
             float gate = static_cast<float>(currentPos - startPos);
@@ -1841,17 +1889,35 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
 
   const int kBlockSize = 256;
 
-  float samplesPerStep =
-      (static_cast<float>(mSampleRate) * 60.0f) / (std::max(1.0f, mBpm) * 4.0f);
-  // Safety: Prevent near-infinite loops if BPM is crazy high
-  if (samplesPerStep < 10.0f)
-    samplesPerStep = 10.0f;
-  mSamplesPerStep = samplesPerStep;
+  // Local snapshots of atomic parameters to ensure consistency within this block
+  const float currentBpm = mBpm.load(std::memory_order_relaxed);
+  const double currentSampleRate = mSampleRate.load(std::memory_order_relaxed);
 
-  // --- Consolidated Thread Safety (v2.2.2 Stability Fix) ---
-  // Acquire mLock BEFORE processCommands and render loop to ensure
-  // state consistency during JNI calls and rendering.
-  std::lock_guard<std::recursive_mutex> lock(mLock);
+  float samplesPerStep =
+      (static_cast<float>(currentSampleRate) * 15.0f) / (std::max(1.0f, currentBpm));
+  // Safety: Prevent near-infinite loops if BPM is crazy high
+  if (samplesPerStep < 12.0f)
+    samplesPerStep = 12.0f;
+  
+  // Optimization: Only store if it changed significantly (prevents unnecessary cache invalidation)
+  if (std::abs(mSamplesPerStep.load(std::memory_order_relaxed) - samplesPerStep) > 0.001f) {
+    mSamplesPerStep.store(samplesPerStep, std::memory_order_relaxed);
+  }
+
+  // --- No Mutex Needed Here (v3.1.27: Decoupled) ---
+  // Parameter updates are now atomic (std::atomic<float>) and Note events
+  // use the thread-safe mCommandQueue. The audio thread is now wait-free.
+
+  // --- BLOCK-LEVEL JITTER CORRECTION (Fixes 5-25Hz flickering) ---
+  bool inputNeeded = isInputNeeded();
+  if (inputNeeded) {
+    uint32_t writePos = mInputWritePtr.load();
+    int32_t currentDist = static_cast<int32_t>(writePos - mInputReadPtr);
+    if (currentDist < 512 || currentDist > 8000) {
+      // Jump to safe middle ground if we drift too far or get too close
+      mInputReadPtr = (writePos - 2048);
+    }
+  }
 
   processCommands();
 
@@ -1862,15 +1928,21 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
       // Unified Processing Block (Control + Audio + NoteOff)
       // mLock is already held by the outer onAudioReady scope.
 
-      mSampleCount += framesToDo;
-      while (mSampleCount >= samplesPerStep && samplesPerStep > 0.0f) {
-        mSampleCount -= samplesPerStep;
-        if (mIsPlaying)
-          mGlobalStepIndex = (mGlobalStepIndex + 1) % mPatternLength;
+      double scLocal = mSampleCount.load(std::memory_order_relaxed);
+      scLocal += framesToDo;
+      const int patternLen = mPatternLength.load(std::memory_order_relaxed);
+      while (scLocal >= samplesPerStep && samplesPerStep > 0.0f) {
+        scLocal -= samplesPerStep;
+        if (mIsPlaying) {
+          // Fix: Remove 16-step modulo constraint to support long sequences and accurate gate recording
+          mGlobalStepIndex = (mGlobalStepIndex + 1) % 4096; 
+        }
       }
+      mSampleCount.store(scLocal, std::memory_order_relaxed);
 
       for (int t = 0; t < (int)mTracks.size(); ++t) {
         Track &track = mTracks[t];
+        if (track.isDisabled) continue;
         float effectiveMultiplier = track.mClockMultiplier;
 
         // Only run Arp logic if NOT a drum track to prevent
@@ -1894,6 +1966,10 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
             safetyCounter++;
 
             bool looped = track.sequencer.advance();
+            mTrackCurrentStep[t].store(track.sequencer.getCurrentStepIndex());
+            for (int d = 0; d < 16; ++d) {
+              mTrackCurrentDrumStep[t][d].store(track.drumSequencers[d].getCurrentStepIndex());
+            }
 
             // Apply SWING: even steps are longer, odd steps are shorter
             // mSwing range is -0.23 to +0.23
@@ -1955,7 +2031,8 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
             if (seqStep < steps.size()) {
               const Step &s = steps[seqStep];
               if (s.active) {
-                if (s.probability >= 1.0f || gRng.next() <= s.probability) {
+                float effectiveProb = s.probability * track.sequenceProbability;
+                if (effectiveProb >= 1.0f || gRng.next() <= effectiveProb) {
                   for (const auto &ni : s.notes) {
                     double randomOffset = 0.0;
                     float velocityScale = 1.0f;
@@ -2064,8 +2141,8 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
                 if (drumStep < dSteps.size()) {
                   const Step &ds = dSteps[drumStep];
                   if (ds.active) {
-                    if (ds.probability >= 1.0f ||
-                        gRng.next() <= ds.probability) {
+                    float effectiveProb = ds.probability * track.sequenceProbability;
+                    if (effectiveProb >= 1.0f || gRng.next() <= effectiveProb) {
                       for (const auto &ni : ds.notes) {
 
                         double randomOffset = 0.0;
@@ -2175,7 +2252,7 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
             track.mArpCountdown += arpSamplesPerStep;
 
             float currentGate = track.arpeggiator.getCurrentGate();
-            std::vector<int> arpNotes = track.arpeggiator.nextNotes();
+            const std::vector<int> &arpNotes = track.arpeggiator.nextNotes();
 
             float strum = track.arpeggiator.getStrum();
             int noteCount = (int)arpNotes.size();
@@ -2250,38 +2327,37 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
       renderStereo(&output[frameIdx * numChannels], framesToDo);
     }
 
-    // Push to recorder (Sampler/Granular)
+    // Push to recorder (Sampler/Granular) - PRE-ALLOCATED v3.1.37
     if (mIsRecordingSample && mRecordingTrackIndex != -1) {
       auto &recTrack = mTracks[mRecordingTrackIndex];
-      std::vector<float> recBuffer;
-      recBuffer.reserve(framesToDo);
+      int recCount = std::min((int)framesToDo, 1024);
 
       if (mRecordingSource == 1) { // RESAMPLE (MIX)
-        for (int k = 0; k < framesToDo; ++k) {
+        for (int k = 0; k < recCount; ++k) {
           float mixed = (output[(frameIdx + k) * numChannels] +
                          output[(frameIdx + k) * numChannels + 1]) * 0.5f;
-          recBuffer.push_back(mixed);
+          mRecordingScratchBuffer[k] = mixed;
         }
       } else if (mRecordingSource == 2) { // SYSTEM AUDIO
-        for (int k = 0; k < framesToDo; ++k) {
-          recBuffer.push_back(mSystemAudioRingBuffer[(mSystemAudioReadPtr + k) & 8191]);
+        for (int k = 0; k < recCount; ++k) {
+          mRecordingScratchBuffer[k] = mSystemAudioRingBuffer[(mSystemAudioReadPtr + k) & 8191];
         }
-        mSystemAudioReadPtr = (mSystemAudioReadPtr + framesToDo) & 8191;
+        mSystemAudioReadPtr = (mSystemAudioReadPtr + recCount) & 8191;
       } else { // MIC (DEFAULT)
-        // inputSample is usually mono, captured from mInputRingBuffer
-        for (int k = 0; k < framesToDo; ++k) {
-            recBuffer.push_back(mInputRingBuffer[(mInputReadPtr - framesToDo + k) & 8191]); // Backtrack to what was just "read"
+        for (int k = 0; k < recCount; ++k) {
+            mRecordingScratchBuffer[k] = mInputRingBuffer[(mInputReadPtr - recCount + k) & 8191];
         }
       }
 
-      if (!recBuffer.empty()) {
+      if (recCount > 0) {
         if (recTrack.engineType == 2) // SAMPLER
-          recTrack.samplerEngine.pushSamples(recBuffer.data(), recBuffer.size());
+          recTrack.samplerEngine.pushSamples(mRecordingScratchBuffer.data(), recCount);
         else if (recTrack.engineType == 3) // GRANULAR
-          recTrack.granularEngine.pushSamples(recBuffer.data(), recBuffer.size());
+          recTrack.granularEngine.pushSamples(mRecordingScratchBuffer.data(), recCount);
       }
     }
   }
+
 
   auto end = std::chrono::steady_clock::now();
   float elapsed = std::chrono::duration<float>(end - start).count();
@@ -2324,7 +2400,7 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
     LOGD("AudioEngineCore Stats: ActiveTracks=%d, Voices=%d, MasterVol=%.2f, "
          "SampleRate=%.1f, "
          "BlockPeak=%.4f, MaxPeak=%.4f",
-         activeTracks, mGlobalVoiceCount.load(), mMasterVolume, (float)mSampleRate, currentPeak, maxPeak);
+         activeTracks, mGlobalVoiceCount.load(), mMasterVolume.load(std::memory_order_relaxed), (float)mSampleRate, currentPeak, maxPeak);
 
     // Extra debug: track states
     for (int t = 0; t < 8; ++t) {
@@ -2337,6 +2413,12 @@ void AudioEngineCore::render(float *audioData, int32_t numFrames) {
     maxPeak = 0.0f; // Reset max peak every second
   }
 
+  // Throttle UI synchronization: Update snapshot only every 4th callback
+  // This reduces JNI and Mutex overhead by 75%, helping low-power CPU stability
+  int counter = mSnapshotCounter.fetch_add(1, std::memory_order_relaxed);
+  if (counter % 4 == 0) {
+      updateUISnapshot();
+  }
   return;
 }
 
@@ -2406,30 +2488,39 @@ void AudioEngineCore::setStep(int trackIndex, int stepIndex, bool active,
 }
 
 void AudioEngineCore::getFxSends(int trackIndex, float *dest) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
+  // v3.1.27: Lock-free atomic access
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     for (int i = 0; i < 17; ++i) {
-      dest[i] = mTracks[trackIndex].fxSends[i];
+      dest[i] = mTracks[trackIndex].fxSends[i].load();
     }
   }
 }
 
 void AudioEngineCore::getFxMix(int trackIndex, float *dest) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
+  // v3.1.27: Lock-free atomic access
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     for (int i = 0; i < 17; ++i) {
-      dest[i] = mTracks[trackIndex].fxMix[i];
+      dest[i] = mTracks[trackIndex].fxMix[i].load();
     }
   }
 }
 
 std::vector<float> AudioEngineCore::getAllTrackParameters(int trackIndex) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
   std::vector<float> params;
-  if (trackIndex >= 0 && trackIndex < mTracks.size()) {
-    for (int i = 0; i < 1024; ++i) {
-      params.push_back(mTracks[trackIndex].parameters[i]);
-    }
+  params.reserve(1024);
+  
+  if (trackIndex >= 0 && trackIndex < 8) {
+      // Use Snapshot Lock (faster than mLock)
+      std::unique_lock<std::mutex> lock(mSnapshotLock, std::try_to_lock);
+      // Even if lock fails, we return a vector (either zeroed or from snapshot if we got it)
+      // Actually, let's just wait for mSnapshotLock since it's extremely fast (just a copy)
+      if (!lock.owns_lock()) lock.lock(); 
+      
+      for (int i = 0; i < 1024; ++i) {
+        params.push_back(mUISnapshot.tracks[trackIndex].parameters[i]);
+      }
+  } else {
+      params.resize(1024, 0.0f);
   }
   return params;
 }
@@ -2766,12 +2857,19 @@ void AudioEngineCore::applyModulations() {
 
 void AudioEngineCore::setIsRecording(bool isRecording) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
+  if (!isRecording && mIsRecording.load()) {
+    // Flush all in-flight recording notes to prevent orphaned entries
+    // that would cause duplicate writes on the next recording pass.
+    for (auto &track : mTracks) {
+      track.mRecordingNotes.clear();
+    }
+  }
   mIsRecording = isRecording;
 }
 
 void AudioEngineCore::jumpToStep(int stepIndex) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
-  mGlobalStepIndex = stepIndex % mPatternLength;
+  mGlobalStepIndex = stepIndex % mPatternLength.load(std::memory_order_relaxed);
 
   for (auto &track : mTracks) {
     track.mStepCountdown = 0.0; // Force immediate trigger on next block
@@ -2780,18 +2878,12 @@ void AudioEngineCore::jumpToStep(int stepIndex) {
       track.drumSequencers[i].jumpToStep(mGlobalStepIndex);
     }
   }
-  mSampleCount = mSamplesPerStep;
+  mSampleCount.store(mSamplesPerStep.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
 int AudioEngineCore::getCurrentStep(int trackIndex, int drumIndex) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-    if (drumIndex >= 0 && drumIndex < 16) {
-      return mTracks[trackIndex]
-          .drumSequencers[drumIndex]
-          .getCurrentStepIndex();
-    }
-    return mTracks[trackIndex].sequencer.getCurrentStepIndex();
+  if (trackIndex >= 0 && trackIndex < 8) {
+    return mTrackCurrentStep[trackIndex].load();
   }
   return 0;
 }
@@ -3076,6 +3168,15 @@ std::vector<float> AudioEngineCore::getRecordedSampleData(int trackIndex,
 
 void AudioEngineCore::startRecordingSample(int trackIndex) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
+  
+  // v3.2.6: Debounce recording starts to prevent "double-click" artifacts on touch screens
+  auto now = std::chrono::steady_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - mLastRecordStartTime).count();
+  if (elapsed < 200) { // 200ms debounce
+      return;
+  }
+  mLastRecordStartTime = now;
+
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     mIsRecordingSample = true;
     mIsRecordingLocked = false; // Reset lock on new recording start
@@ -3181,22 +3282,18 @@ float AudioEngineCore::getStepSubStep(int trackIndex, int stepIndex,
 }
 
 bool AudioEngineCore::getStepActive(int trackIndex, int stepIndex, int drumIndex) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
-    if (drumIndex >= 0 && drumIndex < 16) {
-      const auto &steps =
-          mTracks[trackIndex].drumSequencers[drumIndex].getSteps();
-      if (stepIndex >= 0 && stepIndex < (int)steps.size()) {
-        return steps[stepIndex].active;
-      }
-    } else {
-      const auto &steps = mTracks[trackIndex].sequencer.getSteps();
-      if (stepIndex >= 0 && stepIndex < (int)steps.size()) {
-        return steps[stepIndex].active;
-      }
-    }
+  if (trackIndex < 0 || trackIndex >= 8 || stepIndex < 0 || stepIndex >= 64) {
+    return false;
   }
-  return false;
+
+  std::unique_lock<std::mutex> lock(mSnapshotLock, std::try_to_lock);
+  if (!lock.owns_lock()) lock.lock();
+
+  const auto &snap = mUISnapshot.tracks[trackIndex];
+  if (drumIndex >= 0 && drumIndex < 16) {
+    return snap.activeDrumSteps[drumIndex].test(stepIndex);
+  }
+  return snap.activeSteps.test(stepIndex);
 }
 
 void AudioEngineCore::resetSampler(int trackIndex) {
@@ -3233,8 +3330,7 @@ void AudioEngineCore::clearSequencer(int trackIndex) {
 }
 
 void AudioEngineCore::setMasterVolume(float volume) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  mMasterVolume = volume * 1.5f; // 50% boost at max
+  mMasterVolume.store(volume * 1.5f, std::memory_order_relaxed);
 }
 
 void AudioEngineCore::panic() {
@@ -3370,6 +3466,17 @@ void AudioEngineCore::setArpTriplet(int trackIndex, bool isTriplet) {
 
 float AudioEngineCore::getCpuLoad() { return mCpuLoad.load(); }
 
+void AudioEngineCore::getTrackLevels(float *outLevels) const {
+  for (int t = 0; t < 8; ++t) {
+    if (t < (int)mTracks.size()) {
+      outLevels[t] = mTracks[t].follower.getLevel();
+    } else {
+      outLevels[t] = 0.0f;
+    }
+  }
+}
+
+
 void AudioEngineCore::enqueuePatternSaveEvent(int trackIndex, int slotIndex) {
   std::lock_guard<std::mutex> lock(mEventLock);
   EngineEvent ev;
@@ -3380,7 +3487,8 @@ void AudioEngineCore::enqueuePatternSaveEvent(int trackIndex, int slotIndex) {
 }
 
 int AudioEngineCore::fetchEngineEvents(int *outBuffer, int maxEvents) {
-  std::lock_guard<std::mutex> lock(mEventLock);
+  std::unique_lock<std::mutex> lock(mEventLock, std::try_to_lock);
+  if (!lock.owns_lock()) return 0;
   int count = 0;
   while (!mEventQueue.empty() && count < maxEvents) {
     auto ev = mEventQueue.front();
@@ -3542,8 +3650,9 @@ void AudioEngineCore::pushInputSamples(const float *data, int numFrames,
 void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   // Lock handled by onAudioReady caller
   // Master volume and safety
-  if (!std::isfinite(mMasterVolume))
-    mMasterVolume = 0.5f;
+  float masterVol = mMasterVolume.load(std::memory_order_relaxed);
+  if (!std::isfinite(masterVol))
+    masterVol = 0.5f;
 
   // Force Filter FX Mix Levels to 1.0 (Passthrough Fix)
   mFxMixLevels[12] = 1.0f;
@@ -3614,170 +3723,231 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
     if (t.isSoloed) {
       anySolo = true;
       break;
+    }
+  }
+
+  DenormalDisabler denormalDisabler;
 
   // Block-Based FX Processing Setup
   int safeNumFrames = std::min((int)numFrames, 1024);
 
   // Buffers for dry mix and sidechain
-  float mixedSampleL_arr[1024] = {0.0f};
-  float mixedSampleR_arr[1024] = {0.0f};
-  float sidechain_arr[1024] = {0.0f};
-  float spreadL_arr[1024] = {0.0f};
-  float spreadR_arr[1024] = {0.0f};
-  float wetSampleL_arr[1024] = {0.0f};
-  float wetSampleR_arr[1024] = {0.0f};
+  std::fill(mMixedSampleL.begin(), mMixedSampleL.begin() + safeNumFrames, 0.0f);
+  std::fill(mMixedSampleR.begin(), mMixedSampleR.begin() + safeNumFrames, 0.0f);
+  std::fill(mSidechainBuffer.begin(), mSidechainBuffer.begin() + safeNumFrames, 0.0f);
+  std::fill(mSpreadL.begin(), mSpreadL.begin() + safeNumFrames, 0.0f);
+  std::fill(mSpreadR.begin(), mSpreadR.begin() + safeNumFrames, 0.0f);
+  std::fill(mWetSampleL.begin(), mWetSampleL.begin() + safeNumFrames, 0.0f);
+  std::fill(mWetSampleR.begin(), mWetSampleR.begin() + safeNumFrames, 0.0f);
+
+  float* mixedSampleL_arr = mMixedSampleL.data();
+  float* mixedSampleR_arr = mMixedSampleR.data();
+  float* sidechain_arr = mSidechainBuffer.data();
+  float* spreadL_arr = mSpreadL.data();
+  float* spreadR_arr = mSpreadR.data();
+  float* wetSampleL_arr = mWetSampleL.data();
+  float* wetSampleR_arr = mWetSampleR.data();
 
   // 1. Initialize FX Buses with Feedback from previous block
   const float denormalBias = 1e-15f;
+  // Optimized Block Clear with NEON (v3.2.1)
+#ifdef __ARM_NEON
+  float32x4_t vDenormal = vdupq_n_f32(denormalBias);
+#endif
   for (int b = 0; b < 18; ++b) {
     if (mFxBusBlockL[b].size() < safeNumFrames) mFxBusBlockL[b].resize(safeNumFrames, 0.0f);
     if (mFxBusBlockR[b].size() < safeNumFrames) mFxBusBlockR[b].resize(safeNumFrames, 0.0f);
     
-    // Fill first sample with feedback
-    mFxBusBlockL[b][0] = mFxFeedbacksL[b] + denormalBias;
-    mFxBusBlockR[b][0] = mFxFeedbacksR[b] + denormalBias;
-    // Clear the rest
-    for (int i = 1; i < safeNumFrames; ++i) {
-      mFxBusBlockL[b][i] = denormalBias;
-      mFxBusBlockR[b][i] = denormalBias;
+    float* bL = mFxBusBlockL[b].data();
+    float* bR = mFxBusBlockR[b].data();
+    
+    int j = 0;
+#ifdef __ARM_NEON
+    for (; j <= safeNumFrames - 4; j += 4) {
+      vst1q_f32(&bL[j], vDenormal);
+      vst1q_f32(&bR[j], vDenormal);
     }
-    // Clear feedback state
-    mFxFeedbacksL[b] = 0.0f;
-    mFxFeedbacksR[b] = 0.0f;
+#endif
+    for (; j < safeNumFrames; ++j) {
+      bL[j] = bR[j] = denormalBias;
+    }
+    
+    // Feedback injection (with denormal protection)
+    bL[0] += mFxFeedbacksL[b] + 1e-15f;
+    bR[0] += mFxFeedbacksR[b] + 1e-15f;
+    mFxFeedbacksL[b] = mFxFeedbacksR[b] = 0.0f;
   }
 
-  // --- PHASE 1: GENERATE DRY SIGNAL & FX SENDS ---
-  for (int i = 0; i < safeNumFrames; ++i) {
-    uint32_t writePos = mInputWritePtr.load();
-    int32_t distance = static_cast<int32_t>(writePos - mInputReadPtr);
-    if (distance < 128 || distance > 8000) {
-      mInputReadPtr = writePos - 2048; 
-    }
-    float inputSample = mInputRingBuffer[mInputReadPtr & 8191];
-    mInputReadPtr++;
+  // --- PHASE 1: GENERATE DRY SIGNAL & FX SENDS (BLOCK PROCESSING) ---
+  bool inputNeeded = isInputNeeded();
 
-    float mixedSampleL = 0.0f;
-    float mixedSampleR = 0.0f;
+  int activeTracks = 0;
+  for (int t = 0; t < (int)mTracks.size(); ++t) {
+    Track &track = mTracks[t];
+    track.gainReduction = 1.0f;
 
-    for (int t = 0; t < (int)mTracks.size(); ++t) {
-      Track &track = mTracks[t];
-      track.gainReduction = 1.0f;
-
-      if (!track.isActive && track.mSilenceFrames > 2400) {
+    // Hard-disable path: perfectly skips rendering and silence checks
+    if (track.isDisabled) {
         track.follower.process(0.0f);
         continue;
-      }
+    }
 
-      bool shouldMute = track.isMuted;
-      if (anySolo && !track.isSoloed) {
-        shouldMute = true;
-      }
+    // Fast-path for silent/inactive tracks
+    if (!track.isActive && track.mSilenceFrames > 2400) {
+      track.follower.process(0.0f);
+      continue;
+    }
+    activeTracks++;
 
-      if (std::abs(track.volume - track.smoothedVolume) > 0.0001f) {
-        track.smoothedVolume += 0.01f * (track.volume - track.smoothedVolume);
-      }
-      for (int f = 0; f < 18; ++f) {
-        if (std::abs(track.fxSends[f] - track.smoothedFxSends[f]) > 0.0001f) {
-          track.smoothedFxSends[f] += 0.01f * (track.fxSends[f] - track.smoothedFxSends[f]);
-        }
-      }
-      for (int f = 0; f < 18; ++f) {
-        if (std::abs(mFxMixLevels[f] - track.fxMix[f]) > 0.0001f) {
-          track.fxMix[f] += 0.01f * (mFxMixLevels[f] - track.fxMix[f]);
-        }
-      }
+    bool shouldMute = track.isMuted;
+    if (anySolo && !track.isSoloed) {
+      shouldMute = true;
+    }
 
-      float rawSampleL = 0.0f;
-      float rawSampleR = 0.0f;
+      // v3.1.39: Per-Sample Volume Ramping (Smoothing)
+      // This eliminates zipper noise and "envelope pops" by interpolating volume frame-by-frame.
+      float startVol = track.smoothedVolume;
+      float targetVol = track.volume.load(std::memory_order_relaxed);
+      float volStep = (targetVol - startVol) / (float)safeNumFrames;
+      float currentSmoothVol = startVol;
+      track.smoothedVolume = targetVol; // For next block
 
-      if (track.engineType == 0) {
-        rawSampleL = track.subtractiveEngine.process(mSampleRate);
-        rawSampleR = rawSampleL;
-      } else if (track.engineType == 1) {
-        rawSampleL = track.fmEngine.process(mSampleRate);
-        rawSampleR = rawSampleL;
-      } else if (track.engineType == 2) {
-        track.samplerEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
-      } else if (track.engineType == 3) {
-        track.granularEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
-      } else if (track.engineType == 4) {
-        track.wavetableEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
-      } else if (track.engineType == 5) {
-        track.fmDrumEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
-      } else if (track.engineType == 6) {
-        track.analogDrumEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
-      } else if (track.engineType == 8) {
-        track.audioInEngine.processStereo(inputSample, rawSampleL, rawSampleR, mSampleRate);
-      } else if (track.engineType == 9) {
-        track.soundFontEngine.processStereo(rawSampleL, rawSampleR, mSampleRate);
-      }
-
-      float monoSum = (rawSampleL + rawSampleR) * 0.5f;
-
-      if (t == mSidechainSourceTrack) {
-        if (mSidechainSourceDrumIdx == -1 || track.lastTriggeredDrumIndex == mSidechainSourceDrumIdx) {
-          sidechain_arr[i] = monoSum * track.smoothedVolume;
-        }
-      }
-
-      rawSampleL = softLimit(rawSampleL);
-      rawSampleR = softLimit(rawSampleR);
-
-      float finalVol = track.smoothedVolume;
-      float preFaderL = rawSampleL;
-      float preFaderR = rawSampleR;
-
-      if (track.mPunchCounter > 0) {
-        float punchScale = 2.5f;
-        preFaderL *= punchScale;
-        preFaderR *= punchScale;
-        preFaderL = fast_tanh(preFaderL);
-        preFaderR = fast_tanh(preFaderR);
-        float makeupGain = 1.25f;
-        preFaderL *= makeupGain;
-        preFaderR *= makeupGain;
-        track.mPunchCounter--;
-        rawSampleL = preFaderL;
-        rawSampleR = preFaderR;
-      }
-
-      preFaderL *= track.gainReduction;
-      preFaderR *= track.gainReduction;
-
-      float trackDryKill = 0.0f;
-      bool skipTrackSends = (track.engineType == 2 && track.samplerEngine.isSliceLockEnabled());
+      // Cache active FX sends for this block (Sparse Mixer)
+      float activeSends[18];
+      int activeSendIndices[18];
+      int activeSendCount = 0;
+      float maxDryKill = 0.0f;
 
       for (int f = 0; f < 18; ++f) {
-        if (track.smoothedFxSends[f] > 0.001f) {
-          float wetAmount = track.smoothedFxSends[f] * track.fxMix[f];
-          if (!skipTrackSends && !shouldMute) {
-            mFxBusBlockL[f][i] += preFaderL * wetAmount;
-            mFxBusBlockR[f][i] += preFaderR * wetAmount;
-          }
-          if (wetAmount > trackDryKill) trackDryKill = wetAmount;
+        float targetFx = track.fxSends[f].load(std::memory_order_relaxed);
+        if (std::abs(targetFx - track.smoothedFxSends[f]) > 0.0001f) {
+          track.smoothedFxSends[f] += 0.05f * (targetFx - track.smoothedFxSends[f]);
+        }
+        float sendAmt = track.smoothedFxSends[f];
+        float mixAmt = track.fxMix[f].load(std::memory_order_relaxed);
+        float wetAmount = sendAmt * mixAmt;
+        
+        if (wetAmount > 0.001f) {
+          activeSends[activeSendCount] = wetAmount;
+          activeSendIndices[activeSendCount] = f;
+          activeSendCount++;
+          if (wetAmount > maxDryKill) maxDryKill = wetAmount;
         }
       }
 
-      float dryScale = 1.0f - trackDryKill;
+      float dryScale = 1.0f - maxDryKill;
       if (dryScale < 0.0f) dryScale = 0.0f;
+      if (shouldMute) dryScale = 0.0f;
 
-      float trackOutputL = rawSampleL * finalVol * dryScale;
-      float trackOutputR = rawSampleR * finalVol * dryScale;
+      // Generate Track Block
+      float trackBlockL[1024] = {0.0f};
+      float trackBlockR[1024] = {0.0f};
 
-      if (shouldMute) {
-        trackOutputL = 0.0f;
-        trackOutputR = 0.0f;
+      switch(track.engineType) {
+        case 0: track.subtractiveEngine.render(trackBlockL, trackBlockR, safeNumFrames); break;
+        case 1: track.fmEngine.render(trackBlockL, trackBlockR, safeNumFrames); break;
+        case 2: track.samplerEngine.render(trackBlockL, trackBlockR, safeNumFrames); break;
+        case 3: track.granularEngine.render(trackBlockL, trackBlockR, safeNumFrames); break;
+        case 4: track.wavetableEngine.render(trackBlockL, trackBlockR, safeNumFrames); break;
+        case 5: track.fmDrumEngine.render(trackBlockL, trackBlockR, safeNumFrames); break;
+        case 6: track.analogDrumEngine.render(trackBlockL, trackBlockR, safeNumFrames); break;
+        case 8: {
+          float inputBlock[1024] = {0.0f};
+          if (inputNeeded) {
+            for (int j = 0; j < safeNumFrames; ++j) {
+               inputBlock[j] = mInputRingBuffer[(mInputReadPtr + j) & 8191];
+            }
+          }
+          track.audioInEngine.render(inputBlock, trackBlockL, trackBlockR, safeNumFrames);
+          break;
+        }
+        case 9: track.soundFontEngine.render(trackBlockL, trackBlockR, safeNumFrames); break;
       }
 
-      mixedSampleL += trackOutputL;
-      mixedSampleR += trackOutputR;
+      // Mix into Master and FX buses (v3.1.43: Optimized with ARM NEON SIMD)
+      float combinedScale = startVol * dryScale;
+      float combinedStep = volStep * dryScale;
 
+      int i = 0;
+#ifdef __ARM_NEON
+      // Use NEON to sum 4 samples at a time
+      float scale_vals[4] = { combinedScale, combinedScale + combinedStep, combinedScale + combinedStep * 2.0f, combinedScale + combinedStep * 3.0f };
+      float32x4_t vCombinedScale = vld1q_f32(scale_vals);
+      float32x4_t vCombinedStep4 = vdupq_n_f32(combinedStep * 4.0f);
       
-      track.follower.process(monoSum);
+      for (; i <= safeNumFrames - 4; i += 4) {
+        float32x4_t vRawL = vld1q_f32(&trackBlockL[i]);
+        float32x4_t vRawR = vld1q_f32(&trackBlockR[i]);
+        
+        float32x4_t vMixedL = vld1q_f32(&mixedSampleL_arr[i]);
+        float32x4_t vMixedR = vld1q_f32(&mixedSampleR_arr[i]);
+        
+        vld1q_f32(&mixedSampleL_arr[i]); // Prefetch hint (not real prefetch but keeps compiler happy)
+        
+        vMixedL = vmlaq_f32(vMixedL, vRawL, vCombinedScale);
+        vMixedR = vmlaq_f32(vMixedR, vRawR, vCombinedScale);
+        
+        vst1q_f32(&mixedSampleL_arr[i], vMixedL);
+        vst1q_f32(&mixedSampleR_arr[i], vMixedR);
+        
+        // Update combinedScale for next 4 samples
+        vCombinedScale = vaddq_f32(vCombinedScale, vCombinedStep4);
 
-      // Silence Detection
-      if (std::abs(monoSum) < 0.0001f) {
-        track.mSilenceFrames++;
+        // Update follower sub-sampled
+        if (i % 64 == 0) track.follower.process((std::abs(trackBlockL[i]) + std::abs(trackBlockR[i])) * 0.5f);
+      }
+#endif
+
+      // Remainder loop
+      for (; i < safeNumFrames; ++i) {
+        float renderedVol = startVol + (volStep * (float)i);
+        float scale = renderedVol * dryScale;
+        mixedSampleL_arr[i] += trackBlockL[i] * scale;
+        mixedSampleR_arr[i] += trackBlockR[i] * scale;
+        if (i % 64 == 0) track.follower.process((std::abs(trackBlockL[i]) + std::abs(trackBlockR[i])) * 0.5f);
+      }
+
+      // v3.2.1: Vectorized FX Sends (NEON)
+      // This is a sparse matrix sum: mFxBus[fx] += trackBlock * sendAmt
+      for (int s = 0; s < activeSendCount; ++s) {
+        int fxIdx = activeSendIndices[s];
+        float sendAmt = activeSends[s];
+        float* busL = mFxBusBlockL[fxIdx].data();
+        float* busR = mFxBusBlockR[fxIdx].data();
+        
+        int j = 0;
+#ifdef __ARM_NEON
+        float32x4_t vSendAmt = vdupq_n_f32(sendAmt);
+        for (; j <= safeNumFrames - 4; j += 4) {
+          float32x4_t vRawL = vld1q_f32(&trackBlockL[j]);
+          float32x4_t vRawR = vld1q_f32(&trackBlockR[j]);
+          float32x4_t vBusL = vld1q_f32(&busL[j]);
+          float32x4_t vBusR = vld1q_f32(&busR[j]);
+          
+          vst1q_f32(&busL[j], vmlaq_f32(vBusL, vRawL, vSendAmt));
+          vst1q_f32(&busR[j], vmlaq_f32(vBusR, vRawR, vSendAmt));
+        }
+#endif
+        for (; j < safeNumFrames; ++j) {
+          busL[j] += trackBlockL[j] * sendAmt;
+          busR[j] += trackBlockR[j] * sendAmt;
+        }
+      }
+        
+        // Sidechain source collection
+        if (t == mSidechainSourceTrack) {
+          if (mSidechainSourceDrumIdx == -1 || track.mDrumLastTriggeredNote[mSidechainSourceDrumIdx] != -1) {
+            for (int i_fx = 0; i_fx < safeNumFrames; ++i_fx) {
+              sidechain_arr[i_fx] = (trackBlockL[i_fx] + trackBlockR[i_fx]) * 0.5f * (startVol + (volStep * (float)i_fx));
+            }
+          }
+        }
+
+      // Silence Detection (Block-based check)
+      float blockSum = 0.0f;
+      for (int i=0; i<safeNumFrames; i+=16) blockSum += std::abs(trackBlockL[i]);
+      if (blockSum < 0.0001f) {
+        track.mSilenceFrames += safeNumFrames;
         if (track.mSilenceFrames > 2400) {
           bool activeVoices = false;
           for (int v = 0; v < 8; ++v) {
@@ -3793,16 +3963,19 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
         }
       } else {
         track.mSilenceFrames = 0;
+        track.isActive = true; // Audio detected — mark active
       }
-
-    }
+    } // End track loop
     
-    mixedSampleL_arr[i] = mixedSampleL;
-    mixedSampleR_arr[i] = mixedSampleR;
-  } // End Phase 1
+    // Prepare FX input buffer (Phase 1 result)
+    for (int i = 0; i < safeNumFrames; ++i) {
+        wetSampleL_arr[i] = mixedSampleL_arr[i];
+        wetSampleR_arr[i] = mixedSampleR_arr[i];
+    }
+    if (inputNeeded) mInputReadPtr += safeNumFrames;
 
   // --- PHASE 2: BLOCK FX PROCESSING ---
-  auto routeFxBlock = [&](int index, bool isDelta, float* outBufL, float* outBufR) {
+  auto routeFxBlock = [this, safeNumFrames, &wetSampleL_arr, &wetSampleR_arr](int index, bool isDelta, float* outBufL, float* outBufR) {
     int dest = mFxChainDest[index];
     
     for (int i = 0; i < safeNumFrames; ++i) {
@@ -3827,7 +4000,6 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
           mFxBusBlockL[dest][i] += outL;
           mFxBusBlockR[dest][i] += outR;
         } else {
-          // Backward pass via 1-block delay (capture last sample for next block)
           if (i == safeNumFrames - 1) {
             mFxFeedbacksL[dest] += outL;
             mFxFeedbacksR[dest] += outR;
@@ -3905,7 +4077,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 5: Delay
-  if (!mDelayFx.isSilent()) {
+  {
     float dL[1024], dR[1024];
     for(int i=0; i<safeNumFrames; ++i) { dL[i] = mFxBusBlockL[5][i]; dR[i] = mFxBusBlockR[5][i]; }
     mDelayFx.processBlockStereo(dL, dR, safeNumFrames, mSampleRate);
@@ -3925,7 +4097,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 6: Reverb
-  if (!mReverbFx.isSilent()) {
+  {
     float rL[1024], rR[1024];
     for(int i=0; i<safeNumFrames; ++i) { rL[i] = mFxBusBlockL[6][i]; rR[i] = mFxBusBlockR[6][i]; }
     mReverbFx.processBlockStereoWet(rL, rR, safeNumFrames);
@@ -3977,8 +4149,10 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[12][i]; tmpR[i] = mFxBusBlockR[12][i]; }
-    mFilterPedalL[0].processBlock(tmpL, safeNumFrames, mSampleRate);
-    mFilterPedalR[0].processBlock(tmpR, safeNumFrames, mSampleRate);
+    for(int i=0; i<safeNumFrames; ++i) { 
+      tmpL[i] = mFilterPedalL[0].process(tmpL[i], mSampleRate);
+      tmpR[i] = mFilterPedalR[0].process(tmpR[i], mSampleRate);
+    }
     routeFxBlock(12, false, tmpL, tmpR);
   }
 
@@ -3986,8 +4160,10 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[15][i]; tmpR[i] = mFxBusBlockR[15][i]; }
-    mFilterPedalL[1].processBlock(tmpL, safeNumFrames, mSampleRate);
-    mFilterPedalR[1].processBlock(tmpR, safeNumFrames, mSampleRate);
+    for(int i=0; i<safeNumFrames; ++i) { 
+      tmpL[i] = mFilterPedalL[1].process(tmpL[i], mSampleRate);
+      tmpR[i] = mFilterPedalR[1].process(tmpR[i], mSampleRate);
+    }
     routeFxBlock(15, false, tmpL, tmpR);
   }
 
@@ -3995,8 +4171,10 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[16][i]; tmpR[i] = mFxBusBlockR[16][i]; }
-    mFilterPedalL[2].processBlock(tmpL, safeNumFrames, mSampleRate);
-    mFilterPedalR[2].processBlock(tmpR, safeNumFrames, mSampleRate);
+    for(int i=0; i<safeNumFrames; ++i) { 
+      tmpL[i] = mFilterPedalL[2].process(tmpL[i], mSampleRate);
+      tmpR[i] = mFilterPedalR[2].process(tmpR[i], mSampleRate);
+    }
     routeFxBlock(16, false, tmpL, tmpR);
   }
 
@@ -4030,26 +4208,24 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
     routeFxBlock(17, false, tmpL, tmpR);
   }
 
-  // --- PHASE 3: MASTER SUMMING ---
+  // v3.2.1: Dynamic Headroom Scaling
+  // If track count > 4, we scale down by 3dB to prevent cubic saturation artifacts
+  float trackScale = (activeTracks > 4) ? 0.707f : 1.0f;
   for (int i = 0; i < safeNumFrames; ++i) {
-    float finalL = mixedSampleL_arr[i] + wetSampleL_arr[i] + spreadL_arr[i];
-    float finalR = mixedSampleR_arr[i] + wetSampleR_arr[i] + spreadR_arr[i];
+    float finalL = (mixedSampleL_arr[i] + wetSampleL_arr[i] + spreadL_arr[i]) * masterVol * trackScale;
+    float finalR = (mixedSampleR_arr[i] + wetSampleR_arr[i] + spreadR_arr[i]) * masterVol * trackScale;
 
     if (!std::isfinite(finalL)) finalL = 0.0f;
     if (!std::isfinite(finalR)) finalR = 0.0f;
 
-    if (finalL > 1.0f) finalL = fast_tanh(finalL);
-    else if (finalL < -1.0f) finalL = fast_tanh(finalL);
-
-    if (finalR > 1.0f) finalR = fast_tanh(finalR);
-    else if (finalR < -1.0f) finalR = fast_tanh(finalR);
-
-    outBuffer[i * 2] = finalL * mMasterVolume;
-    outBuffer[i * 2 + 1] = finalR * mMasterVolume;
+    // Apply soft-limiter to the final summed result before writing to hardware buffer
+    outBuffer[i * 2] = softLimit(finalL);
+    outBuffer[i * 2 + 1] = softLimit(finalR);
   }
 
 // Reset Punch Active flags for all tracks after processing the block
 // Reset of mPunchActive removed here, handled frame-by-frame
+}
 
 void AudioEngineCore::renderToWav(int numCycles, const std::string &path) {
   std::lock_guard<std::recursive_mutex> lock(mLock);
@@ -4060,7 +4236,7 @@ void AudioEngineCore::renderToWav(int numCycles, const std::string &path) {
   std::vector<float> output(totalFrames * 2);
 
   // Reset sequence state for export
-  mSampleCount = 0;
+  mSampleCount.store(0, std::memory_order_relaxed);
   // --- High Priority: Audio Rendering ---
   int framesRendered = 0;
   while (framesRendered < totalFrames) {
@@ -4072,9 +4248,12 @@ void AudioEngineCore::renderToWav(int numCycles, const std::string &path) {
       processCommands();
 
       // Check for next step trigger
-      if (mSampleCount >= mSamplesPerStep) {
-        mSampleCount -= mSamplesPerStep;
-        mGlobalStepIndex = (mGlobalStepIndex + 1) % mPatternLength;
+      double scExport = mSampleCount.load(std::memory_order_relaxed);
+      double spsExport = mSamplesPerStep.load(std::memory_order_relaxed);
+      if (scExport >= spsExport) {
+        scExport -= spsExport;
+        mSampleCount.store(scExport, std::memory_order_relaxed);
+        mGlobalStepIndex = (mGlobalStepIndex + 1) % mPatternLength.load(std::memory_order_relaxed);
 
         // Advance sequencers
         for (int t = 0; t < (int)mTracks.size(); ++t) {
@@ -4101,7 +4280,7 @@ void AudioEngineCore::renderToWav(int numCycles, const std::string &path) {
     }
 
     framesRendered += chunk;
-    mSampleCount += chunk;
+    mSampleCount.store(mSampleCount.load(std::memory_order_relaxed) + chunk, std::memory_order_relaxed);
   }
 
   WavFileUtils::writeWav(path, output, 48000, 2, {});
@@ -4124,15 +4303,18 @@ void AudioEngineCore::loadDefaultWavetable(int trackIndex) {
 }
 
 void AudioEngineCore::getStepActiveStates(int trackIndex, bool *out, int maxSize) {
-  std::lock_guard<std::recursive_mutex> lock(mLock);
-  if (trackIndex < 0 || trackIndex >= (int)mTracks.size()) {
-    std::fill(out, out + maxSize, false);
+  if (trackIndex < 0 || trackIndex >= 8) {
+    if (out) std::fill(out, out + maxSize, false);
     return;
   }
-  const auto &steps = mTracks[trackIndex].sequencer.getSteps();
-  int limit = std::min(maxSize, (int)steps.size());
+
+  std::unique_lock<std::mutex> lock(mSnapshotLock, std::try_to_lock);
+  if (!lock.owns_lock()) lock.lock();
+
+  const auto &snap = mUISnapshot.tracks[trackIndex];
+  int limit = std::min(maxSize, 64);
   for (int i = 0; i < limit; ++i) {
-    out[i] = steps[i].active;
+    out[i] = snap.activeSteps.test(i);
   }
 }
 void AudioEngineCore::setInputDevice(int deviceId) {
@@ -4153,6 +4335,15 @@ void AudioEngineCore::setTrackActive(int trackIndex, bool active) {
   cmd.type = AudioCommand::SET_TRACK_ACTIVE;
   cmd.trackIndex = trackIndex;
   cmd.bValue = active;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngineCore::setTrackDisabled(int trackIndex, bool disabled) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TRACK_DISABLED;
+  cmd.trackIndex = trackIndex;
+  cmd.bValue = disabled;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
 }
@@ -4254,8 +4445,60 @@ void AudioEngineCore::setSlices(int trackIndex, const std::vector<int> &starts, 
 }
 
 void AudioEngineCore::getFxChain(int *destination) {
-  for (int i = 0; i < 17; ++i) {
+  for (int i = 0; i < 17; ++i)
     destination[i] = mFxChainDest[i];
+}
+
+void AudioEngineCore::setFocusedTrack(int trackIndex) {
+  if (trackIndex >= 0 && trackIndex < 8) {
+    mFocusedTrackIndex.store(trackIndex);
+  }
+}
+
+void AudioEngineCore::updateUISnapshot() {
+  std::unique_lock<std::mutex> lock(mSnapshotLock, std::try_to_lock);
+  if (!lock.owns_lock()) return;
+
+  mUISnapshot.isPlaying = mIsPlaying.load();
+  mUISnapshot.isRecording = mIsRecording.load();
+  mUISnapshot.masterVolume = mMasterVolume.load();
+
+  int focusedIdx = mFocusedTrackIndex.load();
+
+  for (int i = 0; i < 8 && i < (int)mTracks.size(); ++i) {
+    Track &track = mTracks[i];
+    auto &snap = mUISnapshot.tracks[i];
+    
+    // Always update track levels for activity highlights (fast)
+    mUISnapshot.trackLevels[i] = track.follower.getLevel();
+    
+    // Only perform heavy copies for the track the user is actually looking at
+    if (i == focusedIdx) {
+      // Sync playhead (wait-free)
+      snap.currentStep = track.sequencer.getCurrentStepIndex();
+
+      // Copy parameters (limit to 1024)
+      std::memcpy(snap.parameters, track.parameters, sizeof(float) * 1024);
+      
+      // Sync sequencer active states
+      const auto &steps = track.sequencer.getSteps();
+      for(int s=0; s<64 && s<(int)steps.size(); ++s) {
+          snap.activeSteps.set(s, steps[s].active);
+      }
+      
+      // Sync Drum Sequencer active states (only if it's a drum engine)
+      if (track.engineType == 5 || track.engineType == 6) {
+        for(int d=0; d<16; ++d) {
+            const auto &dsteps = track.drumSequencers[d].getSteps();
+            for(int s=0; s<64 && s<(int)dsteps.size(); ++s) {
+                snap.activeDrumSteps[d].set(s, dsteps[s].active);
+            }
+        }
+      }
+    } else {
+        // Just sync playhead for other tracks (cheap)
+        snap.currentStep = track.sequencer.getCurrentStepIndex();
+    }
   }
 }
 
@@ -4292,5 +4535,28 @@ void AudioEngineCore::setSlicePosition(int trackIndex, int sliceIndex,
                                    float position) {
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     mTracks[trackIndex].samplerEngine.setSlicePosition(sliceIndex, position);
+  }
+}
+bool AudioEngineCore::isInputNeeded() {
+    // 1. Check if any track is an Audio In engine
+    for (const auto& track : mTracks) {
+        if (track.isActive && (track.engineType == 8)) {
+            return true;
+        }
+    }
+    // 2. Check if recording is active and targeting input
+    if (mIsRecordingSample && (mRecordingSource == 0)) { // 0 = Mic
+        return true;
+    }
+    return false;
+}
+void AudioEngineCore::setTrackProbability(int trackIndex, float probability) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_TRACK_PROBABILITY;
+  cmd.trackIndex = trackIndex;
+  cmd.value = probability;
+  {
+    std::lock_guard<std::mutex> lock(mCommandLock);
+    mCommandQueue.push_back(cmd);
   }
 }

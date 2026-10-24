@@ -17,35 +17,52 @@ public:
     float Q;
     float gain; // in dB
     float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;
-    float m1, m2; // state
+    float m1 = 0.0f, m2 = 0.0f; // state
+    float g = 0.0f, k = 0.0f, A = 1.0f, d = 0.0f;
+    bool dirty = true;
+
+    Band(float f = 1000.0f, float q = 0.707f, float g_db = 0.0f)
+        : frequency(f), Q(q), gain(g_db) {
+      reset();
+    }
 
     void reset() {
       m1 = 0;
       m2 = 0;
-      b0 = 1.0f;
-      b1 = 0.0f;
-      b2 = 0.0f;
-      a1 = 0.0f;
-      a2 = 0.0f;
+      dirty = true;
+    }
+
+    void updateCoefficients(float sampleRate) {
+      if (!dirty) return;
+      if (sampleRate <= 0.0f) return;
+      
+      // Limit frequency to avoid tangent explosion
+      float freq = std::max(10.0f, std::min(frequency, sampleRate * 0.45f));
+      g = std::tan((float)M_PI * freq / sampleRate);
+      k = 1.0f / std::max(0.1f, Q);
+      A = std::pow(10.0f, gain / 40.0f); // Square root of linear gain
+      float denom = 1.0f + g * (g + k);
+      d = (denom != 0.0f) ? 1.0f / denom : 0.0f;
+      
+      dirty = false;
     }
   };
 
   Eq5BandFx() {
-    // Low Shelf
-    mBands[0] = {80.0f, 0.707f, 0.0f, 0, 0};
-    // Low Mid
-    mBands[1] = {250.0f, 1.0f, 0.0f, 0, 0};
-    // Mid
-    mBands[2] = {1000.0f, 1.0f, 0.0f, 0, 0};
-    // High Mid
-    mBands[3] = {4000.0f, 1.0f, 0.0f, 0, 0};
-    // High Shelf
-    mBands[4] = {10000.0f, 0.707f, 0.0f, 0, 0};
+    mBands[0] = Band(80.0f, 0.707f, 0.0f);   // Low Shelf
+    mBands[1] = Band(250.0f, 1.0f, 0.0f);    // Low Mid
+    mBands[2] = Band(1000.0f, 1.0f, 0.0f);   // Mid
+    mBands[3] = Band(4000.0f, 1.0f, 0.0f);   // High Mid
+    mBands[4] = Band(10000.0f, 0.707f, 0.0f); // High Shelf
+    reset();
   }
 
   void setBandGain(int bandIdx, float gainDb) {
     if (bandIdx >= 0 && bandIdx < 5) {
-      mBands[bandIdx].gain = gainDb;
+      if (mBands[bandIdx].gain != gainDb) {
+        mBands[bandIdx].gain = gainDb;
+        mBands[bandIdx].dirty = true;
+      }
     }
   }
 
@@ -65,6 +82,7 @@ public:
 
     float out = input;
     for (int i = 0; i < 5; ++i) {
+      mBands[i].updateCoefficients(sampleRate);
       out = processBand(i, out, sampleRate);
     }
 
@@ -72,6 +90,11 @@ public:
   }
 
   void processBlock(float *inOut, int numFrames, float sampleRate) {
+    // Update all coefficients once per block
+    for (int i = 0; i < 5; ++i) {
+      mBands[i].updateCoefficients(sampleRate);
+    }
+    
     for (int i = 0; i < numFrames; ++i) {
       inOut[i] = processSample(inOut[i], sampleRate);
     }
@@ -90,34 +113,26 @@ private:
   float processBand(int idx, float input, float sampleRate) {
     auto &b = mBands[idx];
 
-    // Limit frequency to avoid tangent explosion
-    float freq = std::max(10.0f, std::min(b.frequency, sampleRate * 0.45f));
-    float g = std::tan((float)M_PI * freq / sampleRate);
-    float k = 1.0f / std::max(0.1f, b.Q);
-    float A = std::pow(10.0f, b.gain / 40.0f); // Square root of linear gain
-
-    // TPT SVF structure (Stable)
-    float d = 1.0f / (1.0f + g * (g + k));
-    float hp = (input - (k + g) * b.m1 - b.m2) * d;
-    float bp = g * hp + b.m1;
-    float lp = g * bp + b.m2;
+    // TPT SVF structure (Stable) - uses cached g, k, A, d
+    float hp = (input - (b.k + b.g) * b.m1 - b.m2) * b.d;
+    float bp = b.g * hp + b.m1;
+    float lp = b.g * bp + b.m2;
 
     // Update state
-    b.m1 = g * hp + bp;
-    b.m2 = g * bp + lp;
+    b.m1 = b.g * hp + bp;
+    b.m2 = b.g * bp + lp;
 
     float wet = input;
 
     if (idx == 0) { // Low Shelf
-      wet = input + (A * A - 1.0f) * lp + k * (A - 1.0f) * bp;
+      wet = input + (b.A * b.A - 1.0f) * lp + b.k * (b.A - 1.0f) * bp;
     } else if (idx == 4) { // High Shelf
-      wet = input + (A * A - 1.0f) * hp + k * (A - 1.0f) * bp;
+      wet = input + (b.A * b.A - 1.0f) * hp + b.k * (b.A - 1.0f) * bp;
     } else { // Peaking
-      // Standard TPT peaking gain formula
-      wet = input + k * (A * A - 1.0f) * bp;
+      wet = input + b.k * (b.A * b.A - 1.0f) * bp;
     }
 
-    if (!std::isfinite(wet) || std::isnan(wet)) {
+    if (!std::isfinite(wet)) {
       b.reset();
       wet = input;
     }

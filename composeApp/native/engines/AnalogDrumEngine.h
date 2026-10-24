@@ -368,6 +368,139 @@ public:
     return std::tanh(out * 0.9f);
   }
 
+  // v3.2.5: Brutally Optimized Block Rendering with Algorithm Hoisting
+  void render(float *outL, float *outR, int numFrames) {
+    if (!isActive()) return;
+
+    float dt = 1.0f / mVoices[0].sampleRate;
+
+    for (int i = 0; i < 8; ++i) {
+      AnalogVoice &v = mVoices[i];
+      if (!v.active) continue;
+
+      const float vGain = v.gain;
+      const float vVel = v.velocity;
+      const float vDecay = v.decay;
+      const float vTone = v.tone;
+      const float vParamA = v.paramA;
+      const float vParamB = v.paramB;
+      const float vBaseFreq = v.baseFreq;
+
+      // Type-specific hoisted loops
+      switch (v.type) {
+      case DrumType::Kick:
+        for (int f = 0; f < numFrames; ++f) {
+            v.env -= dt / vDecay;
+            if (v.env <= 0.0f) { v.active = false; break; }
+            v.currentFreq += (vBaseFreq - v.currentFreq) * (0.002f + (1.0f - vTone) * 0.005f);
+            v.phase += v.currentFreq * dt;
+            if (v.phase > 1.0f) v.phase -= 1.0f;
+            float sine = FastSine::get(v.phase);
+            if (vTone > 0.5f) {
+                sine = fast_tanh(sine * 1.5f);
+            }
+            float out = sine * v.env * vGain * vVel;
+            outL[f] += out; outR[f] += out;
+        }
+        break;
+
+      case DrumType::Snare:
+        for (int f = 0; f < numFrames; ++f) {
+            float envTone = std::max(0.0f, v.env - dt / (vDecay * 0.4f));
+            v.env -= dt / vDecay;
+            if (v.env <= 0.0f) { v.active = false; break; }
+            v.phase += vBaseFreq * dt;
+            if (v.phase > 1.0f) v.phase -= 1.0f;
+            float shell = FastSine::get(v.phase) * envTone;
+            float noise = v.rng.next();
+            float hpCoeff = 0.1f + (vTone * 0.6f);
+            v.filterState += (noise - v.filterState) * hpCoeff;
+            float wires = (noise - v.filterState) * v.env;
+            float out = ((shell * (1.0f - vParamA * 0.5f)) + (wires * (0.2f + vParamA))) * vGain * vVel;
+            outL[f] += out; outR[f] += out;
+        }
+        break;
+
+      case DrumType::Clap:
+        for (int f = 0; f < numFrames; ++f) {
+            v.clapTimer -= dt;
+            if (v.clapStage < 4 && v.clapTimer <= 0) {
+                v.clapEnv = 1.0f;
+                v.clapTimer = (0.005f + vParamA * 0.025f) + v.rng.next() * 0.005f;
+                v.clapStage++;
+            }
+            v.clapEnv -= dt / (0.01f + vDecay * 0.1f);
+            if (v.clapEnv < 0.0f) v.clapEnv = 0.0f;
+            v.env -= dt / vDecay;
+            if (v.env <= 0.0f && v.clapStage >= 4) { v.active = false; break; }
+            float noise = v.rng.next();
+            v.filterState += (noise - v.filterState) * (0.4f + vTone * 0.4f);
+            float out = (noise - v.filterState) * v.clapEnv * vVel * vGain * 0.8f;
+            outL[f] += out; outR[f] += out;
+        }
+        break;
+
+      case DrumType::HiHatClosed:
+      case DrumType::HiHatOpen:
+      case DrumType::Cymbal: {
+        float spread = (v.type == DrumType::Cymbal) ? (1.0f + vParamB * 0.4f) : (1.0f + vParamB * 0.3f);
+        float hpFreq = (v.type == DrumType::Cymbal) ? (0.05f + vTone * 0.4f) : (0.25f + vTone * 0.7f);
+        float gainScale = (v.type == DrumType::Cymbal) ? 0.4f : 0.3f;
+        float freqs[6] = {vBaseFreq, vBaseFreq * 1.5f * spread, vBaseFreq * 1.63f, vBaseFreq * 1.86f * spread, vBaseFreq * 2.16f * spread, vBaseFreq * 2.66f};
+
+        for (int f = 0; f < numFrames; ++f) {
+            if (v.type == DrumType::Cymbal && v.attackPhase > 0.0f) {
+                v.env += dt / (0.01f + vParamA * 0.5f);
+                if (v.env >= 1.0f) { v.env = 1.0f; v.attackPhase = 0.0f; }
+            } else {
+                v.env -= dt / vDecay;
+            }
+            if (v.env <= 0.0f) { v.active = false; break; }
+
+            float cluster = 0.0f;
+            for (int j = 0; j < 6; ++j) {
+                v.hatPhases[j] += freqs[j] * dt;
+                if (v.hatPhases[j] > 1.0f) v.hatPhases[j] -= 1.0f;
+                cluster += (v.hatPhases[j] > 0.5f) ? 1.0f : -1.0f;
+            }
+            v.filterState += (cluster - v.filterState) * hpFreq;
+            float out = (cluster - v.filterState) * v.env * gainScale * vVel * vGain;
+            outL[f] += out; outR[f] += out;
+        }
+        break;
+      }
+
+      case DrumType::Perc:
+        for (int f = 0; f < numFrames; ++f) {
+            v.env -= dt / vDecay;
+            if (v.env <= 0.0f) { v.active = false; break; }
+            v.phase += vBaseFreq * dt;
+            if (v.phase > 1.0f) v.phase -= 1.0f;
+            float out = FastSine::get(v.phase) * v.env * 0.8f * vVel * vGain;
+            outL[f] += out; outR[f] += out;
+        }
+        break;
+
+      case DrumType::Noise:
+        for (int f = 0; f < numFrames; ++f) {
+            v.env -= dt / vDecay;
+            if (v.env <= 0.0f) { v.active = false; break; }
+            float noise = v.rng.next();
+            v.filterState += (noise - v.filterState) * (0.1f + vTone * 0.8f);
+            float out = v.filterState * v.env * 0.7f * vVel * vGain;
+            outL[f] += out; outR[f] += out;
+        }
+        break;
+      }
+    }
+    
+    // Master Saturation (Drum Bus)
+    for (int f = 0; f < numFrames; ++f) {
+        outL[f] = fast_tanh(outL[f] * 0.9f);
+        outR[f] = fast_tanh(outR[f] * 0.9f);
+    }
+  }
+
   bool isActive() const {
     for (const auto &v : mVoices)
       if (v.active)

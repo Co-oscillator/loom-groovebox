@@ -25,6 +25,7 @@ public:
     // SVF state
     TSvf svf;
     float currentFilterEnvVal = 0.0f;
+    float smoothedCutoff = 0.5f;
     uint32_t controlCounter = 0;
 
     Voice() { oscillators.resize(4); }
@@ -270,26 +271,45 @@ public:
   float render() {
     float mixedOutput = 0.0f;
     int activeCount = 0;
-    float lfo =
-        sinf(mControlCounter * 6.283185f * mLfoRate / mSampleRate) * mLfoDepth;
+    
+    // Optimize: Calculate LFO using FastSine
+    float lfo = 0.0f;
+    if (mLfoDepth > 0.0f) {
+        float lfoPhase = (float)mControlCounter * mLfoRate / mSampleRate;
+        lfo = FastSine::get(lfoPhase) * mLfoDepth;
+    }
+
+    // Optimize: Pre-calculate bend factor once per render call
+    float bendFactor = powf(2.0f, mPitchBend / 12.0f);
 
     for (auto &v : mVoices) {
       if (!v.active)
         continue;
 
-      if (mGlide > 0.001f) {
-        float glideTimeSamples = mGlide * mSampleRate * 0.5f;
-        float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
-        v.frequency += (v.targetFrequency - v.frequency) * glideAlpha;
-      } else {
-        v.frequency = v.targetFrequency;
-      }
+      // v3.1.41: Moved all modulation and frequency updates to a 32-sample control block
+      if (v.controlCounter % 32 == 0) {
+        if (mGlide > 0.001f) {
+           float glideTimeSamples = mGlide * mSampleRate * 0.5f;
+           float glideAlpha = 32.0f / (glideTimeSamples + 32.0f);
+           v.frequency += (v.targetFrequency - v.frequency) * glideAlpha;
+        } else {
+           v.frequency = v.targetFrequency;
+        }
 
-      float bendFactor = powf(2.0f, mPitchBend / 12.0f);
-      for (int i = 0; i < 4; ++i) {
-        v.oscillators[i].setFrequency(v.frequency * bendFactor, mSampleRate);
+        float baseFreqWithBend = v.frequency * bendFactor;
+        for (int i = 0; i < 4; ++i) {
+          v.oscillators[i].setFrequency(baseFreqWithBend, mSampleRate);
+        }
+        
+        float modCutoff = std::max(
+            0.0f,
+            std::min(0.999f, mCutoff + v.currentFilterEnvVal * mF_Amt + lfo));
+        
+        v.smoothedCutoff = v.smoothedCutoff * 0.8f + modCutoff * 0.2f;
+        v.svf.setParams(20.0f + v.smoothedCutoff * v.smoothedCutoff * 14000.0f,
+                        std::max(0.1f, mResonance * 5.0f), mSampleRate);
       }
-
+      
       float envVal = mUseEnvelope ? v.ampEnv.nextValue() : 1.0f;
       if (envVal < 0.0001f && mUseEnvelope && !v.ampEnv.isActive()) {
         v.active = false;
@@ -298,58 +318,170 @@ public:
       activeCount++;
       v.currentFilterEnvVal = v.filterEnv.nextValue();
 
-      float osc1Pitch = mOscPitch[0];
-      float osc2Pitch = mOscPitch[1] * (1.0f + mDetune * 0.05f);
-      float osc3Pitch = mOscPitch[2];
-      float osc4Pitch = mOscPitch[3];
-
-      if (mOscSync && v.oscillators[0].hasWrapped()) {
-        v.oscillators[1].resetPhase();
+      float oscOutput = 0.0f;
+      float osc1Val = 0.0f; // Cache for RingMod
+      float baseFreqWithBend = v.frequency * bendFactor;
+      
+      // Optimize: Only process active oscillators
+      // Oscillator 1
+      if (mOscVolumes[0] > 0.0f) {
+        osc1Val = v.oscillators[0].nextSample(0.0f, mOscPitch[0], mOscFold[0]);
+        oscOutput += osc1Val * mOscVolumes[0] * mOscDrive[0];
+      }
+      
+      // Oscillator 2 (with Detune)
+      if (mOscVolumes[1] > 0.0f) {
+        float osc2Pitch = mOscPitch[1] * (1.0f + mDetune * 0.05f);
+        if (mOscSync && v.oscillators[0].hasWrapped()) {
+          v.oscillators[1].resetPhase();
+        }
+        
+        float val = v.oscillators[1].nextSample(0.0f, osc2Pitch, mOscFold[1]);
+        if (mRingMod && mOscVolumes[0] > 0.0f) {
+            oscOutput = (osc1Val * mOscVolumes[0] * mOscDrive[0]) * (val * mOscVolumes[1] * mOscDrive[1]);
+        } else {
+            oscOutput += val * mOscVolumes[1] * mOscDrive[1];
+        }
+      }
+      
+      // Oscillator 3 (Sub)
+      if (mOscVolumes[2] > 0.0f) {
+        oscOutput += v.oscillators[2].nextSample(0.0f, mOscPitch[2], mOscFold[2]) * mOscVolumes[2] * mOscDrive[2];
+      }
+      
+      // Oscillator 4
+      if (mOscVolumes[3] > 0.0f) {
+        oscOutput += v.oscillators[3].nextSample(0.0f, mOscPitch[3], mOscFold[3]) * mOscVolumes[3] * mOscDrive[3];
       }
 
-      float osc1Val = v.oscillators[0].nextSample(0.0f, osc1Pitch, mOscFold[0]);
-      float osc2Val = v.oscillators[1].nextSample(0.0f, osc2Pitch, mOscFold[1]);
-      float osc3Val = v.oscillators[2].nextSample(0.0f, osc3Pitch, mOscFold[2]);
-      float osc4Val = v.oscillators[3].nextSample(0.0f, osc4Pitch, mOscFold[3]);
-
-      float subOutput = 0.0f;
-      if (mRingMod) {
-        subOutput = (osc1Val * mOscVolumes[0] * mOscDrive[0]) *
-                    (osc2Val * mOscVolumes[1] * mOscDrive[1]);
-      } else {
-        subOutput = (osc1Val * mOscVolumes[0] * mOscDrive[0]) +
-                    (osc2Val * mOscVolumes[1] * mOscDrive[1]);
+      // Noise
+      if (mNoiseLevel > 0.0f) {
+        mNoiseSeed = mNoiseSeed * 1103515245 + 12345;
+        oscOutput += (((float)(mNoiseSeed & 0x7fffffff) / (float)0x7fffffff) * 2.0f - 1.0f) * mNoiseLevel;
       }
-      subOutput += (osc3Val * mOscVolumes[2] * mOscDrive[2]);
-      subOutput += (osc4Val * mOscVolumes[3] * mOscDrive[3]);
-
-      mNoiseSeed = mNoiseSeed * 1103515245 + 12345;
-      subOutput +=
-          (((float)(mNoiseSeed & 0x7fffffff) / (float)0x7fffffff) * 2.0f -
-           1.0f) *
-          mNoiseLevel;
-      float output = subOutput * 1.0f * v.amplitude * envVal;
-
-      if (v.controlCounter++ % 16 == 0) {
-        float modCutoff = std::max(
-            0.0f,
-            std::min(0.999f, mCutoff + v.currentFilterEnvVal * mF_Amt + lfo));
-        v.svf.setParams(20.0f + modCutoff * modCutoff * 14000.0f,
-                        std::max(0.1f, mResonance * 5.0f), mSampleRate);
-      }
-
-      TSvf::Type type = TSvf::LowPass;
-      if (mFilterMode == 1)
-        type = TSvf::HighPass;
-      else if (mFilterMode == 2)
-        type = TSvf::BandPass;
-      else if (mFilterMode == 3)
-        type = TSvf::Notch;
-
-      mixedOutput += v.svf.process(output, type);
+      
+      float finalOutput = oscOutput * v.amplitude * envVal;
+      TSvf::Type type = (TSvf::Type)mFilterMode;
+      mixedOutput += v.svf.process(finalOutput, type);
+      
+      v.controlCounter++;
     }
     mControlCounter++;
     return fast_tanh(mixedOutput * (activeCount > 1 ? 0.7f : 1.0f));
+  }
+
+  // v3.2.5: Brutally Optimized Voices-Outside Block Rendering
+  void render(float *outL, float *outR, int numFrames) {
+    mActiveCount = 0;
+    for (int i = 0; i < 16; ++i) {
+        if (mVoices[i].active) mActiveIndices[mActiveCount++] = i;
+    }
+    if (mActiveCount == 0) return;
+
+    float bendFactor = powf(2.0f, mPitchBend / 12.0f);
+    
+    // Global LFO (Hoisted)
+    float lfo = 0.0f;
+    if (mLfoDepth > 0.0f) {
+        float lfoPhase = (float)mControlCounter * mLfoRate / mSampleRate;
+        lfo = FastSine::get(lfoPhase) * mLfoDepth;
+    }
+
+    for (int v_idx = 0; v_idx < mActiveCount; ++v_idx) {
+        Voice &v = mVoices[mActiveIndices[v_idx]];
+        
+        // Hoist modulation/glide to per-block
+        if (mGlide > 0.001f) {
+            float glideTimeSamples = mGlide * mSampleRate * 0.5f;
+            float glideAlpha = (float)numFrames / (glideTimeSamples + (float)numFrames);
+            v.frequency += (v.targetFrequency - v.frequency) * glideAlpha;
+        } else {
+            v.frequency = v.targetFrequency;
+        }
+        float baseFreqWithBend = v.frequency * bendFactor;
+        for (int osc_i = 0; osc_i < 4; ++osc_i) {
+            v.oscillators[osc_i].setFrequency(baseFreqWithBend, mSampleRate);
+        }
+
+        // Osc constants are block-invariant — hoist above chunk loop
+        float v0 = mOscVolumes[0] * mOscDrive[0];
+        float p0 = mOscPitch[0];
+        float f0 = mOscFold[0];
+        float v1 = mOscVolumes[1] * mOscDrive[1];
+        float p1 = mOscPitch[1] * (1.0f + mDetune * 0.05f);
+        float f1 = mOscFold[1];
+        float v2 = mOscVolumes[2] * mOscDrive[2];
+        float p2 = mOscPitch[2];
+        float f2 = mOscFold[2];
+        float v3 = mOscVolumes[3] * mOscDrive[3];
+        float p3 = mOscPitch[3];
+        float f3 = mOscFold[3];
+
+        // Process in chunks of 16 samples to allow filter envelope updates without massive CPU overhead
+        int samplesRemaining = numFrames;
+        int frameIndex = 0;
+        
+        while (samplesRemaining > 0) {
+            int chunkSize = std::min(16, samplesRemaining);
+            
+            // Per-chunk filter envelope update
+            v.currentFilterEnvVal = v.filterEnv.getValue(); // Sample current envelope
+            float modCutoff = std::max(0.001f, std::min(0.999f, mCutoff + v.currentFilterEnvVal * mF_Amt + lfo));
+            v.smoothedCutoff = v.smoothedCutoff * 0.7f + modCutoff * 0.3f;
+            
+            float f_freq = 20.0f + v.smoothedCutoff * v.smoothedCutoff * 14000.0f;
+            v.svf.setParams(f_freq, std::max(0.1f, mResonance * 5.0f), mSampleRate);
+            
+            for (int f = 0; f < chunkSize; ++f) {
+                float envVal = mUseEnvelope ? v.ampEnv.nextValue() : 1.0f;
+                if (envVal < 0.0001f && mUseEnvelope && !v.ampEnv.isActive()) {
+                    v.active = false;
+                    break; 
+                }
+                
+                // Advance filter envelope per sample to keep timing accurate
+                v.filterEnv.nextValue();
+
+                float oscOutput = 0.0f;
+                float osc1Val = 0.0f;
+
+                if (v0 > 0.0f) {
+                    osc1Val = v.oscillators[0].nextSample(0.0f, p0, f0);
+                    oscOutput += osc1Val * v0;
+                }
+                if (v1 > 0.0f) {
+                    if (mOscSync && v.oscillators[0].hasWrapped()) v.oscillators[1].resetPhase();
+                    float val = v.oscillators[1].nextSample(0.0f, p1, f1);
+                    if (mRingMod && v0 > 0.0f) oscOutput = (osc1Val * v0) * (val * v1);
+                    else oscOutput += val * v1;
+                }
+                if (v2 > 0.0f) oscOutput += v.oscillators[2].nextSample(0.0f, p2, f2) * v2;
+                if (v3 > 0.0f) oscOutput += v.oscillators[3].nextSample(0.0f, p3, f3) * v3;
+
+                if (mNoiseLevel > 0.0f) {
+                    mNoiseSeed = mNoiseSeed * 1103515245 + 12345;
+                    oscOutput += (((float)(mNoiseSeed & 0x7fffffff) / (float)0x7fffffff) * 2.0f - 1.0f) * mNoiseLevel;
+                }
+                
+                float voiceSample = v.svf.process(oscOutput * v.amplitude * envVal * 0.5f, (TSvf::Type)mFilterMode);
+                outL[frameIndex + f] += voiceSample;
+                outR[frameIndex + f] += voiceSample;
+            }
+            
+            if (!v.active) break;
+            
+            samplesRemaining -= chunkSize;
+            frameIndex += chunkSize;
+        }
+    }
+    
+    mControlCounter += numFrames;
+    // Final block-level saturation
+    for (int f = 0; f < numFrames; ++f) {
+        float masterS = fast_tanh(outL[f] * (mActiveCount > 1 ? 0.7f : 1.0f));
+        outL[f] = masterS;
+        outR[f] = masterS;
+    }
   }
 
   bool isActive() const {
@@ -378,6 +510,8 @@ private:
       }
   }
   std::vector<Voice> mVoices;
+  int mActiveIndices[16];
+  int mActiveCount = 0;
   std::vector<float> mOscVolumes;
   std::vector<float> mOscWaveValues;
   uint32_t mControlCounter = 0;

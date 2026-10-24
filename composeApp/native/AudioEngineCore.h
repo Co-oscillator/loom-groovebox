@@ -4,9 +4,11 @@
 #include <bitset>
 #include <memory>
 #include <mutex>
+#include <chrono>
 #include <vector>
 #include <string>
 #include <atomic>
+#include "UISnapshot.h"
 
 #include "Arpeggiator.h"
 #include "EnvelopeFollower.h"
@@ -158,20 +160,27 @@ public:
   void updateSampleRate(float sampleRate);
   void setArpStrum(int trackIndex, float strum);
   float getCpuLoad();
+  // Returns 8 envelope follower levels (0..1) for track activity highlighting
+  void getTrackLevels(float *outLevels) const;
   void setInputDevice(int deviceId);
   void setSidechainConfig(int trackIndex, int drumIndex);
   void setSlicePosition(int trackIndex, int sliceIndex, float position);
   void setTrackActive(int trackIndex, bool active);
+  void setTrackDisabled(int trackIndex, bool disabled);
   void setTrackPan(int trackIndex, float pan);
   void setTrackMute(int trackIndex, bool muted);
   void setTrackSolo(int trackIndex, bool soloed);
   void setSlices(int trackIndex, const std::vector<int> &starts,
                  const std::vector<int> &ends);
 
+  void updateUISnapshot();
+  void setFocusedTrack(int trackIndex);
+
   void setChainEnabled(int trackIndex, bool enabled);
   void setChainLength(int trackIndex, int length);
   void setChainSlot(int trackIndex, int slotIndex, int laneIndex,
                     const std::vector<Step> &steps);
+  void setTrackProbability(int trackIndex, float probability);
 
   // Audio Export
   void renderToWav(int numCycles, const std::string &path);
@@ -179,6 +188,7 @@ public:
   void pushSystemAudioSamples(const float *data,
                               int numSamples); // New: for System Audio
   void pushInputSamples(const float *data, int numFrames, int numChannels);
+  bool isInputNeeded();
 
   // Track Management
   void initTrack(int i);
@@ -238,7 +248,10 @@ private:
       SET_CHAIN_ENABLED,
       SET_CHAIN_LENGTH,
       SET_CHAIN_SLOT,
-      SET_PAD_MOD
+      SET_PAD_MOD,
+      PARAM_PREVIEW,
+      SET_TRACK_PROBABILITY,
+      SET_TRACK_DISABLED
     };
     Type type;
     int trackIndex;
@@ -285,15 +298,91 @@ public:
 
   std::atomic<bool> mFirstRun{true};
   std::atomic<float> mCpuLoad{0.0f};
+  std::atomic<int> mFocusedTrackIndex{0};
 
 public:
   struct Track {
-    float volume = 0.8f;
+    std::atomic<float> volume{0.8f};
     float smoothedVolume = 0.8f;
-    float pan = 0.5f;
+    std::atomic<float> pan{0.5f};
     int transpose = 0;
-    float mPitchBend = 0.0f;  // -1.0 to 1.0 (semitones)
-    float padModValue = 0.0f; // 0.0 to 1.0 (Y-axis)
+    std::atomic<float> mPitchBend{0.0f};  // -1.0 to 1.0 (semitones)
+    std::atomic<float> padModValue{0.0f}; // 0.0 to 1.0 (Y-axis)
+    std::atomic<float> sequenceProbability{1.0f}; // Track-level probability
+
+    Track() = default;
+    Track(Track&& other) noexcept :
+      volume(other.volume.load()),
+      smoothedVolume(other.smoothedVolume),
+      pan(other.pan.load()),
+      transpose(other.transpose),
+      mPitchBend(other.mPitchBend.load()),
+      padModValue(other.padModValue.load()),
+      smoothedPan(other.smoothedPan),
+      humanize(other.humanize),
+      isMuted(other.isMuted),
+      isSoloed(other.isSoloed),
+      engineType(other.engineType),
+      selectedFmDrumInstrument(other.selectedFmDrumInstrument),
+      subtractiveEngine(std::move(other.subtractiveEngine)),
+      fmEngine(std::move(other.fmEngine)),
+      fmDrumEngine(std::move(other.fmDrumEngine)),
+      samplerEngine(std::move(other.samplerEngine)),
+      granularEngine(std::move(other.granularEngine)),
+      wavetableEngine(std::move(other.wavetableEngine)),
+      analogDrumEngine(std::move(other.analogDrumEngine)),
+      audioInEngine(std::move(other.audioInEngine)),
+      soundFontEngine(std::move(other.soundFontEngine)),
+      mModulatedCount(other.mModulatedCount),
+      mRecordingNotes(std::move(other.mRecordingNotes)),
+      sequencer(std::move(other.sequencer)),
+      arpeggiator(std::move(other.arpeggiator)),
+      follower(std::move(other.follower)),
+      isActive(other.isActive),
+      currentFrequency(other.currentFrequency),
+      lastOutput(other.lastOutput),
+      gainReduction(other.gainReduction),
+      patternLength(other.patternLength),
+      mPhysicallyHeldNoteCount(other.mPhysicallyHeldNoteCount),
+      midiInChannel(other.midiInChannel),
+      midiOutChannel(other.midiOutChannel),
+      mPendingNotes(std::move(other.mPendingNotes)),
+      mPendingParams(std::move(other.mPendingParams)),
+      mClockMultiplier(other.mClockMultiplier),
+      mArpRate(other.mArpRate),
+      mArpDivisionMode(other.mArpDivisionMode),
+      mActivePLockCount(other.mActivePLockCount),
+      mArpTriplet(other.mArpTriplet),
+      mParametersDirty(other.mParametersDirty),
+      mStepCountdown(other.mStepCountdown),
+      mArpCountdown(other.mArpCountdown),
+      mInternalStepIndex(other.mInternalStepIndex),
+      panL(other.panL),
+      panR(other.panR),
+      mPunchCounter(other.mPunchCounter),
+      mLastTriggeredNote(other.mLastTriggeredNote),
+      mNoteDurationRemaining(other.mNoteDurationRemaining),
+      lastSamplePath(std::move(other.lastSamplePath)),
+      chainSlots(std::move(other.chainSlots)),
+      currentChainSlot(other.currentChainSlot),
+      chainLength(other.chainLength),
+      isChainEnabled(other.isChainEnabled),
+      mSilenceFrames(other.mSilenceFrames)
+    {
+        std::memcpy(parameters, other.parameters, sizeof(parameters));
+        std::memcpy(appliedParameters, other.appliedParameters, sizeof(appliedParameters));
+        std::memcpy(mModulatedIds, other.mModulatedIds, sizeof(mModulatedIds));
+        for(int i=0; i<16; ++i) drumSequencers[i] = std::move(other.drumSequencers[i]);
+        for(int i=0; i<18; ++i) fxSends[i].store(other.fxSends[i].load());
+        std::memcpy(smoothedFxSends, other.smoothedFxSends, sizeof(smoothedFxSends));
+        for(int i=0; i<18; ++i) fxMix[i].store(other.fxMix[i].load());
+        std::memcpy(mActivePLocks, other.mActivePLocks, sizeof(mActivePLocks));
+        std::memcpy(mActiveNotes, other.mActiveNotes, sizeof(mActiveNotes));
+        std::memcpy(mDrumNoteDurationRemaining, other.mDrumNoteDurationRemaining, sizeof(mDrumNoteDurationRemaining));
+        std::memcpy(mDrumLastTriggeredNote, other.mDrumLastTriggeredNote, sizeof(mDrumLastTriggeredNote));
+    }
+    Track& operator=(Track&&) = delete;
+
 
     float smoothedPan = 0.5f;
     float humanize = 0.0f;
@@ -330,12 +419,12 @@ public:
     Sequencer drumSequencers[16];
     Arpeggiator arpeggiator;
     EnvelopeFollower follower;
-    float fxSends[18] = {0.0f};
+    std::atomic<float> fxSends[18];
     float smoothedFxSends[18] = {0.0f};
-    float fxMix[18] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                       1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    std::atomic<float> fxMix[18];
 
     bool isActive = false;
+    bool isDisabled = false;
     float currentFrequency = 440.0f;
     float lastOutput = 0.0f;
     float gainReduction = 1.0f;
@@ -409,20 +498,24 @@ public:
   std::atomic<bool> mIsPlaying{false};
   std::atomic<bool> mIsRecording{false};       // Transport record (sequencer)
   std::atomic<bool> mIsRecordingSample{false}; // Sample capture
+  std::chrono::steady_clock::time_point mLastRecordStartTime;
   std::atomic<int> mRecordingSource{0};        // 0=Mic, 1=Resample, 2=System
   std::atomic<bool> mIsRecordingLocked{false};
   std::atomic<bool> mSampleRateChanged{false};
   std::atomic<float> mPendingSampleRate{48000.0f};
   int mRecordingTrackIndex = -1;
-  float mBpm = 120.0f;
-  double mSampleCount = 0;
-  double mSamplesPerStep = 0;
-  int mGlobalStepIndex = 0;
-  int mPatternLength = 16;
-  float mTempo = 120.0f;
-  float mSwing = 0.0f;
+  std::atomic<float> mBpm{120.0f};
+  std::atomic<double> mSampleCount{0.0};
+  std::atomic<double> mSamplesPerStep{0.0};
+  std::atomic<int> mGlobalStepIndex{0};
+  std::atomic<int> mTrackCurrentStep[8];
+  std::atomic<int> mTrackCurrentDrumStep[8][16];
+  std::atomic<int> mPatternLength{16};
+  std::atomic<float> mTempo{120.0f};
+  std::atomic<float> mSwing{0.0f};
   long mStartupFrames = 10000; // Wait ~200ms at 48k
-  double mSampleRate = 48000.0;
+  std::atomic<double> mSampleRate{48000.0};
+  std::atomic<int> mSnapshotCounter{0};
   std::recursive_mutex mLock;
   void triggerNoteLocked(int trackIndex, int note, int velocity,
                          bool isSequencerTrigger = false, float gate = 0.95f,
@@ -479,16 +572,27 @@ public:
   // v3.1 Block Buffers (pre-allocated to avoid malloc on audio thread)
   std::vector<float> mFxBusBlockL[18];
   std::vector<float> mFxBusBlockR[18];
+  std::vector<float> mMixedSampleL;
+  std::vector<float> mMixedSampleR;
+  std::vector<float> mSidechainBuffer;
+  std::vector<float> mSpreadL;
+  std::vector<float> mSpreadR;
+  std::vector<float> mWetSampleL;
+  std::vector<float> mWetSampleR;
+
 
   // FX Split Filter LFO Effects (Slots 9/10)
   FilterLfoFx mHpLfoL{FilterLfoMode::HighPass};
   FilterLfoFx mHpLfoR{FilterLfoMode::HighPass};
   FilterLfoFx mLpLfoL{FilterLfoMode::LowPass};
   FilterLfoFx mLpLfoR{FilterLfoMode::LowPass};
+  
+  // v3.1.37: Pre-allocated scratch buffer for recording/sidechain (Wait-free)
+  std::vector<float> mRecordingScratchBuffer;
 
   int mSidechainSourceTrack = -1;
   int mSidechainSourceDrumIdx = -1;
-  float mMasterVolume = 0.8f;
+  std::atomic<float> mMasterVolume{0.8f};
   bool mIsFloatFormat = true; // Assume Float, but verify at stream open
   float mFxMixLevels[18] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
                             1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
@@ -502,8 +606,10 @@ public:
   uint32_t mSystemAudioReadPtr = 0;
   std::atomic<int> mGlobalVoiceCount{0};
   std::string mAppDataDir = "";
-  int mGlobalTranspose =
-      0; // Keeping it for compatibility but will use per-track
+  std::atomic<int> mGlobalTranspose{0};
+  
+  UISnapshot mUISnapshot;
+  std::mutex mSnapshotLock;
   std::recursive_mutex &getLock() { return mLock; }
   const std::vector<Track> &getTracks() const { return mTracks; }
 };

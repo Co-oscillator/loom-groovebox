@@ -2,17 +2,15 @@
 #define UTILS_H
 
 #include <algorithm>
-#include "Log.h"
 #include <cmath>
 #include <vector>
 
 static inline float fast_tanh(float x) {
-  if (x < -3.0f)
-    return -1.0f;
-  if (x > 3.0f)
-    return 1.0f;
-  float x2 = x * x;
-  return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+  // Ultra-fast smooth cubic saturator (C1 Continuous)
+  // Reaches exactly 1.0 with 0 slope at x = 1.5, avoiding all thresholds
+  if (x <= -1.5f) return -1.0f;
+  if (x >= 1.5f) return 1.0f;
+  return x * (1.0f - (x * x) / 6.75f);
 }
 // 4-point, 3rd-order Hermite Interpolation (Cubic)
 static inline float cubicInterpolation(float y0, float y1, float y2, float y3,
@@ -104,13 +102,18 @@ public:
     float v1 = mA1 * mSvfZ1 + mA2 * v3;
     float v2 = mSvfZ2 + mA2 * mSvfZ1 + mA3 * v3;
 
+    // Continuous saturation (Always-On)
+    // Eliminates threshold discontinuities while keeping CPU load extremely low (branchless)
+    v1 = fast_tanh(v1);
+    v2 = fast_tanh(v2);
+
     mSvfZ1 = 2.0f * v1 - mSvfZ1;
     mSvfZ2 = 2.0f * v2 - mSvfZ2;
 
-    // Denormal snapping
-    if (std::abs(mSvfZ1) < 1e-9f)
+    // Denormal snapping (Use 1.0e-9f as a safe floor)
+    if (std::abs(mSvfZ1) < 1.0e-9f)
       mSvfZ1 = 0.0f;
-    if (std::abs(mSvfZ2) < 1e-9f)
+    if (std::abs(mSvfZ2) < 1.0e-9f)
       mSvfZ2 = 0.0f;
 
     switch (type) {

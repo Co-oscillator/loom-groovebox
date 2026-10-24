@@ -70,10 +70,10 @@ public:
       int idx = static_cast<int>(position);
       float frac = position - static_cast<float>(idx);
 
-      int i0 = (idx - 1 + size) % size;
+      int i0 = idx - 1; if (i0 < 0) i0 += size;
       int i1 = idx;
-      int i2 = (idx + 1) % size;
-      int i3 = (idx + 2) % size;
+      int i2 = idx + 1; if (i2 >= size) i2 -= size;
+      int i3 = idx + 2; if (i3 >= size) i3 -= size;
 
       float s =
           cubicInterp(source[i0], source[i1], source[i2], source[i3], frac);
@@ -447,86 +447,104 @@ public:
     return maxEnv;
   }
 
-  void render(float *left, float *right) {
-    // Lock-free: read from active buffer
+  // v3.3.1: MediaTek-Optimized Granular Rendering
+  void render(float *outL, float *outR, int numFrames) {
     int activeIdx = mActiveBuffer.load(std::memory_order_acquire);
     const auto &source = mSourceBuffers[activeIdx];
-    if (source.empty()) {
-      *left = *right = 0.0f;
-      return;
-    }
+    if (source.empty() || !isActive()) return;
 
-    bool hasActive = isActive();
-    if (!hasActive) {
-      *left = *right = 0.0f;
-      return;
-    }
-
-    // Process LFOs
-    float lfoOffsets[3] = {mLFOS[0].nextValue(), mLFOS[1].nextValue(),
-                           mLFOS[2].nextValue()};
-
-    for (int i = 0; i < 16; ++i) {
-      Voice &v = mVoices[i];
-      if (!v.active)
-        continue;
-
-      if (mGlide > 0.001f) {
-        float glideTimeSamples = mGlide * mSampleRate * 0.5f;
-        float glideAlpha = 1.0f / (glideTimeSamples + 1.0f);
-        v.basePitch += (v.targetBasePitch - v.basePitch) * glideAlpha;
-      } else {
-        v.basePitch = v.targetBasePitch;
-      }
-
-      float envVal = v.envelope.nextValue();
-      if (envVal < 0.0001f && !v.envelope.isActive()) {
-        v.active = false;
-      }
-
-      // Spawn logic
-      float grainDuration = (mGrainSize * 48000.0f * 2.0f) + 100.0f;
-      float overlap = 0.1f + (mDensity * 4.0f);
-      float interval = grainDuration / overlap;
-      if (interval < 1.0f)
-        interval = 1.0f;
-
-      v.spawnCounter += 1.0f;
-      if (v.spawnCounter >= interval) {
-        v.spawnCounter = 0.0f;
-        spawnGrain(lfoOffsets, i);
-      }
-    }
-
-    // 2. Render and Mix Grains
-    float lMixed = 0.0f, rMixed = 0.0f;
-    int activeCount = 0;
     const float *srcData = source.data();
     size_t srcSize = source.size();
+
+    // 1. Block-level constants — computed once per render call
+    float grainDuration = (mGrainSize * 48000.0f * 2.0f) + 100.0f;
+    float overlap = 0.1f + (mDensity * 4.0f);
+    float spawnInterval = std::max(1.0f, grainDuration / overlap);
+    float glideTimeSamples = mGlide * mSampleRate * 0.5f;
+    float glideAlpha = (mGlide > 0.001f) ? (1.0f / (glideTimeSamples + 1.0f)) : 1.0f;
+
+    // 2. Grain compaction — once per block (was: once per chunk = 64x more expensive)
+    Grain* activeGrains[100];
+    int numActiveGrains = 0;
     for (auto &g : mGrains) {
-      if (g.isActive) {
-        float sample = g.nextSample(srcData, srcSize);
-
-        // Multiplier from parent voice (ADSR + Velocity)
-        float masterGain = 0.0f;
-        if (g.voiceIdx >= 0 && g.voiceIdx < 16) {
-          masterGain = mVoices[g.voiceIdx].envelope.getValue() *
-                       mVoices[g.voiceIdx].amplitude;
-        }
-
-        float out = sample * masterGain;
-        lMixed += out * (1.0f - g.lOffset);
-        rMixed += out * (1.0f - g.rOffset);
-        activeCount++;
-      }
+        if (g.isActive) activeGrains[numActiveGrains++] = &g;
     }
 
-    float norm = activeCount > 0 ? 1.0f / sqrtf(activeCount) : 0.0f;
-    // Boost output gain (2.5x)
-    float finalGain = norm * 2.5f * mGain; // Apply user gain
+    // 3. sqrtf/gain — once per block (was: once per 16 samples = 3000x/sec per track)
+    float norm = numActiveGrains > 0 ? 1.0f / sqrtf((float)numActiveGrains) : 1.0f;
+    float finalGain = norm * 2.5f * mGain;
 
-    *left = lMixed * finalGain;
-    *right = rMixed * finalGain;
+    // 4. Process in 16-sample chunks
+    int samplesRemaining = numFrames;
+    int frameIndex = 0;
+
+    while (samplesRemaining > 0) {
+        int chunkSize = std::min(16, samplesRemaining);
+
+        // LFOs advance once per chunk
+        float lfoOffsets[3];
+        for (int i = 0; i < 3; i++) {
+            mLFOS[i].phase += mLFOS[i].rate * 0.01f * chunkSize;
+            while (mLFOS[i].phase >= 1.0f) mLFOS[i].phase -= 1.0f;
+            float val = 0.0f;
+            float p = mLFOS[i].phase;
+            if (mLFOS[i].shape < 1.0f) val = sinf(p * 2.0f * M_PI);
+            else if (mLFOS[i].shape < 2.0f) val = p < 0.5f ? p * 4.0f - 1.0f : 3.0f - p * 4.0f;
+            else if (mLFOS[i].shape < 3.0f) val = p * 2.0f - 1.0f;
+            else val = p < 0.5f ? 1.0f : -1.0f;
+            lfoOffsets[i] = val * mLFOS[i].depth;
+        }
+
+        // Spawning and glide — once per chunk
+        for (int i = 0; i < 16; ++i) {
+            Voice &v = mVoices[i];
+            if (!v.active) continue;
+            if (mGlide > 0.001f) {
+                v.basePitch += (v.targetBasePitch - v.basePitch) * glideAlpha;
+            } else {
+                v.basePitch = v.targetBasePitch;
+            }
+            v.spawnCounter += chunkSize;
+            while (v.spawnCounter >= spawnInterval) {
+                v.spawnCounter -= spawnInterval;
+                spawnGrain(lfoOffsets, i);
+            }
+        }
+
+        // 5. Voice envelopes — once per chunk (was: every sample = 16x more expensive)
+        // Chunk-rate ADSR (333Hz) is imperceptible for granular voice envelopes.
+        // This removes the 16-voice scan from the per-sample inner loop entirely.
+        float voiceGainCache[16];
+        for (int i = 0; i < 16; ++i) {
+            voiceGainCache[i] = 0.0f;
+            if (mVoices[i].active) {
+                float envVal = mVoices[i].envelope.nextValue();
+                if (envVal < 0.0001f && !mVoices[i].envelope.isActive()) {
+                    mVoices[i].active = false;
+                } else {
+                    voiceGainCache[i] = envVal * mVoices[i].amplitude;
+                }
+            }
+        }
+
+        // Inner sample loop — pure grain mixing, no voice/envelope work
+        for (int f = 0; f < chunkSize; ++f) {
+            float lMixed = 0.0f, rMixed = 0.0f;
+            for (int gIdx = 0; gIdx < numActiveGrains; ++gIdx) {
+                Grain* g = activeGrains[gIdx];
+                if (!g->isActive) continue;
+                float sample = g->nextSample(srcData, srcSize);
+                float out = sample * voiceGainCache[g->voiceIdx];
+                lMixed += out * (1.0f - g->lOffset);
+                rMixed += out * (1.0f - g->rOffset);
+            }
+            outL[frameIndex + f] += lMixed * finalGain;
+            outR[frameIndex + f] += rMixed * finalGain;
+        }
+
+        samplesRemaining -= chunkSize;
+        frameIndex += chunkSize;
+    }
   }
 
   struct PlayheadInfo {

@@ -1273,6 +1273,15 @@ public:
     }
   }
 
+  // v3.1.28: Block Rendering
+  void render(float *outL, float *outR, int numFrames) {
+    for (int i = 0; i < numFrames; ++i) {
+      float s = render();
+      outL[i] += s;
+      outR[i] += s;
+    }
+  }
+
   bool isActive() const {
     for (const auto &v : mVoices)
       if (v.active)

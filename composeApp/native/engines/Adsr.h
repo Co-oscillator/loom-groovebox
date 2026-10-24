@@ -71,7 +71,7 @@ public:
       break;
     case AdsrStage::Release:
       mValue *= mReleaseCoeff;
-      if (mValue < 0.0001f) {
+      if (mValue < 0.00001f) {
         mValue = 0.0f;
         mStage = AdsrStage::Idle;
       }

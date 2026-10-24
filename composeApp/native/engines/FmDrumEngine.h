@@ -256,6 +256,15 @@ public:
     return std::tanh(mixed * 1.1f); // Reduced boost + cleaner saturation
   }
 
+  // v3.1.28: Block Rendering
+  void render(float *outL, float *outR, int numFrames) {
+    for (int i = 0; i < numFrames; ++i) {
+      float s = render();
+      outL[i] += s;
+      outR[i] += s;
+    }
+  }
+
   void setVoiceGain(int index, float gain) {
     if (index >= 0 && index < 8)
       mGains[index] = gain;

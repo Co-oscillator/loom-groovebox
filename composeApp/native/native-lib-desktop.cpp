@@ -939,6 +939,20 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetTrackActive(
     engine->getCore().setTrackActive(track_index, active);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetTrackDisabled(
+    JNIEnv *env, jobject thiz, jint track_index, jboolean disabled) {
+  if (engine)
+    engine->getCore().setTrackDisabled(track_index, disabled);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_groovebox_NativeLib_nSetTrackProbability(JNIEnv *env, jobject thiz,
+                                                  jint track_index,
+                                                  jfloat probability) {
+  if (engine)
+    engine->getCore().setTrackProbability(track_index, probability);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetTrackPan(
     JNIEnv *env, jobject thiz, jint track_index, jfloat pan) {
   if (engine)

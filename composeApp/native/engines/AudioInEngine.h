@@ -204,6 +204,15 @@ public:
     return fast_tanh(eqOut * 1.2f);
   }
 
+  // v3.1.28: Block Rendering
+  void render(const float *inBuffer, float *outL, float *outR, int numFrames) {
+    for (int i = 0; i < numFrames; ++i) {
+      float s = render(inBuffer[i]);
+      outL[i] += s;
+      outR[i] += s;
+    }
+  }
+
   float getEnvelopeValue() const {
     if (mVoices.empty())
       return 0.0f;

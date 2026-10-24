@@ -72,21 +72,10 @@ fun MainScreen(
                     val selectedTrackIdx = viewModel.state.selectedTrackIndex
                     val currentTrack = viewModel.state.tracks[selectedTrackIdx]
                     
-                    // 2. Update Playhead
-                    if (viewModel.state.isPlaying) {
-                        val newStep = nativeLib.getCurrentStep(selectedTrackIdx)
-                        viewModel.updateCurrentStep(newStep)
-                    } else {
-                        viewModel.updateCurrentStep(0)
-                    }
+                    // Playhead and Sequencing are handles via polling snapshots in pollEngineState()
+                    // 2. Playhead sync is now automatic via currentStep in state
                     
-                    // 3. Sync Sequencer Highlights
-                    // Pull if recording (live input) OR if it's a drum engine (which often has dynamic updates)
-                    if (viewModel.state.isRecording || 
-                        currentTrack.engineType == com.groovebox.EngineType.FM_DRUM || 
-                        currentTrack.engineType == com.groovebox.EngineType.ANALOG_DRUM) {
-                        viewModel.pullRecordedSteps(selectedTrackIdx)
-                    }
+                    // 3. Waveform Updates for Sampler/Granular
                     
                     // 4. Waveform Updates for Sampler/Granular
                     if (currentTrack.engineType == com.groovebox.EngineType.SAMPLER || 

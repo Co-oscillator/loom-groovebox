@@ -90,6 +90,7 @@ expect class NativeLib() {
     fun setTrackPan(trackIndex: Int, pan: Float)
     fun setTrackMute(trackIndex: Int, muted: Boolean)
     fun setTrackSolo(trackIndex: Int, soloed: Boolean)
+    fun setTrackDisabled(trackIndex: Int, disabled: Boolean)
     fun getFxSends(trackIndex: Int): FloatArray
     fun getFxMix(trackIndex: Int): FloatArray
     fun getFxChain(): IntArray
@@ -103,4 +104,7 @@ expect class NativeLib() {
     fun getIsPlaying(): Boolean
     fun getIsRecording(): Boolean
     fun getIsRecordingSample(): Boolean
+    fun getTrackLevels(): FloatArray
+    fun setFocusedTrack(trackIndex: Int)
+    fun setTrackProbability(trackIndex: Int, probability: Float)
 }

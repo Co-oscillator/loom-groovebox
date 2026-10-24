@@ -44,6 +44,7 @@ import com.groovebox.StepState
 import com.groovebox.midi.EmpledManager
 import com.groovebox.ui.components.Knob
 import com.groovebox.ui.components.NativeFileDialog
+import com.groovebox.ui.LocalPlatformInfo
 import com.groovebox.persistence.PersistenceManager
 import java.io.File
 import com.groovebox.ui.theme.getEngineColor
@@ -106,7 +107,7 @@ fun SequencerView(viewModel: com.groovebox.GrooveboxViewModel, nativeLib: Native
     val track = state.tracks[selectedTrackIndex]
     
     // Calculations for layout
-    val platformInfo = com.groovebox.ui.LocalPlatformInfo.current
+    val platformInfo = LocalPlatformInfo.current
     val screenRatio = platformInfo.screenWidthDp.toFloat() / platformInfo.screenHeightDp.toFloat()
     val isWideScreen = screenRatio > 1.8f && platformInfo.screenHeightDp < 500
     
@@ -843,7 +844,7 @@ fun SequencerView(viewModel: com.groovebox.GrooveboxViewModel, nativeLib: Native
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(bottom = 8.dp, end = 8.dp)
-                            .offset(x = (-10).dp) // Moved 20dp right v1.12.x
+                            .offset(x = if (LocalPlatformInfo.current.isTablet || state.uiLayoutMode == 2) 10.dp else (-10).dp) 
                             .background(
                                 if (track.isChainEnabled) getEngineColor(track.engineType).copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.6f), 
                                 RoundedCornerShape(8.dp)
@@ -884,25 +885,8 @@ fun SequencerView(viewModel: com.groovebox.GrooveboxViewModel, nativeLib: Native
                                 overrideColor = engineColor,
                                 onValueChangeOverride = { v ->
                                     val newTracks = latestState.tracks.toMutableList()
-                                    if (track.engineType == EngineType.FM_DRUM) {
-                                        val oldInst = track.selectedFmDrumInstrument
-                                        val newDrumSteps = track.drumSteps.mapIndexed { di, ds ->
-                                            nativeLib.setSelectedFmDrumInstrument(selectedTrackIndex, di)
-                                            val newLane = ds.mapIndexed { si, st -> 
-                                                nativeLib.setStep(selectedTrackIndex, si, st.active, st.notes.toIntArray(), st.velocity, st.ratchet, st.punch, v, st.gate, st.isSkipped, st.subStepOffset)
-                                                st.copy(probability = v)
-                                            }
-                                            newLane
-                                        }
-                                        nativeLib.setSelectedFmDrumInstrument(selectedTrackIndex, oldInst) // Restore
-                                        newTracks[selectedTrackIndex] = track.copy(sequenceProbability = v, drumSteps = newDrumSteps)
-                                    } else {
-                                        val newSteps = track.steps.mapIndexed { si, st -> 
-                                            nativeLib.setStep(selectedTrackIndex, si, st.active, st.notes.toIntArray(), st.velocity, st.ratchet, st.punch, v, st.gate, st.isSkipped, st.subStepOffset)
-                                            st.copy(probability = v)
-                                        }
-                                        newTracks[selectedTrackIndex] = track.copy(sequenceProbability = v, steps = newSteps)
-                                    }
+                                    newTracks[selectedTrackIndex] = track.copy(sequenceProbability = v)
+                                    nativeLib.setTrackProbability(selectedTrackIndex, v)
                                     latestOnStateChange(latestState.copy(tracks = newTracks))
                                 },
                                 valueFormatter = { v -> "${(v * 100).toInt()}%" }

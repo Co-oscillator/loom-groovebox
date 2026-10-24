@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -50,19 +51,28 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                     .weight(1f)
                     .padding(vertical = 1.dp)
                     .background(
-                        if (isSelected) engineColor.copy(alpha = 0.2f) 
-                        else Color.White.copy(alpha = 0.1f),
+                        if (isSelected && !track.isDisabled) engineColor.copy(alpha = 0.2f) 
+                        else Color.White.copy(alpha = if (track.isDisabled) 0.04f else 0.1f),
                         RoundedCornerShape(6.dp)
                     )
                     .border(
-                        width = if (isSelected) 1.5.dp else 0.5.dp,
-                        color = if (isSelected) engineColor else Color.Gray.copy(alpha = 0.2f),
+                        width = if (track.isDisabled || track.isSoloed || track.isMuted) 1.5.dp else 0.5.dp,
+                        color = when {
+                            track.isDisabled -> Color.Gray.copy(alpha = 0.4f)
+                            track.isSoloed   -> Color.Blue
+                            track.isMuted    -> Color.Red
+                            isSelected       -> engineColor
+                            else             -> Color.Gray.copy(alpha = 0.2f)
+                        },
                         shape = RoundedCornerShape(6.dp)
                     )
+                    .alpha(if (track.isDisabled) 0.35f else 1.0f)
                     .pointerInput(i) {
-                        detectTapGestures(
-                            onTap = { latestOnStateChange(latestState.copy(selectedTrackIndex = i)) }
-                        )
+                        if (!track.isDisabled) {
+                            detectTapGestures(
+                                onTap = { latestOnStateChange(latestState.copy(selectedTrackIndex = i)) }
+                            )
+                        }
                     }
                     .padding(horizontal = 6.dp, vertical = 2.dp),
                 verticalArrangement = Arrangement.Center
@@ -125,9 +135,27 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                         EngineIcon(
                             type = track.engineType,
                             modifier = Modifier.size(42.dp),
-                            color = if (isSelected) engineColor else Color.White.copy(alpha = 0.8f),
-                            isGenerating = track.isAudiblyActive
+                            color = if (track.isDisabled) Color.Gray.copy(alpha = 0.4f)
+                                    else if (isSelected) engineColor else Color.White.copy(alpha = 0.8f),
+                            isGenerating = track.isAudiblyActive && !track.isDisabled
                         )
+                        
+                        // "OFF" chip shown when track is disabled
+                        if (track.isDisabled) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .background(Color.Gray.copy(alpha = 0.85f), RoundedCornerShape(2.dp))
+                                    .padding(horizontal = 2.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    text = "OFF",
+                                    fontSize = 6.sp,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                         
                         DropdownMenu(
                             expanded = showMuteSoloMenu,
@@ -150,6 +178,17 @@ fun MixerView(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, na
                                     newTracks[i] = newTracks[i].copy(isSoloed = !track.isSoloed)
                                     latestOnStateChange(latestState.copy(tracks = newTracks))
                                     nativeLib.setTrackSolo(i, !track.isSoloed)
+                                    showMuteSoloMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (track.isDisabled) "Enable Track" else "Disable Track") },
+                                onClick = {
+                                    val newTracks = latestState.tracks.toMutableList()
+                                    val nowDisabled = !track.isDisabled
+                                    newTracks[i] = newTracks[i].copy(isDisabled = nowDisabled)
+                                    latestOnStateChange(latestState.copy(tracks = newTracks))
+                                    nativeLib.setTrackDisabled(i, nowDisabled)
                                     showMuteSoloMenu = false
                                 }
                             )

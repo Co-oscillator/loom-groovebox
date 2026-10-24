@@ -44,6 +44,7 @@ data class TrackState(
     val isActive: Boolean = true,
     val isMuted: Boolean = false,
     val isSoloed: Boolean = false,
+    val isDisabled: Boolean = false,
     val transpose: Int = 0,
     val steps: List<StepState> = List(64) { StepState() },
     val drumSteps: List<List<StepState>> = List(16) { List(64) { StepState() } },
@@ -335,6 +336,7 @@ data class GrooveboxState(
     val isPerformanceMode: Boolean = false, // Toggles visual touch cues
     val isKeyboardModeEnabled: Boolean = false, // Toggle for Android physical keyboard
     val cpuLoad: Float = 0f,
+    val trackLevels: List<Float> = List(8) { 0f },
     val importedFmPresets: List<Map<String, Any>> = emptyList(), // Imported DX7 voice data
     val appVersion: String = com.groovebox.utils.Version.APP_VERSION
 ) : java.io.Serializable {

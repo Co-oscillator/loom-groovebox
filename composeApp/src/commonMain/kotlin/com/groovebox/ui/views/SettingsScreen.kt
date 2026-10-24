@@ -622,7 +622,7 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                     ) {
                         Text("RESOURCES", style = MaterialTheme.typography.titleSmall, color = Color.Gray)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("v${state.appVersion}", style = MaterialTheme.typography.labelSmall, color = Color.Cyan.copy(alpha = 0.7f))
+                        Text("v${com.groovebox.utils.Version.APP_VERSION}", style = MaterialTheme.typography.labelSmall, color = Color.Cyan.copy(alpha = 0.7f))
                         Spacer(modifier = Modifier.height(8.dp))
                         
                         OutlinedButton(

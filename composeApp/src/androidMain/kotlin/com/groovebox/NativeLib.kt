@@ -96,6 +96,7 @@ actual class NativeLib {
     actual fun setTrackPan(trackIndex: Int, pan: Float) = nSetTrackPan(trackIndex, pan)
     actual fun setTrackMute(trackIndex: Int, muted: Boolean) = nSetTrackMute(trackIndex, muted)
     actual fun setTrackSolo(trackIndex: Int, soloed: Boolean) = nSetTrackSolo(trackIndex, soloed)
+    actual fun setTrackDisabled(trackIndex: Int, disabled: Boolean) = nSetTrackDisabled(trackIndex, disabled)
     actual fun getFxSends(trackIndex: Int): FloatArray = nGetFxSends(trackIndex)
     actual fun getFxMix(trackIndex: Int): FloatArray = nGetFxMix(trackIndex)
     actual fun getFxChain(): IntArray = nGetFxChain()
@@ -109,13 +110,17 @@ actual class NativeLib {
     actual fun getIsPlaying(): Boolean = nGetIsPlaying()
     actual fun getIsRecording(): Boolean = nGetIsRecording()
     actual fun getIsRecordingSample(): Boolean = nGetIsRecordingSample()
-
+    actual fun getTrackLevels(): FloatArray = nGetTrackLevels()
+    actual fun setFocusedTrack(trackIndex: Int) = nSetFocusedTrack(trackIndex)
+    actual fun setTrackProbability(trackIndex: Int, probability: Float) = nSetTrackProbability(trackIndex, probability)
     private external fun nInit()
     private external fun nStart()
     private external fun nStop()
+    private external fun nGetAudioThreadTid(): Int
     private external fun nSetTrackVolume(trackIndex: Int, volume: Float)
     private external fun nSetEngineType(trackIndex: Int, type: Int)
     private external fun nSetTempo(bpm: Float)
+    private external fun nSetFocusedTrack(trackIndex: Int)
     private external fun nSetPatternLength(trackIndex: Int, length: Int)
     private external fun nSetPlaying(playing: Boolean)
     private external fun nTriggerNote(trackIndex: Int, note: Int, velocity: Int)
@@ -195,6 +200,7 @@ actual class NativeLib {
     private external fun nSetInputDevice(deviceId: Int)
     private external fun nSetRecordingLocked(locked: Boolean)
     private external fun nSetTrackActive(trackIndex: Int, active: Boolean)
+    private external fun nSetTrackDisabled(trackIndex: Int, disabled: Boolean)
     private external fun nSetTrackPan(trackIndex: Int, pan: Float)
     private external fun nSetTrackMute(trackIndex: Int, muted: Boolean)
     private external fun nSetTrackSolo(trackIndex: Int, soloed: Boolean)
@@ -211,10 +217,12 @@ actual class NativeLib {
     private external fun nGetIsPlaying(): Boolean
     private external fun nGetIsRecording(): Boolean
     private external fun nGetIsRecordingSample(): Boolean
+    private external fun nGetTrackLevels(): FloatArray
+    private external fun nSetTrackProbability(trackIndex: Int, probability: Float)
 
     companion object {
         init {
-            System.loadLibrary("native-lib")
+            System.loadLibrary("loom-native-core")
         }
     }
 }

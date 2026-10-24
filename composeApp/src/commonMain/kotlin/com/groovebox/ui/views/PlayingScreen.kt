@@ -165,6 +165,7 @@ fun PlayingPad(
                                             val down = awaitFirstDown()
                                             isLocallyPressed = true
                                             val startPos = down.position
+                                            val pointerId = down.id
                                             
                                             val currentTIdx = currentState.selectedTrackIndex
                                             val currentBank = currentState.currentSequencerBank
@@ -195,8 +196,10 @@ fun PlayingPad(
                                                     // Track movement
                                                     while (true) {
                                                         val event = awaitPointerEvent()
-                                                        if (event.changes.any { it.pressed }) {
-                                                            val currentPos = event.changes.first().position
+                                                        val change = event.changes.find { it.id == pointerId }
+                                                        
+                                                        if (change != null && change.pressed) {
+                                                            val currentPos = change.position
                                                             val dx = currentPos.x - startPos.x
                                                             
                                                             // X-Axis: Pitch Bend (range depends on mode)
@@ -243,7 +246,7 @@ fun PlayingPad(
                                                                 nativeLib.setPadMod(currentTIdx, currentModValue)
                                                             }
                                                             
-                                                            event.changes.forEach { it.consume() }
+                                                            change.consume()
                                                         } else {
                                                             break
                                                         }
@@ -1691,7 +1694,7 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
         
         Box(modifier = Modifier.weight(0.66f).fillMaxHeight()) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                val platformInfo = com.groovebox.ui.LocalPlatformInfo.current
+                val platformInfo = LocalPlatformInfo.current
                 val screenRatio = platformInfo.screenWidthDp.toFloat() / platformInfo.screenHeightDp.toFloat()
                 
                 val currentMaxWidth = maxWidth

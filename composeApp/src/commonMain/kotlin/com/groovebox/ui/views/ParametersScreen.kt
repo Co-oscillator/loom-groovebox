@@ -894,9 +894,12 @@ fun RecordingStrip(
                         .background(if (isRecording) Color.Red else Color.Red.copy(alpha = 0.3f), CircleShape)
                         .border(2.dp, Color.Red, CircleShape)
                         .pointerInput(trackIndex, state.isRecordingLocked) {
-                            detectTapGestures(
-                                onPress = {
+                            while (true) {
+                                awaitPointerEventScope {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    
                                     if (state.isRecordingLocked) {
+                                        // Toggle Mode
                                         if (latestIsRecording) {
                                             onStateChange(state.copy(isRecordingLocked = false))
                                             nativeLib?.setRecordingLocked(false)
@@ -904,16 +907,21 @@ fun RecordingStrip(
                                         } else {
                                             latestOnStart()
                                         }
+                                        down.consume()
                                     } else {
-                                        try {
-                                            latestOnStart()
-                                            awaitRelease()
-                                        } finally {
-                                            latestOnStop()
-                                        }
+                                        // Hold Mode
+                                        latestOnStart()
+                                        down.consume()
+                                        
+                                        // Wait for release
+                                        waitForUpOrCancellation()
+                                        latestOnStop()
                                     }
                                 }
-                            )
+                                // Small "cool-off" to prevent immediate re-trigger on some touchscreens
+                                // Allowed here because we are in the pointerInput CoroutineScope, not the restricted awaitPointerEventScope
+                                delay(150)
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -2024,7 +2032,7 @@ fun FmDrumParameters(viewModel: com.groovebox.GrooveboxViewModel, trackIndex: In
     val onStateChange = viewModel::onStateChange
     val instruments = listOf("KICK", "SNARE", "TOM", "HIHAT", "OHH", "CYMB", "PERC", "NOISE")
     
-    val platformInfo = com.groovebox.ui.LocalPlatformInfo.current
+    val platformInfo = LocalPlatformInfo.current
     val isTablet = kotlin.math.min(platformInfo.screenWidthDp, platformInfo.screenHeightDp) >= 600
 
     val containerModifier = if (isTablet) Modifier.fillMaxWidth().fillMaxHeight().padding(vertical = 8.dp)

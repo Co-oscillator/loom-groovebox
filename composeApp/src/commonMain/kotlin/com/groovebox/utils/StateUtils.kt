@@ -89,6 +89,7 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
             isActive = (track.isActive as Any?) as? Boolean ?: true,
             isMuted = (track.isMuted as Any?) as? Boolean ?: false,
             isSoloed = (track.isSoloed as Any?) as? Boolean ?: false,
+            isDisabled = (track.isDisabled as Any?) as? Boolean ?: false,
             transpose = (track.transpose as Any?) as? Int ?: 0,
             steps = (track.steps as Any?) as? List<com.groovebox.StepState> ?: List(64) { com.groovebox.StepState() },
             drumSteps = (track.drumSteps as Any?) as? List<List<com.groovebox.StepState>> ?: List(16) { List(64) { com.groovebox.StepState() } },
@@ -263,6 +264,7 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
         isPerformanceMode = (state.isPerformanceMode as Any?) as? Boolean ?: false,
         isKeyboardModeEnabled = (state.isKeyboardModeEnabled as Any?) as? Boolean ?: false,
         cpuLoad = (state.cpuLoad as Any?) as? Float ?: 0f,
+        trackLevels = (state.trackLevels as Any?) as? List<Float> ?: List(8) { 0f },
         importedFmPresets = (state.importedFmPresets as Any?) as? List<Map<String, Any>> ?: emptyList(),
         appVersion = (state.appVersion as Any?) as? String ?: Version.APP_VERSION
     )
@@ -287,7 +289,8 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         
         nativeLib.setTrackVolume(trackIdx, safeVol)
         nativeLib.setTrackTranspose(trackIdx, t.transpose)
-        nativeLib.setTrackActive(trackIdx, t.isActive)
+        nativeLib.setTrackActive(trackIdx, if (t.isDisabled) false else t.isActive)
+        if (t.isDisabled) nativeLib.setTrackDisabled(trackIdx, true)
         nativeLib.setTrackPan(trackIdx, t.pan)
         nativeLib.setSelectedFmDrumInstrument(trackIdx, t.selectedFmDrumInstrument)
         

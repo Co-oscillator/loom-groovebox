@@ -244,8 +244,10 @@ class GrooveboxViewModel(
 
     fun pollEngineState() {
         pullTransportState()
-        val cpu = nativeLib.getCpuLoad()
         val focusedTrackIdx = state.selectedTrackIndex
+        nativeLib.setFocusedTrack(focusedTrackIdx)
+        
+        val cpu = nativeLib.getCpuLoad()
         val track = state.tracks[focusedTrackIdx]
         
         // Pull modulated parameter values for visual consistency
@@ -261,10 +263,30 @@ class GrooveboxViewModel(
             }
         }
         
+        // Pull real-time track levels for activity indicators
+        val levels = nativeLib.getTrackLevels()
+        
+        // Pull active step bits from native for the focused track (Wait-free)
+        val activeBits = nativeLib.getAllStepActiveStates(focusedTrackIdx)
+        
+        // Playhead sync (native is the source of truth while playing)
+        val newStep = if (state.isPlaying) nativeLib.getCurrentStep(focusedTrackIdx, -1) else 0
+        
         state = state.copy(
             cpuLoad = cpu,
+            currentStep = newStep,
+            trackLevels = levels.toList(),
             tracks = state.tracks.mapIndexed { idx, t ->
-                if (idx == focusedTrackIdx) t.copy(parameters = updatedParams) else t
+                val isNowActive = levels.getOrElse(idx) { 0f } > 0.01f
+                if (idx == focusedTrackIdx) {
+                   // Sync active states for the sequencer pads
+                   val syncedSteps = t.steps.mapIndexed { si, step ->
+                       if (si < activeBits.size) step.copy(active = activeBits[si]) else step
+                   }
+                   t.copy(parameters = updatedParams, isAudiblyActive = isNowActive, steps = syncedSteps)
+                } else {
+                   t.copy(isAudiblyActive = isNowActive)
+                }
             }
         )
         

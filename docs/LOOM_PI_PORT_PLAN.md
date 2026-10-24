@@ -348,7 +348,8 @@ Ranked by value-to-effort for Loom:
 |---|---|---|---|---|
 | **0. Prep** | Delete/mark `app/src/main/cpp` duplicate; extract `PlayingPad` target-track/mod params; add settings schema version | Low | Prevents engine drift |
 | **1. Arp clone** | `copyFrom`, `copyArpeggiator`, JNI, Kotlin state sync, "Copy To" UI with **Copy settings** and **Clone live** | Low | Independently shippable, immediate live-performance value |
-| **2. MIDI devices** | Device registry, per-device config UI, persistence, routing filters | Medium | Touches both platform MIDI implementations |
+| **1b. CPU budget** | Finish track disable, add FX enable mask + UI, performance profile, verify CPU drops | Medium | Directly addresses budget-tablet performance (§8) |
+| **2. MIDI devices** | Device registry, per-device config UI, hardware presets, persistence, routing filters | Medium | Touches both platform MIDI implementations |
 | **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | Does not require engine changes |
 | **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | Unlocks true multitouch expression; needs audio-thread care |
 | **5. MIDI expression** | Clock in/out, SPP, pitch-bend input, **aftertouch → pad mod** | Medium | Aftertouch depends on Phase 4 for full benefit |
@@ -394,19 +395,84 @@ Rather than only working around Loom Pi's known defects, fix them upstream and c
 
 ## 7. Decisions
 
-Resolved:
+Resolved (2026-10-24):
 
-1. **Arp clone semantics:** both *Copy settings* and *Clone live* ship. *Clone live* keeps the source running and layers; *Copy settings* leaves the destination idle until the next gesture.
-2. **Per-voice modulation:** in scope (Phase 4), not deferred.
-3. **MIDI clock input:** in scope (Phase 5).
-4. **Aftertouch → pad mod:** in scope (Phase 5).
-5. **Pad modes / Launchkey / drum-row wizard:** in scope (Phases 6–7).
-6. **Melody tracker:** last priority (Phase 8).
+1. **Arp clone semantics:** both *Copy settings* and *Clone live* ship. *Clone live* keeps the source running, layers, and **copies the RNG seed** so the clone matches exactly. *Copy settings* starts a **fresh random seed** so it can diverge.
+2. **Split pads:** different tracks are the normal case, but assigning **the same track to both banks is allowed** — the two banks then act as separate octave ranges of one sound.
+3. **MIDI device config:** **global preference**, not per project. Add named **hardware configuration presets** (e.g. "Home" vs "Live") that save/load the device list, channels, mute/ignore and routing.
+4. **Desktop parity:** **Android is the priority.** Split pads are not required on macOS; MIDI routing/device configuration is. Keep a macOS follow-up list (§9).
+5. **Loom Pi:** `main` stays the published default. Port generic features from `10inch-1280x800` into `main` deliberately (see `Loom Pi/PORT_FROM_10INCH.md`), rather than making the 10-inch line the default.
+6. **Per-voice modulation, aftertouch, clock, pad modes, Launchkey, drum-row wizard:** in scope as previously confirmed.
+7. **Melody tracker:** last priority.
 
-Still to decide:
+---
 
-1. Split pads: must the two banks be **different tracks**, or is the same track twice at different octaves allowed?
-2. MIDI device config: **global preference** (recommended) or saved per project?
-3. Desktop parity: must every feature work on macOS, or is Android the priority?
-4. Loom Pi: should `main` stay the published default, or should the merged `10inch-1280x800` line become `origin/main`?
-5. Arp "Copy settings": copy the RNG seed for identical random patterns, or keep divergent streams?
+## 8. Android CPU budget: disable tracks and unused FX
+
+Motivation: Loom runs well on high-end devices but bogs down on budget tablets. The goal is to let the user spend CPU only where it is audible.
+
+### 8.1 Track disable
+
+The uncommitted v3.2.19 work already contains most of this:
+
+- `TrackState.isDisabled`, `NativeLib.setTrackDisabled`, and a MixerView **Enable/Disable Track** action.
+- The engine already skips disabled tracks in both the sequencer loop and the render loop (`if (track.isDisabled) continue`).
+
+Gaps to close before calling it done:
+
+- `applyModulations()` still iterates disabled tracks.
+- `triggerNoteLocked()` does not reject notes for disabled tracks (MIDI/arp can still wake them).
+- Arp/LFO/macro sources can still reference a disabled track; decide whether to mute or skip those sources.
+- UI should block pad/sequence triggering and show a clear "OFF" state (partly present).
+- Verify the disabled flag is pushed after project load and after track engine changes.
+
+Expected saving is roughly linear in track count for synthesis work: 4 active tracks ≈ half the voice/DSP cost of 8, minus shared FX.
+
+### 8.2 FX enable/disable
+
+All 18 FX buses currently process unconditionally every block: overdrive, bitcrusher, HP/LP filter LFOs, chorus, phaser, tape wobble, delay, reverb, slicer, compressor, flanger, three filter pedals, tape echo, octaver and EQ5.
+
+Plan:
+
+- Add an atomic `mFxEnabledMask` (18 bits) to `AudioEngineCore`.
+- Skip each FX's `processBlock` when its bit is off; skip bus clearing and track sends to disabled buses.
+- Fade the bus out over a few ms on disable (and optionally clear state) to avoid clicks; on re-enable, either reset tails or preserve them deliberately.
+- UI: a toggle per pedal in the Routing/FX screen, plus a compact **Performance** panel listing active FX and track states.
+- Persist the mask in the project and expose it through JNI.
+
+Expected saving: reverb, delay, chorus, EQ5, tape echo and the filter pedals are the expensive buses. Bypassing unused ones is one of the largest wins available on low-end hardware.
+
+### 8.3 Additional cheap wins
+
+- Idle/silence gating (partly present; Loom Pi's `7fd774d` is a useful reference).
+- Reduce UI polling and avoid per-frame label formatting (Loom Pi `d2bcc29`).
+- Increase control-rate decimation on a low-end profile.
+- Add a **Performance profile** (High / Balanced / Low) that caps polyphony and disables the most expensive options.
+- Per-track max polyphony / voice stealing.
+- Let the user choose sample rate and buffer size where the platform allows it.
+
+### 8.4 Acceptance criteria
+
+- Eight tracks with all FX remain real-time on a budget tablet.
+- Disabling four tracks produces a measurable CPU drop.
+- Disabling unused FX produces a measurable CPU drop with no clicks or stuck tails.
+- Track/FX enable states persist across project save/load.
+
+---
+
+## 9. macOS follow-up list (after Android)
+
+Required on macOS:
+
+- MIDI device registry, per-device configuration, and hardware configuration presets.
+- MIDI clock in/out, pitch-bend input, aftertouch routing.
+- Arp clone and the MIDI-learn improvements.
+
+Not required on macOS:
+
+- 20/20 split pads (not useful without a touchscreen).
+- Launchkey hardware integration (unless specifically requested).
+
+Also needs desktop parity work in `MidiManager` (`javax.sound.midi`): per-device channels, mute/ignore, and stable device IDs.
+
+---

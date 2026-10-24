@@ -206,7 +206,7 @@ Shipped in `composeApp`:
 - `Arpeggiator::copyFrom(other, live)` and `Arpeggiator::reseed()`.
   - `live == true` copies the RNG stream, held notes, sequence, chord progression, step/note index and multipliers **without** calling `updateSequence()`, so the cloned stream stays in phase.
   - `live == false` reseeds, clears held/sequence/chord state, resets position, then rebuilds the sequence.
-- `AudioEngineCore::copyArpeggiator(src, dest, live)` flushes the destination's sounding voices, copies rate/division/triplet/clock multiplier, resets `mArpCountdown` and the physical-hold count, and tracks live clones in `mArpCloneSource[8]` so note-offs on the source stop non-latched clones. Latched clones keep running.
+- `AudioEngineCore::copyArpeggiator(src, dest, live)` flushes the destination's sounding voices, copies rate/division/triplet/clock multiplier, resets `mArpCountdown` and the physical-hold count, and tracks live clones in `mArpCloneSource[8]`. While a clone link exists, note-ons and note-offs on the source are mirrored to the clone, so later gestures keep layering. Non-latched clones stop when the source gesture ends; latched clones keep running.
 - JNI `nCopyArpeggiator(src, dest, live)` in both native entry points, wired through `NativeLib` expect/actual.
 - UI: **COPY SETTINGS** / **CLONE LIVE** buttons in `ArpSettingsSheet`, each opening an 8-track destination picker (source excluded, disabled tracks marked). Clone live re-enables the destination track in Kotlin and native.
 - Kotlin state copies `arpConfig`, `mutatedNotes` and `clockMultiplier`; native copies rate/division/triplet/clock multiplier too, so both sides stay in sync.

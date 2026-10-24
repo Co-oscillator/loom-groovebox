@@ -536,6 +536,17 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
           track.mArpCountdown = 0; // Immediate trigger for new gesture
         }
         track.arpeggiator.addNote(note);
+        // Live clones follow the source: mirror the gesture so layering keeps
+        // working after the cloned snapshot's first gesture ends.
+        for (int d = 0; d < (int)mTracks.size(); ++d) {
+          if (d != trackIndex && mArpCloneSource[d] == trackIndex &&
+              mTracks[d].arpeggiator.getMode() != ArpMode::OFF) {
+            if (track.mPhysicallyHeldNoteCount == 1) {
+              mTracks[d].mArpCountdown = 0;
+            }
+            mTracks[d].arpeggiator.addNote(note);
+          }
+        }
         return;
       }
     }
@@ -1808,6 +1819,13 @@ void AudioEngineCore::releaseNoteLocked(int trackIndex, int note,
         }
         if (track.arpeggiator.getMode() != ArpMode::OFF) {
           track.arpeggiator.removeNote(note);
+          // Keep live clones' held set in step with the source.
+          for (int d = 0; d < (int)mTracks.size(); ++d) {
+            if (d != trackIndex && mArpCloneSource[d] == trackIndex &&
+                mTracks[d].arpeggiator.getMode() != ArpMode::OFF) {
+              mTracks[d].arpeggiator.removeNote(note);
+            }
+          }
         }
       }
 

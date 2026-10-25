@@ -137,3 +137,7 @@ If you implement this format in another Loom version:
 4. Resolve `wavetableName` against the local wavetable folder; fall back safely.
 5. Keep `filterMode` optional.
 6. Preserve `source` when re-exporting imported patches.
+7. Loom FM-1 ships a web-editor adapter (`web/loom_import.js`) that reads this
+   format plus Helm/Surge files and converts them to FM-1 SUBTRACT/WAVETABLE
+   library patches; use it as the reference for a native importer on another
+   platform.

@@ -83,6 +83,8 @@ fun PlayingPad(
     empledManager: EmpledManager? = null,
     isChopMode: Boolean = false,
     isNoteActive: Boolean = false,
+    targetTrackIndex: Int? = null,
+    playheadEnabled: Boolean = true,
     shape: Shape = RoundedCornerShape(8.dp),
     isSolidStyle: Boolean = false,
     customWidth: Dp? = null,
@@ -106,12 +108,13 @@ fun PlayingPad(
 
                 val isHeld = latestState.heldNotes.contains(note)
                 val isMidiTriggered = latestState.lastMidiNote == note && latestState.lastMidiVelocity > 0
-                val isTrackDisabled = latestState.tracks[latestState.selectedTrackIndex].isDisabled
+                val padTrackIndex = targetTrackIndex ?: latestState.selectedTrackIndex
+                val isTrackDisabled = latestState.tracks.getOrNull(padTrackIndex)?.isDisabled ?: false
                 val isActive = !isTrackDisabled && (isVisuallyPressed || isHeld || isMidiTriggered || isNoteActive) // Combined "Active" state
                 
                 // LED Sync for EMP16
                 LaunchedEffect(isVisuallyPressed, isHeld, isMidiTriggered, isPlaying, currentStep, latestState.currentSequencerBank) {
-                    if (latestState.currentSequencerBank == 0) {
+                    if (playheadEnabled && latestState.currentSequencerBank == 0) {
                         val finalColor = if (isActive) padColor 
                                         else if (isPlaying && (currentStep % 16) == padIndex) androidx.compose.ui.graphics.Color.White
                                         else padColor.copy(alpha = 0.2f)
@@ -123,7 +126,7 @@ fun PlayingPad(
                 val cols = if (latestState.gridMode == GridMode.GRID_6X6) 6 else 4
                 val row = padIndex / cols
                 val col = padIndex % cols
-                val isPlayheadHighlight = if (latestState.gridMode == GridMode.GRID_6X6) {
+                val isPlayheadHighlight = playheadEnabled && if (latestState.gridMode == GridMode.GRID_6X6) {
                     // Map playhead to the top-left 4x4 grid of the 6x6 (representing first 16 steps)
                     row < 4 && col < 4 && (currentStep % 16) == (row * 4 + col)
                 } else {
@@ -135,8 +138,8 @@ fun PlayingPad(
                 } else {
                     if (isActive) padColor.copy(alpha = 0.9f)
                     else if (isPlaying && isPlayheadHighlight) Color.White.copy(alpha = 0.3f)
-                    else if (latestState.tracks[latestState.selectedTrackIndex].engineType == EngineType.FM_DRUM && 
-                             latestState.tracks[latestState.selectedTrackIndex].selectedFmDrumInstrument == (note - 60)) padColor.copy(alpha = 0.2f)
+                    else if (latestState.tracks.getOrNull(padTrackIndex)?.engineType == EngineType.FM_DRUM && 
+                             latestState.tracks[padTrackIndex].selectedFmDrumInstrument == (note - 60)) padColor.copy(alpha = 0.2f)
                     else Color.Transparent
                 }
 
@@ -160,7 +163,7 @@ fun PlayingPad(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(padIndex, note) {
+                            .pointerInput(padIndex, note, targetTrackIndex) {
                                 awaitPointerEventScope {
                                         while (true) {
                                             val down = awaitFirstDown()
@@ -168,7 +171,7 @@ fun PlayingPad(
                                             val startPos = down.position
                                             val pointerId = down.id
                                             
-                                            val currentTIdx = currentState.selectedTrackIndex
+                                            val currentTIdx = targetTrackIndex ?: currentState.selectedTrackIndex
                                             val currentBank = currentState.currentSequencerBank
                                             val triggeredNote = note
                                             
@@ -182,7 +185,7 @@ fun PlayingPad(
                                             } else 0.5f
 
                                             try {
-                                                if (currentState.jumpModeWaitingForTap) {
+                                                if (currentState.jumpModeWaitingForTap && targetTrackIndex == null) {
                                                     nativeLib.jumpToStep(currentBank * 16 + padIndex)
                                                     onStateChange(currentState.copy(jumpModeWaitingForTap = false))
                                                 } else {
@@ -256,7 +259,7 @@ fun PlayingPad(
                                                 }
                                             } finally {
                                                 isLocallyPressed = false
-                                                val currentTIdx = currentState.selectedTrackIndex
+                                                val currentTIdx = targetTrackIndex ?: currentState.selectedTrackIndex
                                                 nativeLib.setPitchBend(currentTIdx, 0.0f) // Reset bend on release
                                                 
                                                 // Y-Axis: Reset modulation on release (Snapback)
@@ -281,7 +284,7 @@ fun PlayingPad(
                             ,
                             contentAlignment = Alignment.Center
                         ) {
-                            val label = when (latestState.tracks[latestState.selectedTrackIndex].engineType) {
+                            val label = when (latestState.tracks.getOrNull(padTrackIndex)?.engineType ?: latestState.tracks[latestState.selectedTrackIndex].engineType) {
                                 EngineType.FM_DRUM -> {
                                     val names = listOf("Kick", "Snare", "Tom", "HH", "OHH", "CYMB", "PERC", "NOISE")
                                     names.getOrElse(note - 60) { "Pad $padIndex" }
@@ -568,6 +571,256 @@ fun PadGrid(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Split performance layout: two independent 5x4 banks side by side.
+ * Each bank targets its own track and octave; the same track may be used on
+ * both banks to get two octave ranges of one sound.
+ */
+@Composable
+fun SplitPadArea(
+    state: GrooveboxState,
+    latestState: GrooveboxState,
+    nativeLib: NativeLib,
+    onStateChange: (GrooveboxState) -> Unit,
+    empledManager: EmpledManager? = null
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val gap = 10.dp
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(gap)
+        ) {
+            SplitBank(
+                zone = state.splitLeft,
+                label = "L",
+                isLeft = true,
+                state = state,
+                latestState = latestState,
+                nativeLib = nativeLib,
+                onStateChange = onStateChange,
+                empledManager = empledManager,
+                modifier = Modifier.weight(1f).fillMaxHeight()
+            )
+            SplitBank(
+                zone = state.splitRight,
+                label = "R",
+                isLeft = false,
+                state = state,
+                latestState = latestState,
+                nativeLib = nativeLib,
+                onStateChange = onStateChange,
+                empledManager = empledManager,
+                modifier = Modifier.weight(1f).fillMaxHeight()
+            )
+        }
+    }
+}
+
+@Composable
+fun SplitBank(
+    zone: SplitZone,
+    label: String,
+    isLeft: Boolean,
+    state: GrooveboxState,
+    latestState: GrooveboxState,
+    nativeLib: NativeLib,
+    onStateChange: (GrooveboxState) -> Unit,
+    empledManager: EmpledManager? = null,
+    modifier: Modifier = Modifier
+) {
+    val track = state.tracks.getOrNull(zone.trackIndex) ?: state.tracks[0]
+    val color = getEngineColor(track.engineType)
+    var showTrackMenu by remember { mutableStateOf(false) }
+
+    fun updateZone(transform: (SplitZone) -> SplitZone) {
+        val updated = transform(zone)
+        onStateChange(
+            if (isLeft) state.copy(splitLeft = updated)
+            else state.copy(splitRight = updated)
+        )
+    }
+
+    val isChopMode = track.engineType == EngineType.SAMPLER && (track.parameters[320] ?: 0f) >= 0.6f
+    val notes = splitNotesFor(track, zone, state)
+
+    Column(
+        modifier = modifier
+            .border(1.dp, color.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+            .padding(5.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(label, color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+
+            Box {
+                Surface(
+                    onClick = { showTrackMenu = true },
+                    color = Color.DarkGray,
+                    shape = RoundedCornerShape(4.dp),
+                    border = BorderStroke(1.dp, color.copy(alpha = 0.6f))
+                ) {
+                    Text(
+                        "T${zone.trackIndex + 1} ${track.engineType.name.take(3)}",
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        maxLines = 1
+                    )
+                }
+                DropdownMenu(expanded = showTrackMenu, onDismissRequest = { showTrackMenu = false }) {
+                    state.tracks.forEachIndexed { idx, t ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "T${idx + 1} · ${t.engineType.name.replace("_", " ")}",
+                                    color = if (t.isDisabled) Color.Gray else Color.White,
+                                    fontSize = 12.sp
+                                )
+                            },
+                            onClick = {
+                                updateZone { it.copy(trackIndex = idx) }
+                                showTrackMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            SplitOctButton("-") {
+                updateZone { it.copy(octave = (it.octave - 1).coerceAtLeast(-3)) }
+            }
+            Text(
+                "OCT ${if (zone.octave > 0) "+${zone.octave}" else "${zone.octave}"}",
+                color = Color.Gray,
+                fontSize = 9.sp,
+                modifier = Modifier.width(44.dp),
+                textAlign = TextAlign.Center
+            )
+            SplitOctButton("+") {
+                updateZone { it.copy(octave = (it.octave + 1).coerceAtMost(3)) }
+            }
+            Surface(
+                onClick = {
+                    onStateChange(
+                        state.copy(
+                            selectedTrackIndex = zone.trackIndex,
+                            isPadModLearnActive = true
+                        )
+                    )
+                },
+                color = if (state.isPadModLearnActive) Color.Cyan else Color.DarkGray,
+                shape = RoundedCornerShape(4.dp),
+                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
+            ) {
+                Text(
+                    "MOD",
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    color = if (state.isPadModLearnActive) Color.Black else Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        BoxWithConstraints(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            val spacing = 4.dp
+            val padSize = minOf(
+                (maxWidth - spacing * 3) / 4,
+                (maxHeight - spacing * 4) / 5,
+                110.dp
+            ).coerceAtLeast(24.dp)
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(spacing),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                repeat(5) { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                        repeat(4) { col ->
+                            val padIndex = row * 4 + col
+                            val note = notes.getOrElse(padIndex) { -1 }
+                            if (note < 0) {
+                                Spacer(modifier = Modifier.size(padSize))
+                            } else {
+                                val isBlack = track.engineType != EngineType.FM_DRUM &&
+                                    track.engineType != EngineType.ANALOG_DRUM &&
+                                    !isChopMode && isBlackKey(note)
+                                val padColor = if (isBlack)
+                                    androidx.compose.ui.graphics.lerp(Color.DarkGray, color, 0.4f)
+                                else color
+                                key(zone.trackIndex, zone.octave, padIndex) {
+                                    PlayingPad(
+                                        padIndex = padIndex,
+                                        note = note,
+                                        padSize = padSize,
+                                        padColor = padColor,
+                                        isPlaying = state.isPlaying,
+                                        currentStep = state.currentStep,
+                                        nativeLib = nativeLib,
+                                        latestState = latestState,
+                                        onStateChange = onStateChange,
+                                        empledManager = empledManager,
+                                        isChopMode = isChopMode,
+                                        targetTrackIndex = zone.trackIndex,
+                                        playheadEnabled = false
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SplitOctButton(text: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = Color.DarkGray,
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/** Note map for one split bank, mirroring the single-grid drum/chop rules. */
+fun splitNotesFor(track: TrackState, zone: SplitZone, state: GrooveboxState): List<Int> {
+    val count = 20
+    return when {
+        track.engineType == EngineType.FM_DRUM -> List(count) { 60 + (it % 8) }
+        track.engineType == EngineType.ANALOG_DRUM -> List(count) {
+            if (it % 8 < 6) 60 + (it % 8) else -1
+        }
+        track.engineType == EngineType.SAMPLER && (track.parameters[320] ?: 0f) >= 0.6f -> {
+            val slices = (((track.parameters[340] ?: 0f) * 14f).toInt() + 2).coerceIn(2, 16)
+            List(count) { if (it < slices) 60 + it else -1 }
+        }
+        else -> {
+            val base = (state.rootNote + zone.octave * 12).coerceIn(0, 115)
+            ScaleLogic.generateScaleNotes(base, state.scaleType, count).map { it.coerceAtMost(127) }
         }
     }
 }
@@ -1975,6 +2228,34 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                             Text("GRID", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         }
 
+                        // PLAY LAYOUT (single grid / split 20+20)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val isSplit = state.playLayout == PlayLayout.SPLIT_20_20
+                            Button(
+                                onClick = {
+                                    onStateChange(
+                                        state.copy(
+                                            playLayout = if (isSplit) PlayLayout.GRID else PlayLayout.SPLIT_20_20
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.height(controlHeight).width(controlWidth),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSplit) Color(0xFFFF7043) else Color.DarkGray
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(
+                                    if (isSplit) "GRID" else "20/20",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isSplit) Color.Black else Color.White,
+                                    maxLines = 1
+                                )
+                            }
+                            Text("SPLIT", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+
                         // ARP
                         val currentState by rememberUpdatedState(latestState)
                         if (track.engineType != EngineType.FM_DRUM && track.engineType != EngineType.ANALOG_DRUM) {
@@ -2010,13 +2291,23 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
 
                     // --- Pad Grid ---
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        val padSize = minOf(
-                            (currentMaxWidth - (spacing * (cols - 1))) / cols.coerceAtLeast(1),
-                            (currentMaxHeight - (spacing * (rows - 1)) - controlHeight - 20.dp) / rows.coerceAtLeast(1),
-                            135.dp
-                        ).coerceAtLeast(40.dp)
-                        
-                        PadGrid(rows, cols, padSize, spacing, track, state, scaleNotes, engineColor, nativeLib, latestState, onStateChange, latestOnStateChange, empledManager)
+                        if (state.playLayout == PlayLayout.SPLIT_20_20) {
+                            SplitPadArea(
+                                state = state,
+                                latestState = latestState,
+                                nativeLib = nativeLib,
+                                onStateChange = onStateChange,
+                                empledManager = empledManager
+                            )
+                        } else {
+                            val padSize = minOf(
+                                (currentMaxWidth - (spacing * (cols - 1))) / cols.coerceAtLeast(1),
+                                (currentMaxHeight - (spacing * (rows - 1)) - controlHeight - 20.dp) / rows.coerceAtLeast(1),
+                                135.dp
+                            ).coerceAtLeast(40.dp)
+
+                            PadGrid(rows, cols, padSize, spacing, track, state, scaleNotes, engineColor, nativeLib, latestState, onStateChange, latestOnStateChange, empledManager)
+                        }
                     }
                 }
             }

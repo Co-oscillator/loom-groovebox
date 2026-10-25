@@ -263,6 +263,11 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
         copiedSteps = (state.copiedSteps as Any?) as? List<com.groovebox.StepState>,
         copiedDrumSteps = (state.copiedDrumSteps as Any?) as? List<List<com.groovebox.StepState>>,
         gridMode = (state.gridMode as Any?) as? com.groovebox.GridMode ?: com.groovebox.GridMode.GRID_4X4,
+        playLayout = (state.playLayout as Any?) as? com.groovebox.PlayLayout ?: com.groovebox.PlayLayout.GRID,
+        splitLeft = ((state.splitLeft as Any?) as? com.groovebox.SplitZone ?: com.groovebox.SplitZone(0, 0))
+            .let { it.copy(trackIndex = it.trackIndex.coerceIn(0, 7), octave = it.octave.coerceIn(-3, 3)) },
+        splitRight = ((state.splitRight as Any?) as? com.groovebox.SplitZone ?: com.groovebox.SplitZone(1, 1))
+            .let { it.copy(trackIndex = it.trackIndex.coerceIn(0, 7), octave = it.octave.coerceIn(-3, 3)) },
         uiLayoutMode = (state.uiLayoutMode as Any?) as? Int ?: 0,
         showCpuMonitor = (state.showCpuMonitor as Any?) as? Boolean ?: true,
         performanceProfile = (((state.performanceProfile as Any?) as? Int) ?: 0).coerceIn(0, 2),

@@ -8,6 +8,19 @@ enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM, B
 
 enum class GridMode { GRID_4X4, GRID_6X6, TONNETZ, MAC_KEYS }
 
+/** Play-screen arrangement: one grid or two independent 5x4 performance banks. */
+enum class PlayLayout { GRID, SPLIT_20_20 }
+
+/** One 20-pad bank in the split performance layout. */
+data class SplitZone(
+    val trackIndex: Int = 0,
+    val octave: Int = 0
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
 data class ArpConfig(
     val mode: ArpMode = ArpMode.OFF,
     val octaves: Int = 0, // -3 to +3
@@ -334,6 +347,9 @@ data class GrooveboxState(
     
     // UI State
     val gridMode: GridMode = GridMode.GRID_4X4,
+    val playLayout: PlayLayout = PlayLayout.GRID,
+    val splitLeft: SplitZone = SplitZone(trackIndex = 0, octave = 0),
+    val splitRight: SplitZone = SplitZone(trackIndex = 1, octave = 1),
     val uiLayoutMode: Int = 0, // 0=Auto, 1=Phone, 2=Tablet
     val showCpuMonitor: Boolean = true, // Toggles performance overlay
     val performanceProfile: Int = 0, // 0 = High, 1 = Balanced, 2 = Low

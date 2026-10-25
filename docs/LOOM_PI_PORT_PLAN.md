@@ -379,7 +379,7 @@ Ranked by value-to-effort for Loom:
 | **1. Arp clone** | `copyFrom`, `copyArpeggiator`, JNI, Kotlin state sync, "Copy To" UI with **Copy settings** and **Clone live** | Low | Independently shippable, immediate live-performance value |
 | **1b. CPU budget** | Finish track disable, FX enable mask + UI, performance profile, verify CPU drops | Medium | **Done** (§8.5): track disable, FX mask, High/Balanced/Low profile, idle gate, UI poll scaling |
 | **2. MIDI devices** | Device registry, per-device config UI, hardware presets, persistence, routing filters | Medium | **Done** (§3.6); clock/transport deferred to Phase 5 |
-| **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | Does not require engine changes |
+| **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | **Done** (§11); per-voice mod arrives with Phase 4 |
 | **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | Unlocks true multitouch expression; needs audio-thread care |
 | **5. MIDI expression** | Clock in/out, SPP, pitch-bend input, **aftertouch → pad mod** | Medium | Aftertouch depends on Phase 4 for full benefit |
 | **6. Pad modes + drum row wizard** | 16/24/40 layouts, six pad modes, general drum-row learn wizard | Medium | Reuses the split-bank pad abstraction |
@@ -605,5 +605,37 @@ tight/long/hard variants).
 
 This feature is version-neutral: the bank and the import mapping are the parts
 to mirror in Loom Pi when its engine exposes the same parameter ids.
+
+---
+
+## 11. Split pads v1 (20/20 performance layout)
+
+Implemented in v3.2.19.
+
+- New persisted state: `playLayout` (`GRID` / `SPLIT_20_20`), `splitLeft` and
+  `splitRight` (`SplitZone(trackIndex, octave)`).
+- A **SPLIT** button in the Play top bar toggles the layout; it works for synth,
+  sampler and drum tracks.
+- Each bank is an independent **5×4 (20 pad)** grid with its own track selector
+  and octave (`-3..+3`). Different tracks are the default (left T1, right T2),
+  and assigning the same track to both banks gives two octave ranges of one
+  sound, as agreed.
+- Pads are addressed as `(bank, track, note)`: `PlayingPad` gained an optional
+  `targetTrackIndex`, so a bank triggers its own track without changing the
+  selected track.
+- Note maps mirror the single grid: melodic banks generate 20 scale notes from
+  `root + octave*12`; FM Drum and Analog Drum banks use the 8 drum notes; chop
+  banks use the active slice count (empty pads are skipped).
+- The **MOD** button in each bank header selects that bank's track and enters
+  pad-mod learn, so X/Y performance gestures target the right sound. X is pitch
+  bend and Y uses the track's existing `padModTargetId` (the v1 global fallback).
+- Playhead/step-jump highlighting is disabled on split pads (they are a
+  performance surface, not a 16-step view). EMP16 LED feedback still uses pad
+  indices 0–15.
+- State is saved with the project and sanitized on load (track clamped 0..7,
+  octave clamped -3..+3). Older projects default to the single grid.
+
+Still in Phase 4: per-voice polyphonic X/Y modulation, per-bank modulation
+destinations/intensity, and per-finger voice-link behaviour.
 
 ---

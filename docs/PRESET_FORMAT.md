@@ -75,7 +75,7 @@ export is generated from it and is the cross-version reference.
 - **Portable `.loom.json`**: written by **EXPORT** in the preset browser and read
   by **IMPORT**. This is the format other Loom versions should implement.
 
-## External import: Helm
+## External imports: Helm (Subtractive) and Surge XT (Wavetable)
 
 **Helm** (GPLv3, Matt Tytel) is used as the reference open-source synth because
 its factory bank is JSON (`.helm`), openly licensed (patches CC-BY 4.0), and its
@@ -103,6 +103,29 @@ routing, effects, and exact wavetables. Wavetable imports use the `Basic` table.
 To import: **Parameters → PRESETS → IMPORT**, select a `.helm` file. The original
 attribution is stored in the preset's `source` field and shown in the browser
 description.
+
+### Surge XT → Wavetable
+
+**Surge XT** (GPLv3) is the reference wavetable source. `.fxp` files are VST2
+preset chunks followed by an XML `<patch>`; only scene A is read.
+
+| Surge | Loom |
+|---|---|
+| `a_osc1_type` | oscillator model; `2` (Wavetable), `7` (Window), `8` (Modern) and classic types are mapped |
+| `a_osc1_param0` | table position (`450`) or shape |
+| `a_osc1_param1` | warp (`465`) for wavetable/modern |
+| `a_osc1_param2` | unison detune (`451`) for wavetable/window/modern |
+| `a_ws_type`, `a_ws_drive` | crush (`466`) / drive (`467`) |
+| `a_filter1_type` | LP → mode 0, HP → 1, BP → 2, notch → 3 |
+| `a_filter1_cutoff` | `440 Hz * 2^(v/12)` → Loom norm |
+| `a_filter1_resonance`, `a_filter1_envmod` | resonance / filter env amount |
+| `a_env1_*` (log2 seconds) | amp ADSR |
+| `a_env2_*` (log2 seconds) | filter ADSR |
+| metadata | name, category, author, and `source` attribution |
+
+Surge's exact wavetables, unison voice count, modulation matrix, LFO routing,
+FM/string/twist oscillator models and effects are not mapped; imports use the
+`Basic` table. Select a `.fxp` file in **IMPORT** while on a Wavetable track.
 
 ## Cross-version checklist
 

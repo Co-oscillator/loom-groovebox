@@ -29,6 +29,7 @@ import com.groovebox.presets.LoomPreset
 import com.groovebox.presets.PresetApplier
 import com.groovebox.presets.PresetCodec
 import com.groovebox.presets.PresetEngine
+import com.groovebox.presets.SurgePresetImporter
 import com.groovebox.persistence.PersistenceManager
 import com.groovebox.ui.components.NativeFileDialog
 import com.groovebox.ui.platformShowMessage
@@ -207,7 +208,7 @@ fun PresetBrowserDialog(
                 }
 
                 Text(
-                    "Import accepts Loom preset .json files and Helm .helm patches (best-effort mapping, CC-BY 4.0).",
+                    "Import accepts Loom .json presets, Helm .helm patches (Subtractive/Wavetable) and Surge .fxp patches (Wavetable). Best-effort mapping; original attribution is kept.",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.Gray,
                     modifier = Modifier.padding(top = 6.dp)
@@ -222,13 +223,26 @@ fun PresetBrowserDialog(
                 state = state,
                 onFileSelected = { path ->
                     val file = File(path)
-                    val text = runCatching { file.readText() }.getOrNull()
-                    if (text.isNullOrBlank()) {
+                    val bytes = runCatching { file.readBytes() }.getOrNull()
+                    val text = bytes?.toString(Charsets.UTF_8)
+                    if (bytes == null || text == null) {
                         platformShowMessage("Could not read ${file.name}")
                     } else if (HelmPresetImporter.looksLikeHelm(text)) {
-                        val imported = HelmPresetImporter.import(text, engine)
-                        if (imported != null) applyPreset(imported)
-                        else platformShowMessage("Could not map this Helm patch")
+                        if (engine != PresetEngine.SUBTRACTIVE && engine != PresetEngine.WAVETABLE) {
+                            platformShowMessage("Helm patches map to Subtractive or Wavetable tracks")
+                        } else {
+                            val imported = HelmPresetImporter.import(text, engine)
+                            if (imported != null) applyPreset(imported)
+                            else platformShowMessage("Could not map this Helm patch")
+                        }
+                    } else if (SurgePresetImporter.looksLikeSurge(bytes)) {
+                        if (engine != PresetEngine.WAVETABLE) {
+                            platformShowMessage("Surge patches map to Wavetable tracks")
+                        } else {
+                            val imported = SurgePresetImporter.import(bytes, engine)
+                            if (imported != null) applyPreset(imported)
+                            else platformShowMessage("Could not map this Surge patch")
+                        }
                     } else {
                         val imported = PresetCodec.decode(text)
                         if (imported == null) {
@@ -245,7 +259,7 @@ fun PresetBrowserDialog(
                 },
                 isSave = false,
                 trackIndex = trackIndex,
-                extensions = listOf("helm", "json"),
+                extensions = listOf("helm", "fxp", "json"),
                 title = "IMPORT PRESET"
             )
         }

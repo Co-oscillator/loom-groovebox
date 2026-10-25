@@ -587,7 +587,7 @@ tight/long/hard variants).
 - The format is deliberately engine-id based so Loom Pi (C++) and other Loom
   versions can consume the same files with a small translation layer.
 
-### 10.3 External import: Helm
+### 10.3 External imports: Helm + Surge XT
 
 - **Helm** (GPLv3; factory patches CC-BY 4.0) is the reference open-source synth
   for both engines: its `.helm` files are JSON, and its 2-osc + sub + noise +
@@ -596,9 +596,12 @@ tight/long/hard variants).
   (MIDI note → Hz → Loom norm), resonance, filter env, ADSRs and glide.
 - Wavetable imports map the oscillator shape to table position and use the
   `Basic` table (Helm's wavetables are not bundled).
+- **Surge XT** (GPLv3) is the reference Wavetable source: `.fxp` files contain
+  XML scene data, mapped to table position/warp/detune/drive, filter type and
+  cutoff (440 Hz · 2^(v/12)), resonance, filter env and both ADSRs (log2 seconds).
 - Attribution is preserved in `LoomPreset.source` and shown in the browser.
-- Unison voices, cross-mod, step sequencer, LFO routing and effects are not
-  mapped (documented in `PRESET_FORMAT.md`).
+- Unison voices, cross-mod, step sequencer, LFO routing, exact wavetables and
+  effects are not mapped (documented in `PRESET_FORMAT.md`).
 
 This feature is version-neutral: the bank and the import mapping are the parts
 to mirror in Loom Pi when its engine exposes the same parameter ids.

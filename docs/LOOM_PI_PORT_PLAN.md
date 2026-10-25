@@ -559,3 +559,48 @@ Not required on macOS:
 Also needs desktop parity work in `MidiManager` (`javax.sound.midi`): per-device channels, mute/ignore, and stable device IDs.
 
 ---
+
+## 10. Factory preset bank and portable preset format (cross-version)
+
+Added in v3.2.19. Design and schema live in [`PRESET_FORMAT.md`](PRESET_FORMAT.md).
+
+### 10.1 Factory bank
+
+20 patches each for **Subtractive**, **Wavetable**, **FM Drum** and **Analog
+Drum** (80 total), grouped by genre-neutral categories: Bass, Lead, Pad, Keys,
+Pluck, FX, Brass, Winds, and 20 drum kits per drum engine (Studio, 808, 909,
+Trap, House, Techno, Electro, Funk, Lo-Fi, Minimal, Industrial, Vinyl, with
+tight/long/hard variants).
+
+- Authored in `presets/FactoryPresets.kt`; the cross-version JSON export is
+  committed as `docs/factory-presets.json`.
+- Applied by resetting the engine, setting the parameter map, applying
+  `filterMode`, and loading the named wavetable (with a safe fallback).
+- Browser: **Parameters → PRESETS**, with category filters and one-tap auditioning.
+
+### 10.2 Portable presets
+
+- New `.loom.json` format (`schema: 1`) with normalized parameter ids, engine
+  key, category, description, optional filter mode and wavetable.
+- **EXPORT** writes the current track; **IMPORT** reads it back. Legacy `.gbp`
+  user presets continue to work through LOAD/SAVE.
+- The format is deliberately engine-id based so Loom Pi (C++) and other Loom
+  versions can consume the same files with a small translation layer.
+
+### 10.3 External import: Helm
+
+- **Helm** (GPLv3; factory patches CC-BY 4.0) is the reference open-source synth
+  for both engines: its `.helm` files are JSON, and its 2-osc + sub + noise +
+  filter + envelope architecture maps closely to Loom Subtractive.
+- Import mapping covers oscillator shapes/levels/pitch, sub/noise, cutoff
+  (MIDI note → Hz → Loom norm), resonance, filter env, ADSRs and glide.
+- Wavetable imports map the oscillator shape to table position and use the
+  `Basic` table (Helm's wavetables are not bundled).
+- Attribution is preserved in `LoomPreset.source` and shown in the browser.
+- Unison voices, cross-mod, step sequencer, LFO routing and effects are not
+  mapped (documented in `PRESET_FORMAT.md`).
+
+This feature is version-neutral: the bank and the import mapping are the parts
+to mirror in Loom Pi when its engine exposes the same parameter ids.
+
+---

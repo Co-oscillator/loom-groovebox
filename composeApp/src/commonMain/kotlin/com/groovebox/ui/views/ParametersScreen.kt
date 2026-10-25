@@ -88,6 +88,8 @@ fun ParametersScreen(viewModel: com.groovebox.GrooveboxViewModel, trackIndex: In
     if (trackIndex < 0 || trackIndex >= state.tracks.size) return
     val track = state.tracks[trackIndex]
     
+    var showPresetBrowser by remember { mutableStateOf(false) }
+
     // Auto-refresh mechanism for visualizers (like Grain playheads)
     var refreshTicker by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
@@ -261,14 +263,19 @@ fun ParametersScreen(viewModel: com.groovebox.GrooveboxViewModel, trackIndex: In
                 Column(horizontalAlignment = Alignment.End) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                          Button(onClick = { showPresetLoad = true }, 
-                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(70.dp, 42.dp), 
+                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(52.dp, 42.dp), 
                             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
-                            shape = RoundedCornerShape(4.dp)) { Text("LOAD", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                            shape = RoundedCornerShape(4.dp)) { Text("LOAD", fontSize = 9.sp, fontWeight = FontWeight.Bold) }
                             
                          Button(onClick = { showPresetSave = true }, 
-                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(70.dp, 42.dp),
+                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(52.dp, 42.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
-                            shape = RoundedCornerShape(4.dp)) { Text("SAVE", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                            shape = RoundedCornerShape(4.dp)) { Text("SAVE", fontSize = 9.sp, fontWeight = FontWeight.Bold) }
+
+                         Button(onClick = { showPresetBrowser = true },
+                            contentPadding = PaddingValues(0.dp), modifier = Modifier.size(68.dp, 42.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20), contentColor = Color(0xFFB9F6CA)),
+                            shape = RoundedCornerShape(4.dp)) { Text("PRESETS", fontSize = 9.sp, fontWeight = FontWeight.Bold) }
                     }
                 }
 
@@ -354,6 +361,16 @@ fun ParametersScreen(viewModel: com.groovebox.GrooveboxViewModel, trackIndex: In
         if (state.midiLearnActive) {
             Spacer(modifier = Modifier.height(16.dp))
             MidiParameters(state, trackIndex, onStateChange, nativeLib)
+        }
+
+        if (showPresetBrowser) {
+            PresetBrowserDialog(
+                state = state,
+                trackIndex = trackIndex,
+                nativeLib = nativeLib,
+                onStateChange = onStateChange,
+                onDismiss = { showPresetBrowser = false }
+            )
         }
     }
 }
@@ -1563,8 +1580,8 @@ fun WavetableParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (
                     Knob("Glide", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 34.dp)
                 }
                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Knob("Bits", 0.0f, 468, state, onStateChange, nativeLib, knobSize = 34.dp)
-                    Knob("Srate", 0.0f, 469, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("Bits", 0.0f, 475, state, onStateChange, nativeLib, knobSize = 34.dp)
+                    Knob("Srate", 0.0f, 476, state, onStateChange, nativeLib, knobSize = 34.dp)
                 }
             }
 

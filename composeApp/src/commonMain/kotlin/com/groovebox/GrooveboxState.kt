@@ -334,6 +334,7 @@ data class GrooveboxState(
     val gridMode: GridMode = GridMode.GRID_4X4,
     val uiLayoutMode: Int = 0, // 0=Auto, 1=Phone, 2=Tablet
     val showCpuMonitor: Boolean = true, // Toggles performance overlay
+    val performanceProfile: Int = 0, // 0 = High, 1 = Balanced, 2 = Low
     val isPerformanceMode: Boolean = false, // Toggles visual touch cues
     val isKeyboardModeEnabled: Boolean = false, // Toggle for Android physical keyboard
     val cpuLoad: Float = 0f,

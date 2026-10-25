@@ -83,7 +83,7 @@ fun MainScreen(
                         viewModel.pullWaveform(selectedTrackIdx)
                     }
                     
-                    kotlinx.coroutines.delay(32)
+                    kotlinx.coroutines.delay(if (viewModel.state.performanceProfile >= 2) 64L else 32L)
                 }
             }
             Surface(color = Color.Black) {

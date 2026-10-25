@@ -208,6 +208,9 @@ public:
   // receive track sends and do not duck the dry signal.
   void setFxEnabled(int fxIndex, bool enabled);
   bool isFxEnabled(int fxIndex) const;
+  // Performance profile: 0 = High, 1 = Balanced, 2 = Low.
+  // Controls per-track voice cap, modulation control rate and idle FX gating.
+  void setPerformanceProfile(int profile);
 
   // Global Transpose
   void setTrackTranspose(int trackIndex, int semitones);
@@ -577,6 +580,12 @@ public:
   std::atomic<uint32_t> mFxEnabledMask{0x3FFFF};
   // Per-bus fade gain used when toggling (audio thread only).
   float mFxFade[18] = {};
+  // Performance profile settings.
+  std::atomic<int> mMaxVoicesPerTrack{16};
+  int mModDecimation = 1;    // Apply modulation routing every N blocks
+  int mModBlockCounter = 0;  // Audio thread only
+  bool mIdleGateEnabled = false;
+  int mIdleBlocks = 0;       // Consecutive silent blocks (audio thread only)
   // Feedback buffers for backward-chaining effects (1-sample latency)
   float mFxFeedbacksL[18] = {0.0f};
   float mFxFeedbacksR[18] = {0.0f};

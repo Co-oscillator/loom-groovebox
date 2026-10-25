@@ -74,6 +74,7 @@ actual class NativeLib {
     actual fun setMacroSource(macroIndex: Int, sourceType: Int, sourceIndex: Int, sourceTrackIndex: Int) = nSetMacroSource(macroIndex, sourceType, sourceIndex, sourceTrackIndex)
     actual fun setFxChain(sourceFx: Int, destFx: Int) = nSetFxChain(sourceFx, destFx)
     actual fun setFxEnabled(fxIndex: Int, enabled: Boolean) = nSetFxEnabled(fxIndex, enabled)
+    actual fun setPerformanceProfile(profile: Int) = nSetPerformanceProfile(profile)
     actual fun fetchMidiEvents(): IntArray = nFetchMidiEvents()
     actual fun fetchEngineEvents(): IntArray = nFetchEngineEvents()
     private var mAppDataDir: String = ""
@@ -188,6 +189,7 @@ actual class NativeLib {
     private external fun nSetMacroSource(macroIndex: Int, sourceType: Int, sourceIndex: Int, sourceTrackIndex: Int)
     private external fun nSetFxChain(sourceFx: Int, destFx: Int)
     private external fun nSetFxEnabled(fxIndex: Int, enabled: Boolean)
+    private external fun nSetPerformanceProfile(profile: Int)
     private external fun nFetchMidiEvents(): IntArray
     private external fun nFetchEngineEvents(): IntArray
     private external fun nSetAppDataDir(path: String)

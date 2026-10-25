@@ -499,7 +499,7 @@ fun PadGrid(
         LaunchedEffect(state.selectedTrackIndex, state.isPlaying) {
             while(true) {
                 activeNoteMask = nativeLib.getActiveNoteMask(state.selectedTrackIndex)
-                kotlinx.coroutines.delay(32)
+                kotlinx.coroutines.delay(if (latestState.performanceProfile >= 2) 64L else 32L)
             }
         }
 

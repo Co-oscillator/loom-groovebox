@@ -362,7 +362,7 @@ Ranked by value-to-effort for Loom:
 |---|---|---|---|---|
 | **0. Prep** | Delete/mark `app/src/main/cpp` duplicate; extract `PlayingPad` target-track/mod params; add settings schema version | Low | Prevents engine drift |
 | **1. Arp clone** | `copyFrom`, `copyArpeggiator`, JNI, Kotlin state sync, "Copy To" UI with **Copy settings** and **Clone live** | Low | Independently shippable, immediate live-performance value |
-| **1b. CPU budget** | Finish track disable, add FX enable mask + UI, performance profile, verify CPU drops | Medium | **Done** for track disable + FX mask (§8.5); High/Balanced/Low profile still open |
+| **1b. CPU budget** | Finish track disable, FX enable mask + UI, performance profile, verify CPU drops | Medium | **Done** (§8.5): track disable, FX mask, High/Balanced/Low profile, idle gate, UI poll scaling |
 | **2. MIDI devices** | Device registry, per-device config UI, hardware presets, persistence, routing filters | Medium | Touches both platform MIDI implementations |
 | **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | Does not require engine changes |
 | **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | Unlocks true multitouch expression; needs audio-thread care |
@@ -489,16 +489,35 @@ Expected saving: reverb, delay, chorus, EQ5, tape echo and the filter pedals are
 - UI: per-pedal power dot (tap to bypass) in the FX screen, with a `BYPASS` label and dimmed controls. Settings → Performance lists all 18 buses and 8 tracks as chips, with counts plus **Bypass Unused** / **Enable All** actions. Bypass Unused is conservative: it only disables buses that no track sends to and that no other FX routes into.
 - `fxEnabled` persists with the project and is re-applied on load by `syncNativeState()`. Older projects default to all-on.
 
+**Performance profile (High / Balanced / Low)**
+
+Settings → Performance now has a three-way profile. It is persisted with the project and pushed on load:
+
+| Profile | Voices per track | Modulation rate | Idle FX gate | UI polling |
+|---|---|---|---|---|
+| High (default) | 16 | every block | off | 32 ms |
+| Balanced | 8 | every block | after ~4 s of silence | 32 ms |
+| Low | 4 | every other block | after ~4 s of silence | 64 ms |
+
+- The voice cap reuses the existing tracking-slot allocator and steals the active voice with the least time remaining.
+- Fixed a voice-stealing bug: the steal pass used to pick inactive slots (their `durationRemaining` is 0), which would have made the cap ineffective and could leak voice counts. It now only steals active voices.
+- Fixed the silence fast-path: deactivating a track reset `mSilenceFrames` to 0, so `!isActive && mSilenceFrames > 2400` was never true and the skip never engaged. The counter now stays above the threshold; a trigger resets it and wakes the track.
+- The idle gate checks transport, input need, active tracks, held notes and rendered tracks. It does not engage while playing or while a note is held.
+
 **Measured impact (macOS, synthetic 8-track patch sending to 10 buses, 6000 blocks ≈ 32 s of audio)**
 
 | Configuration | Render time | Relative |
 |---|---|---|
-| 8 tracks, 18 FX on | 2292 ms | 100% |
-| 8 tracks, FX all off | 320 ms | 14% |
-| 4 tracks, FX off | 162 ms | 7% |
-| 0 tracks, FX off | 6 ms | 0.2% |
+| 8 tracks, 18 FX on | 2517 ms | 100% |
+| 8 tracks, FX all off | 328 ms | 13% |
+| 4 tracks, FX off | 167 ms | 7% |
+| High, 16-note chords on every track | 7663 ms | 100% |
+| Low, same chords (4 voices/track) | 3560 ms | 46% |
+| Idle, High profile | 2208 ms | 100% |
+| Idle, Low/Balanced profile (gate on) | 6 ms | 0.3% |
 
-FX processing dominates the synthetic patch (~86% of render time), and synthesis scales near-linearly with track count (4 tracks ≈ 50% of 8). Real-project savings depend on how many buses are actually used, which is why the mask defaults to all-on and is user-driven.
+FX processing dominates the synthetic patch (~87% of render time), synthesis scales near-linearly with track count and polyphony, and idle FX gating removes essentially all render cost when the app is silent. Real-project savings depend on how many buses and voices are actually used, which is why the mask defaults to all-on and the profile defaults to High.
+
 
 - Disabling four tracks produces a measurable CPU drop.
 - Disabling unused FX produces a measurable CPU drop with no clicks or stuck tails.

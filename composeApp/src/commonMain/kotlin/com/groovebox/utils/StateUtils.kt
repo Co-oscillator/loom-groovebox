@@ -263,6 +263,7 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
         gridMode = (state.gridMode as Any?) as? com.groovebox.GridMode ?: com.groovebox.GridMode.GRID_4X4,
         uiLayoutMode = (state.uiLayoutMode as Any?) as? Int ?: 0,
         showCpuMonitor = (state.showCpuMonitor as Any?) as? Boolean ?: true,
+        performanceProfile = (((state.performanceProfile as Any?) as? Int) ?: 0).coerceIn(0, 2),
         isPerformanceMode = (state.isPerformanceMode as Any?) as? Boolean ?: false,
         isKeyboardModeEnabled = (state.isKeyboardModeEnabled as Any?) as? Boolean ?: false,
         cpuLoad = (state.cpuLoad as Any?) as? Float ?: 0f,
@@ -411,6 +412,9 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
     for (fxIdx in 0 until 18) {
         nativeLib.setFxEnabled(fxIdx, fxEnabled.getOrNull(fxIdx) ?: true)
     }
+
+    // 6c. Performance profile
+    nativeLib.setPerformanceProfile(state.performanceProfile.coerceIn(0, 2))
 
     // 7. Sidechain
     nativeLib.setSidechainConfig(state.sidechainSourceTrack, state.sidechainSourceDrumIdx)

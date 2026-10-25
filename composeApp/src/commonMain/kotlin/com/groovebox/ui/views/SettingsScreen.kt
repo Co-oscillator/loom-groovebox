@@ -522,6 +522,43 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
             border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
+                Text("Performance Profile", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("HIGH", "BALANCED", "LOW").forEachIndexed { idx, label ->
+                        val selected = state.performanceProfile == idx
+                        OutlinedButton(
+                            onClick = {
+                                nativeLib.setPerformanceProfile(idx)
+                                onStateChange(state.copy(performanceProfile = idx))
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (selected) Color(0xFF4CAF50).copy(alpha = 0.25f) else Color.Transparent,
+                                contentColor = if (selected) Color(0xFF4CAF50) else Color.Gray
+                            ),
+                            border = BorderStroke(1.dp, if (selected) Color(0xFF4CAF50) else Color.Gray.copy(alpha = 0.5f))
+                        ) {
+                            Text(label, fontSize = 11.sp, maxLines = 1)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    when (state.performanceProfile) {
+                        1 -> "8 voices per track; FX processing pauses after ~4 s of silence."
+                        2 -> "4 voices per track, modulation every other block, idle FX pause, slower UI polling."
+                        else -> "Full 16-voice polyphony, per-block modulation, FX always processed."
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Active FX Buses", style = MaterialTheme.typography.labelMedium, color = Color.White)

@@ -518,6 +518,9 @@ Settings → Performance now has a three-way profile. It is persisted with the p
 
 FX processing dominates the synthetic patch (~87% of render time), synthesis scales near-linearly with track count and polyphony, and idle FX gating removes essentially all render cost when the app is silent. Real-project savings depend on how many buses and voices are actually used, which is why the mask defaults to all-on and the profile defaults to High.
 
+Remaining from §8.3: user-selectable sample rate / buffer size (platform-dependent; Android's Oboe path would need a host-level config surface).
+
+
 
 - Disabling four tracks produces a measurable CPU drop.
 - Disabling unused FX produces a measurable CPU drop with no clicks or stuck tails.

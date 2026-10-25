@@ -1,3 +1,6 @@
 -ignorewarnings
 -dontwarn kotlinx.serialization.**
 -dontwarn kotlinx.datetime.**
+-keep class com.groovebox.presets.** { *; }
+-keepclassmembers class com.groovebox.presets.** { *; }
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault

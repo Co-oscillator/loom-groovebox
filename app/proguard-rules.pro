@@ -30,3 +30,9 @@
 -keepattributes *Annotation*
 -keepattributes Signature
 -keepattributes InnerClasses
+
+# Keep kotlinx.serialization generated serializers for portable presets
+-keep class com.groovebox.presets.** { *; }
+-keepclassmembers class com.groovebox.presets.** { *; }
+-keepclassmembers class kotlinx.serialization.json.** { *; }
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault

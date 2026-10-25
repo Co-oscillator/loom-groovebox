@@ -518,7 +518,8 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
     }
 
     if (track.engineType == 7) {
-      enqueueMidiEvent(0x90, track.midiOutChannel - 1, note, velocity);
+      enqueueMidiEvent(0x90, track.midiOutChannel - 1, note, velocity,
+                       trackIndex);
       track.isActive = true;
       return;
     }
@@ -1836,7 +1837,7 @@ void AudioEngineCore::releaseNoteLocked(int trackIndex, int note,
   if (trackIndex >= 0 && trackIndex < mTracks.size()) {
     Track &track = mTracks[trackIndex];
     if (track.engineType == 7) {
-      enqueueMidiEvent(0x80, track.midiOutChannel - 1, note, 0);
+      enqueueMidiEvent(0x80, track.midiOutChannel - 1, note, 0, trackIndex);
       track.isActive = false;
     } else {
       if (!isSequencerTrigger) {
@@ -3653,13 +3654,14 @@ int AudioEngineCore::fetchEngineEvents(int *outBuffer, int maxEvents) {
 }
 
 void AudioEngineCore::enqueueMidiEvent(int type, int channel, int data1,
-                                   int data2) {
+                                   int data2, int trackIndex) {
   std::lock_guard<std::mutex> lock(mMidiLock);
   MidiMessage msg;
   msg.type = type;
   msg.channel = channel;
   msg.data1 = data1;
   msg.data2 = data2;
+  msg.trackIndex = trackIndex;
   mMidiQueue.push_back(msg);
 }
 
@@ -3715,11 +3717,12 @@ int AudioEngineCore::fetchMidiEvents(int *outBuffer, int maxEvents) {
   while (!mMidiQueue.empty() && count < maxEvents) {
     MidiMessage msg = mMidiQueue.front();
     mMidiQueue.erase(mMidiQueue.begin());
-    int offset = count * 4;
+    int offset = count * 5;
     outBuffer[offset] = msg.type;
     outBuffer[offset + 1] = msg.channel;
     outBuffer[offset + 2] = msg.data1;
     outBuffer[offset + 3] = msg.data2;
+    outBuffer[offset + 4] = msg.trackIndex;
     count++;
   }
   return count;

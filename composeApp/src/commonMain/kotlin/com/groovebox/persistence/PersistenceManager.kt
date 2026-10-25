@@ -24,4 +24,8 @@ expect object PersistenceManager {
     fun copySoundFontsToFilesDir()
     fun copyDefaultsToFilesDir()
     fun migrateToExternalStorage()
+
+    // Global (non-project) MIDI device configuration
+    fun saveMidiSettings(settings: com.groovebox.midi.MidiSettings)
+    fun loadMidiSettings(): com.groovebox.midi.MidiSettings?
 }

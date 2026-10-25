@@ -12,10 +12,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -664,6 +667,151 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
             }
         }
 
+        // ====== 2d. MIDI DEVICES ======
+        if (midiManager != null) {
+            val devices = midiManager.devices.value
+            val activity = midiManager.deviceActivity.value
+            val midiSettings = com.groovebox.midi.MidiConfigStore.settings
+            var showSavePreset by remember { mutableStateOf(false) }
+            var presetName by remember { mutableStateOf("") }
+            var showPresetMenu by remember { mutableStateOf(false) }
+
+            Text("MIDI Devices", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("${devices.size} connected", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                            Text(
+                                "Per-device routing; saved globally for this machine",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray
+                            )
+                        }
+                        TextButton(onClick = { midiManager.refreshDevices() }) {
+                            Text("REFRESH", fontSize = 11.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (devices.isEmpty()) {
+                        Text(
+                            "No MIDI devices detected. Connect a controller and tap Refresh.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    } else {
+                        devices.forEachIndexed { deviceIdx, device ->
+                            val config = midiSettings.configs.firstOrNull { it.deviceId == device.id }
+                                ?: com.groovebox.midi.MidiDeviceConfig(device.id)
+                            MidiDeviceRow(
+                                device = device,
+                                config = config,
+                                lastActivity = activity[device.id],
+                                onChange = { com.groovebox.midi.MidiConfigStore.updateDevice(it) }
+                            )
+                            if (deviceIdx < devices.lastIndex) {
+                                Divider(color = Color.Gray.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 2.dp))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("HARDWARE PRESETS", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                    Text(
+                        "Save the current device list and channels as a named setup (Home, Live, ...)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedButton(
+                                onClick = { showPresetMenu = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    midiSettings.activePreset ?: "LOAD PRESET",
+                                    fontSize = 11.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            DropdownMenu(expanded = showPresetMenu, onDismissRequest = { showPresetMenu = false }) {
+                                if (midiSettings.presets.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("No presets saved") },
+                                        onClick = { showPresetMenu = false }
+                                    )
+                                } else {
+                                    midiSettings.presets.forEach { preset ->
+                                        DropdownMenuItem(
+                                            text = { Text(preset.name) },
+                                            onClick = {
+                                                com.groovebox.midi.MidiConfigStore.loadPreset(preset.name)
+                                                showPresetMenu = false
+                                            },
+                                            trailingIcon = {
+                                                IconButton(
+                                                    onClick = {
+                                                        com.groovebox.midi.MidiConfigStore.deletePreset(preset.name)
+                                                    }
+                                                ) {
+                                                    Icon(Icons.Default.Delete, contentDescription = "Delete preset", tint = Color.Gray)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { showSavePreset = true },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Text("SAVE AS", fontSize = 11.sp, maxLines = 1)
+                        }
+                    }
+                }
+            }
+
+            if (showSavePreset) {
+                AlertDialog(
+                    onDismissRequest = { showSavePreset = false },
+                    title = { Text("Save MIDI Preset") },
+                    text = {
+                        OutlinedTextField(
+                            value = presetName,
+                            onValueChange = { presetName = it },
+                            label = { Text("Name (e.g. Home, Live)") },
+                            singleLine = true
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                if (presetName.isNotBlank()) {
+                                    com.groovebox.midi.MidiConfigStore.savePreset(presetName)
+                                }
+                                presetName = ""
+                                showSavePreset = false
+                            }
+                        ) { Text("Save") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSavePreset = false }) { Text("Cancel") }
+                    }
+                )
+            }
+        }
+
         // ====== 3. MIDI INPUT ======
 
         // MIDI Input Channels
@@ -721,6 +869,46 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                                             }))
                                             expanded = false
                                         }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Per-track source / destination device filters
+                    if (midiManager != null) {
+                        val inputDevices = midiManager.devices.value.filter { it.isInput }
+                        val outputDevices = midiManager.devices.value.filter { it.isOutput }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("IN", color = Color.Gray, fontSize = 10.sp)
+                            TrackMidiDevicePicker(
+                                devices = inputDevices,
+                                selectedId = track.midiInDeviceId,
+                                anyLabel = "Any input",
+                                modifier = Modifier.weight(1f)
+                            ) { id ->
+                                onStateChange(
+                                    state.copy(tracks = state.tracks.mapIndexed { idx, t ->
+                                        if (idx == i) t.copy(midiInDeviceId = id) else t
+                                    })
+                                )
+                            }
+                            if (track.engineType == com.groovebox.EngineType.MIDI) {
+                                Text("OUT", color = Color.Gray, fontSize = 10.sp)
+                                TrackMidiDevicePicker(
+                                    devices = outputDevices,
+                                    selectedId = track.midiOutDeviceId,
+                                    anyLabel = "All outputs",
+                                    modifier = Modifier.weight(1f)
+                                ) { id ->
+                                    onStateChange(
+                                        state.copy(tracks = state.tracks.mapIndexed { idx, t ->
+                                            if (idx == i) t.copy(midiOutDeviceId = id) else t
+                                        })
                                     )
                                 }
                             }
@@ -940,6 +1128,191 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
 
         if (showCreditsDialog) {
             SoundFontCreditsDialog(onDismiss = { showCreditsDialog = false })
+        }
+    }
+}
+
+@Composable
+private fun MidiBadge(text: String, color: Color) {
+    Text(
+        text = text,
+        color = color,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.15f), RoundedCornerShape(3.dp))
+            .border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(3.dp))
+            .padding(horizontal = 4.dp, vertical = 1.dp)
+    )
+}
+
+@Composable
+private fun MidiChannelChip(label: String, value: Int, onChange: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val valueText = when (value) {
+        -1 -> "ALL"
+        0 -> "OFF"
+        else -> "CH $value"
+    }
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.height(30.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp)
+        ) {
+            Text("$label $valueText", fontSize = 10.sp, maxLines = 1)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("All channels") },
+                onClick = { onChange(-1); expanded = false }
+            )
+            DropdownMenuItem(
+                text = { Text("Off") },
+                onClick = { onChange(0); expanded = false }
+            )
+            (1..16).forEach { ch ->
+                DropdownMenuItem(
+                    text = { Text("Channel $ch") },
+                    onClick = { onChange(ch); expanded = false }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MidiToggleChip(label: String, selected: Boolean, onToggle: (Boolean) -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = { onToggle(!selected) },
+        label = { Text(label, fontSize = 10.sp) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Color(0xFFFF7043).copy(alpha = 0.25f),
+            selectedLabelColor = Color(0xFFFF7043),
+            labelColor = Color.Gray
+        )
+    )
+}
+
+@Composable
+private fun MidiDeviceRow(
+    device: com.groovebox.midi.MidiDeviceInfo,
+    config: com.groovebox.midi.MidiDeviceConfig,
+    lastActivity: Long?,
+    onChange: (com.groovebox.midi.MidiDeviceConfig) -> Unit
+) {
+    val isActive = lastActivity != null && System.currentTimeMillis() - lastActivity < 1500
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(if (isActive) Color.Green else Color.DarkGray, CircleShape)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = device.name,
+                color = if (config.enabled) Color.White else Color.Gray,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            if (device.isInput) {
+                MidiBadge("IN", Color(0xFF00BCD4))
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            if (device.isOutput) {
+                MidiBadge("OUT", Color(0xFF8BC34A))
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            Switch(
+                checked = config.enabled,
+                onCheckedChange = { onChange(config.copy(enabled = it)) }
+            )
+        }
+
+        if (config.enabled) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (device.isOutput) {
+                    MidiChannelChip("SEND", config.sendChannel) {
+                        onChange(config.copy(sendChannel = it))
+                    }
+                }
+                if (device.isInput) {
+                    MidiChannelChip("RECV", config.receiveChannel) {
+                        onChange(config.copy(receiveChannel = it))
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (device.isOutput) {
+                    MidiToggleChip("Mute Out", config.muteOutgoing) {
+                        onChange(config.copy(muteOutgoing = it))
+                    }
+                }
+                if (device.isInput) {
+                    MidiToggleChip("Ignore In", config.ignoreIncoming) {
+                        onChange(config.copy(ignoreIncoming = it))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackMidiDevicePicker(
+    devices: List<com.groovebox.midi.MidiDeviceInfo>,
+    selectedId: String?,
+    anyLabel: String,
+    modifier: Modifier = Modifier,
+    onSelect: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedName = devices.firstOrNull { it.id == selectedId }?.name
+    val label = when {
+        selectedId == null -> anyLabel
+        selectedName == null -> "Missing device"
+        selectedName.length > 14 -> selectedName.take(13) + "…"
+        else -> selectedName
+    }
+
+    Box(modifier = modifier) {
+        Surface(
+            onClick = { expanded = true },
+            color = Color.DarkGray,
+            shape = RoundedCornerShape(4.dp),
+            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp).fillMaxWidth(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selectedId == null) Color.Gray else Color.Cyan,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(anyLabel) },
+                onClick = { onSelect(null); expanded = false }
+            )
+            devices.forEach { device ->
+                DropdownMenuItem(
+                    text = { Text(device.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = { onSelect(device.id); expanded = false }
+                )
+            }
         }
     }
 }

@@ -125,4 +125,23 @@ actual object PersistenceManager {
     actual fun copySoundFontsToFilesDir() { /* TODO: Copy from JAR resources */ }
     actual fun copyDefaultsToFilesDir() { /* TODO: Copy from JAR resources */ }
     actual fun migrateToExternalStorage() {}
+
+    private fun getMidiSettingsFile(): File = File(getLoomFolder(), "midi-settings.gbs")
+
+    actual fun saveMidiSettings(settings: com.groovebox.midi.MidiSettings) {
+        try {
+            ObjectOutputStream(FileOutputStream(getMidiSettingsFile())).use { it.writeObject(settings) }
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    actual fun loadMidiSettings(): com.groovebox.midi.MidiSettings? {
+        try {
+            val file = getMidiSettingsFile()
+            if (!file.exists()) return null
+            ObjectInputStream(FileInputStream(file)).use {
+                return it.readObject() as? com.groovebox.midi.MidiSettings
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+        return null
+    }
 }

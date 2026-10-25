@@ -35,7 +35,11 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
         println("MidiRouter: $msg")
     }
 
-    fun processMidiMessage(message: ByteArray, state: com.groovebox.GrooveboxState) {
+    fun processMidiMessage(
+        message: ByteArray,
+        state: com.groovebox.GrooveboxState,
+        sourceDeviceId: String? = null
+    ) {
         if (message.isEmpty()) return
         
         var i = 0
@@ -64,12 +68,16 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
             val actualLen = if (msgLen <= remaining) msgLen else remaining
             val currentMsg = message.copyOfRange(i, i + actualLen)
             
-            processSingleMessage(currentMsg, state)
+            processSingleMessage(currentMsg, state, sourceDeviceId)
             i += actualLen
         }
     }
 
-    private fun processSingleMessage(message: ByteArray, state: com.groovebox.GrooveboxState) {
+    private fun processSingleMessage(
+        message: ByteArray,
+        state: com.groovebox.GrooveboxState,
+        sourceDeviceId: String?
+    ) {
         val status = message[0].toInt() and 0xFF
         val msgType = status and 0xF0
         val midiChan = (status and 0x0F) + 1
@@ -91,6 +99,12 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
                 // --- MIDI TRIGGER LOGIC ---
                 var shouldTrigger = (track.midiInChannel == 17 && trackIdx == state.selectedTrackIndex) || 
                                    (track.midiInChannel in 1..16 && track.midiInChannel == midiChan)
+
+                // Optional per-track source-device filter (split keyboards).
+                if (shouldTrigger && sourceDeviceId != null &&
+                    track.midiInDeviceId != null && track.midiInDeviceId != sourceDeviceId) {
+                    shouldTrigger = false
+                }
 
                 // STUCK NOTE SAFETY
                 if (!shouldTrigger && (msgType == 0x80 || (msgType == 0x90 && data2 == 0))) {

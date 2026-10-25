@@ -217,10 +217,11 @@ public:
 
   // MIDI Mode
   struct MidiMessage {
-    int type;    // 0x90 (NoteOn), 0x80 (NoteOff)
-    int channel; // Track Index (0-7)
-    int data1;   // Note
-    int data2;   // Velocity
+    int type;      // 0x90 (NoteOn), 0x80 (NoteOff)
+    int channel;   // MIDI channel (0-15)
+    int data1;     // Note
+    int data2;     // Velocity
+    int trackIndex = -1; // Source track for per-track output routing
   };
 
   void restorePresets();
@@ -229,7 +230,8 @@ public:
   int fetchMidiEvents(int *outBuffer, int maxEvents);
 
 private:
-  void enqueueMidiEvent(int type, int channel, int data1, int data2);
+  void enqueueMidiEvent(int type, int channel, int data1, int data2,
+                        int trackIndex = -1);
   std::vector<MidiMessage> mMidiQueue;
   std::mutex mMidiLock;
 

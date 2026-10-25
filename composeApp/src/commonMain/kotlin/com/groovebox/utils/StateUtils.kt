@@ -107,6 +107,8 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
             fxMix = (track.fxMix as Any?) as? List<Float> ?: List(18) { 0.0f },
             midiInChannel = (track.midiInChannel as Any?) as? Int ?: 17,
             midiOutChannel = (track.midiOutChannel as Any?) as? Int ?: 1,
+            midiInDeviceId = (track.midiInDeviceId as Any?) as? String,
+            midiOutDeviceId = (track.midiOutDeviceId as Any?) as? String,
             lastSamplePath = (track.lastSamplePath as Any?) as? String ?: "",
             activeWavetableName = (track.activeWavetableName as Any?) as? String ?: "Basic",
             filterMode = (track.filterMode as Any?) as? Int ?: 0,

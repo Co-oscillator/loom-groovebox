@@ -366,8 +366,64 @@ class GrooveboxViewModel(
         }
     }
 
-    fun processMidiMessage(data: ByteArray) {
-        midiRouter.processMidiMessage(data, state)
+    fun processMidiMessage(data: ByteArray, sourceDeviceId: String? = null) {
+        midiRouter.processMidiMessage(data, state, sourceDeviceId)
+    }
+
+    // --- MIDI output pump -----------------------------------------------
+    // The native sequencer enqueues MIDI note events; this thread drains them
+    // and routes each to its track's chosen output device (or all devices).
+    @Volatile
+    private var midiManagerRef: com.groovebox.midi.MidiManager? = null
+
+    @Volatile
+    private var midiPumpStarted = false
+
+    fun attachMidiManager(manager: com.groovebox.midi.MidiManager) {
+        midiManagerRef = manager
+        if (midiPumpStarted) return
+        midiPumpStarted = true
+        Thread({
+            while (true) {
+                try {
+                    pumpMidiOut()
+                } catch (e: Exception) {
+                    // Never let output routing take down the app.
+                }
+                try {
+                    Thread.sleep(5)
+                } catch (e: InterruptedException) {
+                    return@Thread
+                }
+            }
+        }, "LoomMidiOutPump").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    private fun pumpMidiOut() {
+        val manager = midiManagerRef ?: return
+        val events = nativeLib.fetchMidiEvents()
+        if (events.isEmpty()) return
+
+        val tracks = state.tracks
+        var i = 0
+        while (i + 4 < events.size) {
+            val type = events[i]
+            val channel = events[i + 1] and 0x0F
+            val data1 = events[i + 2] and 0x7F
+            val data2 = events[i + 3] and 0x7F
+            val trackIdx = events[i + 4]
+            i += 5
+
+            val deviceId = tracks.getOrNull(trackIdx)?.midiOutDeviceId
+            val status = (type and 0xF0) or channel
+            manager.sendMidiTo(
+                deviceId,
+                byteArrayOf(status.toByte(), data1.toByte(), data2.toByte())
+            )
+        }
     }
 
     private fun handleMidiCommand(command: MidiCommand) {

@@ -155,4 +155,23 @@ actual object PersistenceManager {
     actual fun migrateToExternalStorage() {
         // Implementation from original file... (simplified for now)
     }
+
+    private fun getMidiSettingsFile(): File = File(getLoomFolder(), "midi-settings.gbs")
+
+    actual fun saveMidiSettings(settings: com.groovebox.midi.MidiSettings) {
+        try {
+            ObjectOutputStream(FileOutputStream(getMidiSettingsFile())).use { it.writeObject(settings) }
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    actual fun loadMidiSettings(): com.groovebox.midi.MidiSettings? {
+        try {
+            val file = getMidiSettingsFile()
+            if (!file.exists()) return null
+            ObjectInputStream(FileInputStream(file)).use {
+                return it.readObject() as? com.groovebox.midi.MidiSettings
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+        return null
+    }
 }

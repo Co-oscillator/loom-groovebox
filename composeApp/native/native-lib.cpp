@@ -673,15 +673,15 @@ Java_com_groovebox_NativeLib_nFetchMidiEvents(JNIEnv *env, jobject thiz) {
     return env->NewIntArray(0);
 
   const int MAX_EVENTS = 64;
-  int buffer[MAX_EVENTS * 4]; // type, ch, d1, d2
+  int buffer[MAX_EVENTS * 5]; // type, ch, d1, d2, trackIndex
 
   int count = engine->getCore().fetchMidiEvents(buffer, MAX_EVENTS);
 
   if (count == 0)
     return env->NewIntArray(0);
 
-  jintArray result = env->NewIntArray(count * 4);
-  env->SetIntArrayRegion(result, 0, count * 4, buffer);
+  jintArray result = env->NewIntArray(count * 5);
+  env->SetIntArrayRegion(result, 0, count * 5, buffer);
   return result;
 }
 

@@ -177,6 +177,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         PersistenceManager.setContext(this)
+        com.groovebox.midi.MidiConfigStore.load()
         mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         
         // Prevent Tablet Idle Crash by keeping screen on
@@ -322,10 +323,11 @@ class MainActivity : ComponentActivity() {
                 // Init MIDI on Main thread (required by Android MIDI API for callbacks)
                 // but only AFTER the audio engine is ready so it doesn't race with IO init.
                 midiRouter = viewModel.midiRouter
-                midiManager = MidiManager(this@MainActivity) { message ->
-                    viewModel.processMidiMessage(message)
+                midiManager = MidiManager(this@MainActivity) { message, deviceId ->
+                    viewModel.processMidiMessage(message, deviceId)
                 }
                 viewModel.midiRouter.setMidiSender(midiManager::sendMidi)
+                viewModel.attachMidiManager(midiManager)
                 empledManager = EmpledManager(midiManager)
                 empledManager.sendHandshake()
             }

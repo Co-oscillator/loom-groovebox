@@ -63,6 +63,8 @@ data class TrackState(
     val fxMix: List<Float> = List(18) { 0.0f },
     val midiInChannel: Int = 17,
     val midiOutChannel: Int = 1,
+    val midiInDeviceId: String? = null,  // null = all input devices
+    val midiOutDeviceId: String? = null, // null = all output devices
     val lastSamplePath: String = "",
     val activeWavetableName: String = "Basic",
     val filterMode: Int = 0,

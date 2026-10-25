@@ -18,10 +18,12 @@ fun main() = application {
     val heldKeys = mutableSetOf<Key>()
     val nativeLib = NativeLib()
     val viewModel = GrooveboxViewModel(nativeLib)
-    val midiManager = com.groovebox.midi.MidiManager { data ->
-        viewModel.processMidiMessage(data)
+    com.groovebox.midi.MidiConfigStore.load()
+    val midiManager = com.groovebox.midi.MidiManager { data, deviceId ->
+        viewModel.processMidiMessage(data, deviceId)
     }
     viewModel.midiRouter.setMidiSender(midiManager::sendMidi)
+    viewModel.attachMidiManager(midiManager)
     val audioCapture = com.groovebox.DesktopAudioCapture()
 
     val windowState = rememberWindowState(

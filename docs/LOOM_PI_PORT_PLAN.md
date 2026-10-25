@@ -314,6 +314,21 @@ New **MIDI Devices** section in `SettingsScreen.kt`:
 
 Recommended ordering: per-device config + persistence first, then clock input, then aftertouch/pitch-bend routing (aftertouch becomes much more useful once per-voice modulation exists).
 
+#### 3.6 Status: device registry + presets implemented (v3.2.19)
+
+Shipped:
+
+- **Model** (`midi/MidiConfig.kt`): `MidiDeviceInfo` with stable IDs, `MidiDeviceConfig` (enabled, send/receive channel, mute-out, ignore-in), `MidiHardwarePreset`, `MidiSettings`.
+- **Registry**: both `MidiManager` actuals now keep a `deviceId -> ports` registry instead of flat lists, tag every inbound message with its source device id, and handle hotplug add/remove (desktop rescans every 3 s, Android uses the device callback). Stable IDs are derived from manufacturer/product/name/serial (Android) or name/vendor/version/description (desktop), never the enumeration index.
+- **Routing**: inbound messages are filtered by `ignoreIncoming` / `enabled` / `receiveChannel` before parsing; outbound sends apply `enabled` / `muteOutgoing` / `sendChannel` (channel remap, system messages untouched). `MidiRouter` also accepts a per-track `midiInDeviceId`, enabling two-keyboard splits; tracks with the MIDI engine have a `midiOutDeviceId`.
+- **Desktop output**: `sendMidi` on macOS was a no-op; it now enumerates receivers, opens them, and sends short/sysex messages. This closes the macOS "MIDI routing" item from §9.
+- **MIDI OUT engine**: the native sequencer already enqueued note events but nothing consumed them. `fetchMidiEvents` now carries the source track index (5 ints per event), and a background pump in `GrooveboxViewModel` routes events to the track's chosen device or all devices.
+- **Persistence**: device configs and presets are global (`<Loom folder>/midi-settings.gbs`, Java serialization like projects), loaded at startup, and never written into project files. The file carries a `schemaVersion` (currently 1) and is sanitized on load: invalid channels fall back to "All", duplicate device/preset ids are dropped, and a missing active preset is cleared. Track-level in/out device assignments stay in the project.
+- **UI** (`Settings → MIDI Devices`): enable switch, IN/OUT badges, activity dot, send/receive channel pickers, Mute Out / Ignore In chips, refresh, and named hardware presets with save/load/delete. The per-track MIDI rows gained source-device pickers (and a destination picker for MIDI tracks).
+
+Left for later phases: MIDI clock in/out, SPP and transport alignment (§3.5 / Phase 5). Note that a device's `sendChannel` applies to all output, including LED/EMP16 feedback.
+
+
 ---
 
 ## 4. Other Loom Pi features you may be forgetting
@@ -363,7 +378,7 @@ Ranked by value-to-effort for Loom:
 | **0. Prep** | Delete/mark `app/src/main/cpp` duplicate; extract `PlayingPad` target-track/mod params; add settings schema version | Low | Prevents engine drift |
 | **1. Arp clone** | `copyFrom`, `copyArpeggiator`, JNI, Kotlin state sync, "Copy To" UI with **Copy settings** and **Clone live** | Low | Independently shippable, immediate live-performance value |
 | **1b. CPU budget** | Finish track disable, FX enable mask + UI, performance profile, verify CPU drops | Medium | **Done** (§8.5): track disable, FX mask, High/Balanced/Low profile, idle gate, UI poll scaling |
-| **2. MIDI devices** | Device registry, per-device config UI, hardware presets, persistence, routing filters | Medium | Touches both platform MIDI implementations |
+| **2. MIDI devices** | Device registry, per-device config UI, hardware presets, persistence, routing filters | Medium | **Done** (§3.6); clock/transport deferred to Phase 5 |
 | **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | Does not require engine changes |
 | **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | Unlocks true multitouch expression; needs audio-thread care |
 | **5. MIDI expression** | Clock in/out, SPP, pitch-bend input, **aftertouch → pad mod** | Medium | Aftertouch depends on Phase 4 for full benefit |

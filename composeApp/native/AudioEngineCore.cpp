@@ -94,6 +94,7 @@ AudioEngineCore::AudioEngineCore() {
 
     mFxFeedbacksL[i] = 0.0f;
     mFxFeedbacksR[i] = 0.0f;
+    mFxFade[i] = 1.0f;
   }
 
   // Initialize Filter Pedals
@@ -510,6 +511,8 @@ void AudioEngineCore::triggerNoteLocked(int trackIndex, int note, int velocity,
                                     bool punch, bool isArpTrigger) {
   if (trackIndex >= 0 && trackIndex < (int)mTracks.size()) {
     Track &track = mTracks[trackIndex];
+    if (track.isDisabled)
+      return;
     if (!isSequencerTrigger) {
       LOGD("ManualTrigger T%d Note=%d Vel=%d", trackIndex, note, velocity);
     }
@@ -1275,11 +1278,23 @@ void AudioEngineCore::processCommands() {
       break;
     case AudioCommand::SET_TRACK_DISABLED:
       if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
-        mTracks[cmd.trackIndex].isDisabled = cmd.bValue;
+        Track &t = mTracks[cmd.trackIndex];
+        t.isDisabled = cmd.bValue;
         if (cmd.bValue) {
-           mTracks[cmd.trackIndex].isActive = false;
-           for (int v = 0; v < 8; ++v) {
-               mTracks[cmd.trackIndex].mActiveNotes[v].active = false;
+           t.isActive = false;
+           for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
+               if (t.mActiveNotes[v].active) {
+                   const int n = t.mActiveNotes[v].note;
+                   t.subtractiveEngine.releaseNote(n);
+                   t.fmEngine.releaseNote(n);
+                   t.samplerEngine.releaseNote(n);
+                   t.fmDrumEngine.releaseNote(n);
+                   t.granularEngine.releaseNote(n);
+                   t.wavetableEngine.releaseNote(n);
+                   t.analogDrumEngine.releaseNote(n);
+                   t.soundFontEngine.noteOff(n);
+                   t.mActiveNotes[v].active = false;
+               }
            }
         }
       }
@@ -2759,6 +2774,10 @@ void AudioEngineCore::setRouting(int destTrack, int sourceTrack, int source,
 void AudioEngineCore::applyModulations() {
   for (int t = 0; t < (int)mTracks.size(); ++t) {
     auto &track = mTracks[t];
+    // Disabled tracks produce no audio, so spending CPU on their modulation
+    // routing is pure waste.
+    if (track.isDisabled)
+      continue;
 
     // v3.0: Compact modulation tracking (replaces bitset<2500> scan)
     int currentModIds[32];
@@ -3520,6 +3539,23 @@ void AudioEngineCore::setFxChain(int sourceFx, int destFx) {
   mFxChainDest[sourceFx] = destFx;
 }
 
+void AudioEngineCore::setFxEnabled(int fxIndex, bool enabled) {
+  if (fxIndex < 0 || fxIndex >= 18)
+    return;
+  const uint32_t bit = 1u << fxIndex;
+  if (enabled) {
+    mFxEnabledMask.fetch_or(bit, std::memory_order_relaxed);
+  } else {
+    mFxEnabledMask.fetch_and(~bit, std::memory_order_relaxed);
+  }
+}
+
+bool AudioEngineCore::isFxEnabled(int fxIndex) const {
+  if (fxIndex < 0 || fxIndex >= 18)
+    return false;
+  return (mFxEnabledMask.load(std::memory_order_relaxed) & (1u << fxIndex)) != 0;
+}
+
 
 void AudioEngineCore::setFilterMode(int trackIndex, int mode) {
   if (trackIndex >= 0 && trackIndex < 8) {
@@ -3733,6 +3769,14 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
 
   float sampleRate = static_cast<float>(mSampleRate);
 
+  // Snapshot the FX enable mask once per block so a toggle cannot change
+  // behaviour halfway through a block.
+  const uint32_t fxEnabledMask =
+      mFxEnabledMask.load(std::memory_order_relaxed);
+  auto fxOn = [fxEnabledMask](int index) {
+    return (fxEnabledMask & (1u << index)) != 0;
+  };
+
   // --- Block Rate Control Updates ---
   for (int l = 0; l < 6; ++l) {
     mLfos[l].process(sampleRate, numFrames);
@@ -3899,7 +3943,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
         float mixAmt = track.fxMix[f].load(std::memory_order_relaxed);
         float wetAmount = sendAmt * mixAmt;
         
-        if (wetAmount > 0.001f) {
+        if (wetAmount > 0.001f && (fxEnabledMask & (1u << f))) {
           activeSends[activeSendCount] = wetAmount;
           activeSendIndices[activeSendCount] = f;
           activeSendCount++;
@@ -4047,8 +4091,14 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
     if (inputNeeded) mInputReadPtr += safeNumFrames;
 
   // --- PHASE 2: BLOCK FX PROCESSING ---
-  auto routeFxBlock = [this, safeNumFrames, &wetSampleL_arr, &wetSampleR_arr](int index, bool isDelta, float* outBufL, float* outBufR) {
+  auto routeFxBlock = [this, safeNumFrames, &wetSampleL_arr, &wetSampleR_arr, &fxOn](int index, bool isDelta, float* outBufL, float* outBufR) {
     int dest = mFxChainDest[index];
+    // Click-free bypass: ramp the wet contribution to zero over this block
+    // when the bus was just disabled (and back up when re-enabled).
+    const float fadeStart = mFxFade[index];
+    const float fadeTarget = fxOn(index) ? 1.0f : 0.0f;
+    const float fadeStep =
+        (fadeTarget - fadeStart) / (float)std::max(1, safeNumFrames - 1);
     
     for (int i = 0; i < safeNumFrames; ++i) {
       if (!std::isfinite(outBufL[i]) || !std::isfinite(outBufR[i])) {
@@ -4063,6 +4113,10 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
         outL = outBufL[i] * mFxMixLevels[index];
         outR = outBufR[i] * mFxMixLevels[index];
       }
+
+      const float fade = fadeStart + fadeStep * (float)i;
+      outL *= fade;
+      outR *= fade;
 
       if (dest >= 0 && dest < 18) {
         const int order[18] = {0, 1, 4, 5, 6, 7, 8, 9, 10, 2, 3, 11, 12, 15, 16, 13, 14, 17};
@@ -4082,10 +4136,11 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
         wetSampleR_arr[i] += outR;
       }
     }
+    mFxFade[index] = fadeTarget;
   };
 
   // FX 0: Overdrive
-  {
+  if (fxOn(0) || mFxFade[0] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for (int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[0][i]; tmpR[i] = mFxBusBlockR[0][i]; }
     mOverdriveFxL.processBlock(tmpL, safeNumFrames);
@@ -4094,7 +4149,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 1: Bitcrusher
-  {
+  if (fxOn(1) || mFxFade[1] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for (int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[1][i]; tmpR[i] = mFxBusBlockR[1][i]; }
     mBitcrusherFxL.processBlock(tmpL, safeNumFrames);
@@ -4103,7 +4158,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 9: HP LFO
-  {
+  if (fxOn(9) || mFxFade[9] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[9][i]; tmpR[i] = mFxBusBlockR[9][i]; }
     mHpLfoL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4113,7 +4168,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 10: LP LFO
-  {
+  if (fxOn(10) || mFxFade[10] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[10][i]; tmpR[i] = mFxBusBlockR[10][i]; }
     mLpLfoL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4123,7 +4178,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 2: Chorus
-  {
+  if (fxOn(2) || mFxFade[2] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[2][i]; tmpR[i] = mFxBusBlockR[2][i]; }
     mChorusFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4132,7 +4187,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 3: Phaser
-  {
+  if (fxOn(3) || mFxFade[3] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[3][i]; tmpR[i] = mFxBusBlockR[3][i]; }
     mPhaserFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4141,7 +4196,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 4: Tape Wobble
-  {
+  if (fxOn(4) || mFxFade[4] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[4][i]; tmpR[i] = mFxBusBlockR[4][i]; }
     mTapeWobbleFx.processBlockStereo(tmpL, tmpR, safeNumFrames, mSampleRate);
@@ -4149,46 +4204,60 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 5: Delay
-  {
+  if (fxOn(5) || mFxFade[5] > 0.0f) {
     float dL[1024], dR[1024];
     for(int i=0; i<safeNumFrames; ++i) { dL[i] = mFxBusBlockL[5][i]; dR[i] = mFxBusBlockR[5][i]; }
     mDelayFx.processBlockStereo(dL, dR, safeNumFrames, mSampleRate);
     int dest = mFxChainDest[5];
+    const float fadeStart = mFxFade[5];
+    const float fadeTarget = fxOn(5) ? 1.0f : 0.0f;
+    const float fadeStep =
+        (fadeTarget - fadeStart) / (float)std::max(1, safeNumFrames - 1);
     if (dest >= 0 && dest < 17) {
       for(int i=0; i<safeNumFrames; ++i) {
-        mFxBusBlockL[dest][i] += dL[i] * mFxMixLevels[5];
-        mFxBusBlockR[dest][i] += dR[i] * mFxMixLevels[5];
+        const float fade = fadeStart + fadeStep * (float)i;
+        mFxBusBlockL[dest][i] += dL[i] * mFxMixLevels[5] * fade;
+        mFxBusBlockR[dest][i] += dR[i] * mFxMixLevels[5] * fade;
       }
       // Note: Backward chaining handled via loop if applicable
     } else {
       for(int i=0; i<safeNumFrames; ++i) {
-        spreadL_arr[i] += dL[i];
-        spreadR_arr[i] += dR[i];
+        const float fade = fadeStart + fadeStep * (float)i;
+        spreadL_arr[i] += dL[i] * fade;
+        spreadR_arr[i] += dR[i] * fade;
       }
     }
+    mFxFade[5] = fadeTarget;
   }
 
   // FX 6: Reverb
-  {
+  if (fxOn(6) || mFxFade[6] > 0.0f) {
     float rL[1024], rR[1024];
     for(int i=0; i<safeNumFrames; ++i) { rL[i] = mFxBusBlockL[6][i]; rR[i] = mFxBusBlockR[6][i]; }
     mReverbFx.processBlockStereoWet(rL, rR, safeNumFrames);
     int dest = mFxChainDest[6];
+    const float fadeStart = mFxFade[6];
+    const float fadeTarget = fxOn(6) ? 1.0f : 0.0f;
+    const float fadeStep =
+        (fadeTarget - fadeStart) / (float)std::max(1, safeNumFrames - 1);
     if (dest >= 0 && dest < 17) {
       for(int i=0; i<safeNumFrames; ++i) {
-        mFxBusBlockL[dest][i] += rL[i] * mFxMixLevels[6];
-        mFxBusBlockR[dest][i] += rR[i] * mFxMixLevels[6];
+        const float fade = fadeStart + fadeStep * (float)i;
+        mFxBusBlockL[dest][i] += rL[i] * mFxMixLevels[6] * fade;
+        mFxBusBlockR[dest][i] += rR[i] * mFxMixLevels[6] * fade;
       }
     } else {
       for(int i=0; i<safeNumFrames; ++i) {
-        spreadL_arr[i] += rL[i];
-        spreadR_arr[i] += rR[i];
+        const float fade = fadeStart + fadeStep * (float)i;
+        spreadL_arr[i] += rL[i] * fade;
+        spreadR_arr[i] += rR[i] * fade;
       }
     }
+    mFxFade[6] = fadeTarget;
   }
 
   // FX 7: Slicer (Requires mSampleCount per sample)
-  {
+  if (fxOn(7) || mFxFade[7] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) {
       tmpL[i] = mSlicerFxL.process(mFxBusBlockL[7][i], mSampleCount + i, mSamplesPerStep);
@@ -4198,7 +4267,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 8: Compressor (Requires sidechain)
-  {
+  if (fxOn(8) || mFxFade[8] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[8][i]; tmpR[i] = mFxBusBlockR[8][i]; }
     mCompressorFx.processBlock(tmpL, sidechain_arr, safeNumFrames);
@@ -4209,7 +4278,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 11: Flanger
-  {
+  if (fxOn(11) || mFxFade[11] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[11][i]; tmpR[i] = mFxBusBlockR[11][i]; }
     mFlangerFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4218,7 +4287,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 12: FilterPedal 0
-  {
+  if (fxOn(12) || mFxFade[12] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[12][i]; tmpR[i] = mFxBusBlockR[12][i]; }
     for(int i=0; i<safeNumFrames; ++i) { 
@@ -4229,7 +4298,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 15: FilterPedal 1
-  {
+  if (fxOn(15) || mFxFade[15] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[15][i]; tmpR[i] = mFxBusBlockR[15][i]; }
     for(int i=0; i<safeNumFrames; ++i) { 
@@ -4240,7 +4309,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 16: FilterPedal 2
-  {
+  if (fxOn(16) || mFxFade[16] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[16][i]; tmpR[i] = mFxBusBlockR[16][i]; }
     for(int i=0; i<safeNumFrames; ++i) { 
@@ -4251,7 +4320,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 13: Tape Echo
-  if (!mTapeEchoFxL.isSilent() || !mTapeEchoFxR.isSilent() || true) {
+  if (fxOn(13) || mFxFade[13] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { 
       tmpL[i] = mFxBusBlockL[13][i] + 1.0e-18f; 
@@ -4263,7 +4332,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 14: Octaver
-  {
+  if (fxOn(14) || mFxFade[14] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[14][i]; tmpR[i] = mFxBusBlockR[14][i]; }
     mOctaverFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4272,7 +4341,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 17: Eq5Band
-  {
+  if (fxOn(17) || mFxFade[17] > 0.0f) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[17][i]; tmpR[i] = mFxBusBlockR[17][i]; }
     mEq5BandFxL.processBlock(tmpL, safeNumFrames, mSampleRate);

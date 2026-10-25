@@ -302,6 +302,7 @@ data class GrooveboxState(
     val routingConnections: List<RoutingConnection> = emptyList(),
     val fxChain: Map<Int, Int> = emptyMap(), // Legacy map, keeping for safety but moving to slots
     val fxChainSlots: List<Int> = List(5) { -1 }, // 5 Serial Slots. -1 = Empty
+    val fxEnabled: List<Boolean> = List(18) { true }, // Per-FX bus bypass (performance)
     val focusedValue: String? = null,
     val lockingTarget: Pair<Int, Int>? = null,
     

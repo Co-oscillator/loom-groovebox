@@ -106,7 +106,8 @@ fun PlayingPad(
 
                 val isHeld = latestState.heldNotes.contains(note)
                 val isMidiTriggered = latestState.lastMidiNote == note && latestState.lastMidiVelocity > 0
-                val isActive = isVisuallyPressed || isHeld || isMidiTriggered || isNoteActive // Combined "Active" state
+                val isTrackDisabled = latestState.tracks[latestState.selectedTrackIndex].isDisabled
+                val isActive = !isTrackDisabled && (isVisuallyPressed || isHeld || isMidiTriggered || isNoteActive) // Combined "Active" state
                 
                 // LED Sync for EMP16
                 LaunchedEffect(isVisuallyPressed, isHeld, isMidiTriggered, isPlaying, currentStep, latestState.currentSequencerBank) {
@@ -130,7 +131,7 @@ fun PlayingPad(
                 }
 
                 val backgroundColor = if (isSolidStyle) {
-                    if (isActive) Color.Black else padColor.copy(alpha = 0.8f) 
+                    if (isActive) Color.Black else padColor.copy(alpha = if (isTrackDisabled) 0.25f else 0.8f)
                 } else {
                     if (isActive) padColor.copy(alpha = 0.9f)
                     else if (isPlaying && isPlayheadHighlight) Color.White.copy(alpha = 0.3f)
@@ -142,7 +143,7 @@ fun PlayingPad(
                 val borderColor = if (isSolidStyle) {
                     if (isActive) padColor else Color.Transparent // Active = Black Body + Color Border
                 } else {
-                    padColor.copy(alpha = 0.6f)
+                    padColor.copy(alpha = if (isTrackDisabled) 0.25f else 0.6f)
                 }
                 
                 val borderWidth = if (isSolidStyle && isActive) 3.dp else 1.5.dp
@@ -185,7 +186,8 @@ fun PlayingPad(
                                                     nativeLib.jumpToStep(currentBank * 16 + padIndex)
                                                     onStateChange(currentState.copy(jumpModeWaitingForTap = false))
                                                 } else {
-                                                    if (triggeredNote in 0..127) {
+                                                    if (triggeredNote in 0..127 &&
+                                                        !currentState.tracks[currentTIdx].isDisabled) {
                                                         nativeLib.triggerNote(currentTIdx, triggeredNote, 100)
                                                     }
                                                     

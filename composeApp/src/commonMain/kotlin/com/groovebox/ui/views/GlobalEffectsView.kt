@@ -18,6 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -494,11 +496,21 @@ fun Pedal(
     val track = latestState.tracks[latestState.selectedTrackIndex]
     val sendLevel = track.fxSends.getOrNull(fxIdx) ?: 0.0f
     val isOn = sendLevel > 0.0f
-    
+    val fxEnabled = latestState.fxEnabled.getOrElse(fxIdx) { true }
+
+    fun toggleFx() {
+        val nowEnabled = !fxEnabled
+        val newMask = latestState.fxEnabled.toMutableList()
+        while (newMask.size < 18) newMask.add(true)
+        newMask[fxIdx] = nowEnabled
+        nativeLib.setFxEnabled(fxIdx, nowEnabled)
+        latestOnStateChange(latestState.copy(fxEnabled = newMask))
+    }
+
     Card(
         modifier = Modifier.padding(4.dp),
-        border = BorderStroke(3.dp, borderColor),
-        colors = CardDefaults.cardColors(containerColor = borderColor.copy(alpha = 0.05f)),
+        border = BorderStroke(3.dp, if (fxEnabled) borderColor else Color.DarkGray),
+        colors = CardDefaults.cardColors(containerColor = borderColor.copy(alpha = if (fxEnabled) 0.05f else 0.02f)),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(
@@ -510,23 +522,46 @@ fun Pedal(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, color = borderColor)
+                Text(
+                    name,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (fxEnabled) borderColor else Color.Gray
+                )
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!fxEnabled) {
+                        Text("BYPASS", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
                     // Signal Path Arrow
                     Icon(
                         imageVector = Icons.Default.ArrowForward, 
                         contentDescription = "Signal Path",
-                        tint = borderColor.copy(alpha = 0.5f),
+                        tint = borderColor.copy(alpha = if (fxEnabled) 0.5f else 0.2f),
                         modifier = Modifier.size(12.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     
-                    // Orange light indicator
-                    Canvas(modifier = Modifier.size(10.dp)) {
-                        drawCircle(if (isOn) Color(0xFFFFA500) else Color.DarkGray)
-                        if (isOn) {
-                            drawCircle(Color(0xFFFFA500).copy(alpha = 0.4f), radius = size.minDimension * 0.8f)
+                    // Power toggle: tap to bypass/enable this FX bus
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .clickable { toggleFx() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.size(10.dp)) {
+                            drawCircle(
+                                when {
+                                    !fxEnabled -> Color.DarkGray
+                                    isOn -> Color(0xFFFFA500)
+                                    else -> Color(0xFF555555)
+                                }
+                            )
+                            if (fxEnabled && isOn) {
+                                drawCircle(Color(0xFFFFA500).copy(alpha = 0.4f), radius = size.minDimension * 0.8f)
+                            }
                         }
                     }
                 }
@@ -536,7 +571,7 @@ fun Pedal(
             
             // Per-track SEND knob (Power/Volume)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().alpha(if (fxEnabled) 1.0f else 0.5f),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 Knob(

@@ -244,6 +244,8 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
         routingConnections = (state.routingConnections as Any?) as? List<RoutingConnection> ?: emptyList(),
         fxChain = (state.fxChain as Any?) as? Map<Int, Int> ?: emptyMap(),
         fxChainSlots = (state.fxChainSlots as Any?) as? List<Int> ?: List(5) { -1 },
+        fxEnabled = ((state.fxEnabled as Any?) as? List<Boolean> ?: emptyList())
+            .let { saved -> List(18) { i -> saved.getOrNull(i) ?: true } },
         focusedValue = (state.focusedValue as Any?) as? String,
         lockingTarget = (state.lockingTarget as Any?) as? Pair<Int, Int>,
         lfoLearnActive = (state.lfoLearnActive as Any?) as? Boolean ?: false,
@@ -290,7 +292,7 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         nativeLib.setTrackVolume(trackIdx, safeVol)
         nativeLib.setTrackTranspose(trackIdx, t.transpose)
         nativeLib.setTrackActive(trackIdx, if (t.isDisabled) false else t.isActive)
-        if (t.isDisabled) nativeLib.setTrackDisabled(trackIdx, true)
+        nativeLib.setTrackDisabled(trackIdx, t.isDisabled)
         nativeLib.setTrackPan(trackIdx, t.pan)
         nativeLib.setSelectedFmDrumInstrument(trackIdx, t.selectedFmDrumInstrument)
         
@@ -402,6 +404,12 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         for (i in 0 until activeSlots.size - 1) {
             nativeLib.setFxChain(activeSlots[i], activeSlots[i+1])
         }
+    }
+
+    // 6b. FX enable mask (performance)
+    val fxEnabled = state.fxEnabled
+    for (fxIdx in 0 until 18) {
+        nativeLib.setFxEnabled(fxIdx, fxEnabled.getOrNull(fxIdx) ?: true)
     }
 
     // 7. Sidechain

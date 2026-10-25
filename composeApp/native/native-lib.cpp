@@ -654,6 +654,12 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetFxChain(
     engine->getCore().setFxChain(source_fx, dest_fx);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetFxEnabled(
+    JNIEnv *env, jobject thiz, jint fx_index, jboolean enabled) {
+  if (engine)
+    engine->getCore().setFxEnabled(fx_index, enabled);
+}
+
 extern "C" JNIEXPORT jintArray JNICALL
 Java_com_groovebox_NativeLib_nFetchMidiEvents(JNIEnv *env, jobject thiz) {
   if (!engine)

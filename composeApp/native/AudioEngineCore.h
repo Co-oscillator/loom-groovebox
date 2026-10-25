@@ -204,6 +204,10 @@ public:
   void setGenericLfoParam(int lfoIndex, int paramId, float value);
   void setMacroValue(int macroIndex, float value);
   void setFxChain(int sourceFx, int destFx);
+  // Enable/disable an FX bus (0-17). Disabled buses are not processed, do not
+  // receive track sends and do not duck the dry signal.
+  void setFxEnabled(int fxIndex, bool enabled);
+  bool isFxEnabled(int fxIndex) const;
 
   // Global Transpose
   void setTrackTranspose(int trackIndex, int semitones);
@@ -569,6 +573,10 @@ public:
   // FX Chaining (Soft Routing)
   // Maps SourceFX Index -> DestinationFX Index. -1 means Master Mix.
   int mFxChainDest[18];
+  // Bit per FX bus: 1 = processed, 0 = bypassed entirely.
+  std::atomic<uint32_t> mFxEnabledMask{0x3FFFF};
+  // Per-bus fade gain used when toggling (audio thread only).
+  float mFxFade[18] = {};
   // Feedback buffers for backward-chaining effects (1-sample latency)
   float mFxFeedbacksL[18] = {0.0f};
   float mFxFeedbacksR[18] = {0.0f};

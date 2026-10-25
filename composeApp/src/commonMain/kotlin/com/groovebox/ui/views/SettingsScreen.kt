@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib, midiManager: MidiManager? = null) {
     // val context = LocalContext.current // Removed
@@ -500,6 +500,129 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
                         checked = state.invertPadY,
                         onCheckedChange = { onStateChange(state.copy(invertPadY = it)) }
                     )
+                }
+            }
+        }
+
+        // ====== 2b. PERFORMANCE / CPU ======
+
+        Text("Performance", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val fxBusNames = listOf(
+            "Overdrive", "Bitcrush", "Chorus", "Phaser", "Wobble", "Delay",
+            "Reverb", "Slicer", "Compressor", "HP LFO", "LP LFO", "Flanger",
+            "Filter 1", "Tape Echo", "Octaver", "Filter 2", "Filter 3", "5-Band EQ"
+        )
+        val fxEnabledCount = (0 until 18).count { state.fxEnabled.getOrElse(it) { true } }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Active FX Buses", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                        Text("Bypass pedals you do not use to free CPU", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    }
+                    Text("$fxEnabledCount/18", color = if (fxEnabledCount < 18) Color(0xFF4CAF50) else Color.Gray, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    fxBusNames.forEachIndexed { idx, name ->
+                        val enabled = state.fxEnabled.getOrElse(idx) { true }
+                        FilterChip(
+                            selected = enabled,
+                            onClick = {
+                                val newEnabled = !enabled
+                                val newMask = state.fxEnabled.toMutableList()
+                                while (newMask.size < 18) newMask.add(true)
+                                newMask[idx] = newEnabled
+                                nativeLib.setFxEnabled(idx, newEnabled)
+                                onStateChange(state.copy(fxEnabled = newMask))
+                            },
+                            label = { Text(name, fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.25f),
+                                selectedLabelColor = Color(0xFF00E5FF),
+                                labelColor = Color.Gray
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            // Conservative rule: an FX is unused only if no track
+                            // sends to it and no other FX routes into it.
+                            val chainDests = state.fxChainSlots.filter { it != -1 }.drop(1).toSet()
+                            val newMask = (0 until 18).map { idx ->
+                                val hasSend = state.tracks.any { (it.fxSends.getOrNull(idx) ?: 0f) > 0.001f }
+                                val receivesChain = chainDests.contains(idx)
+                                if (hasSend || receivesChain) true else false
+                            }
+                            newMask.forEachIndexed { idx, enabled -> nativeLib.setFxEnabled(idx, enabled) }
+                            onStateChange(state.copy(fxEnabled = newMask))
+                        },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text("BYPASS UNUSED", fontSize = 11.sp, maxLines = 1)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val newMask = List(18) { true }
+                            newMask.forEachIndexed { idx, enabled -> nativeLib.setFxEnabled(idx, enabled) }
+                            onStateChange(state.copy(fxEnabled = newMask))
+                        },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text("ENABLE ALL", fontSize = 11.sp, maxLines = 1)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Active Tracks", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                        Text("Disabled tracks skip sequencing, DSP and modulation", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    }
+                    Text("${state.tracks.count { !it.isDisabled }}/8", color = Color.Gray, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    state.tracks.forEachIndexed { i, track ->
+                        val enabled = !track.isDisabled
+                        FilterChip(
+                            selected = enabled,
+                            onClick = {
+                                val nowDisabled = enabled
+                                val newTracks = state.tracks.toMutableList()
+                                newTracks[i] = newTracks[i].copy(isDisabled = nowDisabled)
+                                nativeLib.setTrackDisabled(i, nowDisabled)
+                                onStateChange(state.copy(tracks = newTracks))
+                            },
+                            label = { Text("T${i + 1}", fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFF4CAF50).copy(alpha = 0.25f),
+                                selectedLabelColor = Color(0xFF4CAF50),
+                                labelColor = Color.Gray
+                            )
+                        )
+                    }
                 }
             }
         }

@@ -71,6 +71,7 @@ expect class NativeLib() {
     fun setMacroValue(macroIndex: Int, value: Float)
     fun setMacroSource(macroIndex: Int, sourceType: Int, sourceIndex: Int, sourceTrackIndex: Int = -1)
     fun setFxChain(sourceFx: Int, destFx: Int)
+    fun setFxEnabled(fxIndex: Int, enabled: Boolean)
     fun fetchMidiEvents(): IntArray
     fun fetchEngineEvents(): IntArray
     fun setAppDataDir(path: String)

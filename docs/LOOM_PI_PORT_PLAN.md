@@ -362,7 +362,7 @@ Ranked by value-to-effort for Loom:
 |---|---|---|---|---|
 | **0. Prep** | Delete/mark `app/src/main/cpp` duplicate; extract `PlayingPad` target-track/mod params; add settings schema version | Low | Prevents engine drift |
 | **1. Arp clone** | `copyFrom`, `copyArpeggiator`, JNI, Kotlin state sync, "Copy To" UI with **Copy settings** and **Clone live** | Low | Independently shippable, immediate live-performance value |
-| **1b. CPU budget** | Finish track disable, add FX enable mask + UI, performance profile, verify CPU drops | Medium | Directly addresses budget-tablet performance (§8) |
+| **1b. CPU budget** | Finish track disable, add FX enable mask + UI, performance profile, verify CPU drops | Medium | **Done** for track disable + FX mask (§8.5); High/Balanced/Low profile still open |
 | **2. MIDI devices** | Device registry, per-device config UI, hardware presets, persistence, routing filters | Medium | Touches both platform MIDI implementations |
 | **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | Does not require engine changes |
 | **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | Unlocks true multitouch expression; needs audio-thread care |
@@ -468,6 +468,38 @@ Expected saving: reverb, delay, chorus, EQ5, tape echo and the filter pedals are
 ### 8.4 Acceptance criteria
 
 - Eight tracks with all FX remain real-time on a budget tablet.
+
+### 8.5 Status: implemented (v3.2.19)
+
+**Track disable gaps closed**
+
+- `applyModulations()` skips disabled tracks.
+- `triggerNoteLocked()` rejects notes (including MIDI and arp triggers) for disabled tracks.
+- Disabling a track now releases its voices through every engine (`SET_TRACK_DISABLED`), so re-enabling cannot resurrect stale envelopes.
+- `syncNativeState()` always pushes the disabled flag (previously only pushed `true`, so a track disabled in a loaded project could never be re-enabled).
+- Playing pads are dimmed and do not trigger or highlight while the selected track is disabled; MixerView already had the toggle.
+
+**FX enable mask**
+
+- `AudioEngineCore::mFxEnabledMask` (18-bit `std::atomic<uint32_t>`, default all enabled).
+- `setFxEnabled` / `isFxEnabled`, JNI `nSetFxEnabled`, plus `NativeLib` expect/actual.
+- `renderStereo()` snapshots the mask per block; every FX `processBlock` is skipped when its bit is off.
+- Disabled buses are skipped when collecting track sends, so they cannot duck the dry signal or consume the sparse-mixer loop.
+- Bus buffers are still cleared each block, and `mFxFade[18]` ramps each wet return to/from zero across the toggle block, so enabling or bypassing a pedal does not click.
+- UI: per-pedal power dot (tap to bypass) in the FX screen, with a `BYPASS` label and dimmed controls. Settings → Performance lists all 18 buses and 8 tracks as chips, with counts plus **Bypass Unused** / **Enable All** actions. Bypass Unused is conservative: it only disables buses that no track sends to and that no other FX routes into.
+- `fxEnabled` persists with the project and is re-applied on load by `syncNativeState()`. Older projects default to all-on.
+
+**Measured impact (macOS, synthetic 8-track patch sending to 10 buses, 6000 blocks ≈ 32 s of audio)**
+
+| Configuration | Render time | Relative |
+|---|---|---|
+| 8 tracks, 18 FX on | 2292 ms | 100% |
+| 8 tracks, FX all off | 320 ms | 14% |
+| 4 tracks, FX off | 162 ms | 7% |
+| 0 tracks, FX off | 6 ms | 0.2% |
+
+FX processing dominates the synthetic patch (~86% of render time), and synthesis scales near-linearly with track count (4 tracks ≈ 50% of 8). Real-project savings depend on how many buses are actually used, which is why the mask defaults to all-on and is user-driven.
+
 - Disabling four tracks produces a measurable CPU drop.
 - Disabling unused FX produces a measurable CPU drop with no clicks or stuck tails.
 - Track/FX enable states persist across project save/load.

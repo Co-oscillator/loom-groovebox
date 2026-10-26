@@ -4273,6 +4273,45 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
   const bool runFx = !(mIdleGateEnabled && mIdleBlocks > 750); // ~4 s
 
+  // --- PER-FX SILENCE SKIP ---
+  // An enabled FX whose input bus is silent and whose tail has decayed has
+  // nothing to add. Skipping it is a large win on phone-class CPUs: the
+  // default project enables all 18 buses but has zero sends, so every effect
+  // used to process silence forever. Tail lengths are deliberately generous
+  // so delay/reverb/echo decays are never cut.
+  static const int kFxTailBlockCounts[18] = {
+      100, 100, 100, 100, 400, 4000, 4000, 100, 100,
+      100, 100, 100, 100, 4000, 100, 100, 100, 100};
+  auto busHasSignal = [this, safeNumFrames](int index) {
+    const float *l = mFxBusBlockL[index].data();
+    const float *r = mFxBusBlockR[index].data();
+    for (int i = 0; i < safeNumFrames; ++i) {
+      if (std::abs(l[i]) > 1e-6f || std::abs(r[i]) > 1e-6f)
+        return true;
+    }
+    return false;
+  };
+  auto shouldProcessFx = [&](int index) {
+    const bool enabled = fxOn(index);
+    if (!enabled) {
+      // A bypassed bus only needs processing while its click-free fade-out
+      // is still running.
+      if (mFxFade[index] > 0.0f)
+        return true;
+      mFxTailBlocks[index] = 0;
+      return false;
+    }
+    if (busHasSignal(index)) {
+      mFxTailBlocks[index] = kFxTailBlockCounts[index];
+      return true;
+    }
+    if (mFxTailBlocks[index] > 0) {
+      --mFxTailBlocks[index];
+      return true;
+    }
+    return false;
+  };
+
   // --- PHASE 2: BLOCK FX PROCESSING ---
   auto routeFxBlock = [this, safeNumFrames, &wetSampleL_arr, &wetSampleR_arr, &fxOn](int index, bool isDelta, float* outBufL, float* outBufR) {
     int dest = mFxChainDest[index];
@@ -4323,7 +4362,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   };
 
   // FX 0: Overdrive
-  if (runFx && (fxOn(0) || mFxFade[0] > 0.0f)) {
+  if (runFx && shouldProcessFx(0)) {
     float tmpL[1024], tmpR[1024];
     for (int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[0][i]; tmpR[i] = mFxBusBlockR[0][i]; }
     mOverdriveFxL.processBlock(tmpL, safeNumFrames);
@@ -4332,7 +4371,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 1: Bitcrusher
-  if (runFx && (fxOn(1) || mFxFade[1] > 0.0f)) {
+  if (runFx && shouldProcessFx(1)) {
     float tmpL[1024], tmpR[1024];
     for (int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[1][i]; tmpR[i] = mFxBusBlockR[1][i]; }
     mBitcrusherFxL.processBlock(tmpL, safeNumFrames);
@@ -4341,7 +4380,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 9: HP LFO
-  if (runFx && (fxOn(9) || mFxFade[9] > 0.0f)) {
+  if (runFx && shouldProcessFx(9)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[9][i]; tmpR[i] = mFxBusBlockR[9][i]; }
     mHpLfoL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4351,7 +4390,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 10: LP LFO
-  if (runFx && (fxOn(10) || mFxFade[10] > 0.0f)) {
+  if (runFx && shouldProcessFx(10)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[10][i]; tmpR[i] = mFxBusBlockR[10][i]; }
     mLpLfoL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4361,7 +4400,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 2: Chorus
-  if (runFx && (fxOn(2) || mFxFade[2] > 0.0f)) {
+  if (runFx && shouldProcessFx(2)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[2][i]; tmpR[i] = mFxBusBlockR[2][i]; }
     mChorusFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4370,7 +4409,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 3: Phaser
-  if (runFx && (fxOn(3) || mFxFade[3] > 0.0f)) {
+  if (runFx && shouldProcessFx(3)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[3][i]; tmpR[i] = mFxBusBlockR[3][i]; }
     mPhaserFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4379,7 +4418,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 4: Tape Wobble
-  if (runFx && (fxOn(4) || mFxFade[4] > 0.0f)) {
+  if (runFx && shouldProcessFx(4)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[4][i]; tmpR[i] = mFxBusBlockR[4][i]; }
     mTapeWobbleFx.processBlockStereo(tmpL, tmpR, safeNumFrames, mSampleRate);
@@ -4387,7 +4426,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 5: Delay
-  if (runFx && (fxOn(5) || mFxFade[5] > 0.0f)) {
+  if (runFx && shouldProcessFx(5)) {
     float dL[1024], dR[1024];
     for(int i=0; i<safeNumFrames; ++i) { dL[i] = mFxBusBlockL[5][i]; dR[i] = mFxBusBlockR[5][i]; }
     mDelayFx.processBlockStereo(dL, dR, safeNumFrames, mSampleRate);
@@ -4414,7 +4453,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 6: Reverb
-  if (runFx && (fxOn(6) || mFxFade[6] > 0.0f)) {
+  if (runFx && shouldProcessFx(6)) {
     float rL[1024], rR[1024];
     for(int i=0; i<safeNumFrames; ++i) { rL[i] = mFxBusBlockL[6][i]; rR[i] = mFxBusBlockR[6][i]; }
     mReverbFx.processBlockStereoWet(rL, rR, safeNumFrames);
@@ -4440,7 +4479,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 7: Slicer (Requires mSampleCount per sample)
-  if (runFx && (fxOn(7) || mFxFade[7] > 0.0f)) {
+  if (runFx && shouldProcessFx(7)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) {
       tmpL[i] = mSlicerFxL.process(mFxBusBlockL[7][i], mSampleCount + i, mSamplesPerStep);
@@ -4450,7 +4489,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 8: Compressor (Requires sidechain)
-  if (runFx && (fxOn(8) || mFxFade[8] > 0.0f)) {
+  if (runFx && shouldProcessFx(8)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[8][i]; tmpR[i] = mFxBusBlockR[8][i]; }
     mCompressorFx.processBlock(tmpL, sidechain_arr, safeNumFrames);
@@ -4461,7 +4500,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 11: Flanger
-  if (runFx && (fxOn(11) || mFxFade[11] > 0.0f)) {
+  if (runFx && shouldProcessFx(11)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[11][i]; tmpR[i] = mFxBusBlockR[11][i]; }
     mFlangerFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4470,7 +4509,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 12: FilterPedal 0
-  if (runFx && (fxOn(12) || mFxFade[12] > 0.0f)) {
+  if (runFx && shouldProcessFx(12)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[12][i]; tmpR[i] = mFxBusBlockR[12][i]; }
     for(int i=0; i<safeNumFrames; ++i) { 
@@ -4481,7 +4520,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 15: FilterPedal 1
-  if (runFx && (fxOn(15) || mFxFade[15] > 0.0f)) {
+  if (runFx && shouldProcessFx(15)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[15][i]; tmpR[i] = mFxBusBlockR[15][i]; }
     for(int i=0; i<safeNumFrames; ++i) { 
@@ -4492,7 +4531,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 16: FilterPedal 2
-  if (runFx && (fxOn(16) || mFxFade[16] > 0.0f)) {
+  if (runFx && shouldProcessFx(16)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[16][i]; tmpR[i] = mFxBusBlockR[16][i]; }
     for(int i=0; i<safeNumFrames; ++i) { 
@@ -4503,7 +4542,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 13: Tape Echo
-  if (runFx && (fxOn(13) || mFxFade[13] > 0.0f)) {
+  if (runFx && shouldProcessFx(13)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { 
       tmpL[i] = mFxBusBlockL[13][i] + 1.0e-18f; 
@@ -4515,7 +4554,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 14: Octaver
-  if (runFx && (fxOn(14) || mFxFade[14] > 0.0f)) {
+  if (runFx && shouldProcessFx(14)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[14][i]; tmpR[i] = mFxBusBlockR[14][i]; }
     mOctaverFxL.processBlock(tmpL, safeNumFrames, mSampleRate);
@@ -4524,7 +4563,7 @@ void AudioEngineCore::renderStereo(float *outBuffer, int numFrames) {
   }
 
   // FX 17: Eq5Band
-  if (runFx && (fxOn(17) || mFxFade[17] > 0.0f)) {
+  if (runFx && shouldProcessFx(17)) {
     float tmpL[1024], tmpR[1024];
     for(int i=0; i<safeNumFrames; ++i) { tmpL[i] = mFxBusBlockL[17][i]; tmpR[i] = mFxBusBlockR[17][i]; }
     mEq5BandFxL.processBlock(tmpL, safeNumFrames, mSampleRate);

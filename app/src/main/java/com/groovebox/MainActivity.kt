@@ -637,13 +637,10 @@ fun MainScreen(
     ) {
         // Wrap children in provider
     
-    var cpuLoad by remember { mutableFloatStateOf(0f) }
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             while (true) {
-                cpuLoad = nativeLib.getCpuLoad()
-                
                 // Poll Engine Events
                 val events = nativeLib.fetchEngineEvents()
                 if (events.isNotEmpty()) {
@@ -1020,10 +1017,9 @@ fun MainScreen(
             }
             
             if (state.showCpuMonitor) {
-                Text(
-                    text = "CPU: ${(cpuLoad * 100).toInt()}%", 
-                    style = MaterialTheme.typography.labelSmall, 
-                    color = Color.White.copy(alpha = 0.5f), 
+                CpuMonitor(
+                    nativeLib = nativeLib,
+                    isPlaying = state.isPlaying,
                     modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
                 )
             }
@@ -1476,3 +1472,30 @@ fun GrooveboxTheme(content: @Composable () -> Unit) {
 }
 
 
+
+/**
+ * The CPU readout owns its own state so a changing meter value cannot
+ * invalidate the screen around it. Previously the value lived in MainScreen's
+ * scope, which re-composed the whole tab a few times a second while idle.
+ */
+@Composable
+private fun CpuMonitor(nativeLib: NativeLib, isPlaying: Boolean, modifier: Modifier = Modifier) {
+    var percent by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val value = (nativeLib.getCpuLoad() * 100f).toInt().coerceIn(0, 999)
+            percent = value
+            // A meter tick costs a full frame, so keep it slow while idle and
+            // only refresh quickly while the transport is running.
+            kotlinx.coroutines.delay(if (isPlaying) 250L else 1000L)
+        }
+    }
+    Text(
+        text = if (percent < 0) "CPU: --" else "CPU: $percent%",
+        style = MaterialTheme.typography.labelSmall,
+        color = Color.White.copy(alpha = 0.5f),
+        // Fixed width plus its own layer: a meter tick then only re-records
+        // this small node instead of the whole window.
+        modifier = modifier.width(64.dp).graphicsLayer()
+    )
+}

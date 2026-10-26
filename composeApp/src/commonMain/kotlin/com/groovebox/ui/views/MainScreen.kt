@@ -83,7 +83,15 @@ fun MainScreen(
                         viewModel.pullWaveform(selectedTrackIdx)
                     }
                     
-                    kotlinx.coroutines.delay(if (viewModel.state.performanceProfile >= 2) 64L else 32L)
+                    // Idle: poll slowly so a still screen costs almost nothing.
+                    // Fast again as soon as transport runs or levels move.
+                    kotlinx.coroutines.delay(
+                        when {
+                            viewModel.state.performanceProfile >= 2 -> 64L
+                            viewModel.isUiActive -> 32L
+                            else -> 120L
+                        }
+                    )
                 }
             }
             Surface(color = Color.Black) {

@@ -610,6 +610,9 @@ public:
   std::atomic<uint32_t> mFxEnabledMask{0x3FFFF};
   // Per-bus fade gain used when toggling (audio thread only).
   float mFxFade[18] = {};
+  // Blocks left to keep processing an FX after its input bus went silent, so
+  // delay/reverb tails are not cut. Zero means "skip while the bus is silent".
+  int mFxTailBlocks[18] = {};
   // Performance profile settings.
   std::atomic<int> mMaxVoicesPerTrack{16};
   int mModDecimation = 1;    // Apply modulation routing every N blocks

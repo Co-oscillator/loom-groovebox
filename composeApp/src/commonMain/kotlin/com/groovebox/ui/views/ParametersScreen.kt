@@ -894,11 +894,17 @@ fun RecordingStrip(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(modifier = Modifier.width(12.dp))
                 
-                val infiniteTransition = rememberInfiniteTransition()
-                val animScale by infiniteTransition.animateFloat(
-                    initialValue = 1f, targetValue = 1.15f,
-                    animationSpec = infiniteRepeatable(tween(400), RepeatMode.Reverse)
-                )
+                // Only animate while recording: an always-running infinite
+                // transition invalidates the screen every frame forever, which
+                // is a large idle cost on low-power devices.
+                val animScale = if (isRecording) {
+                    val infiniteTransition = rememberInfiniteTransition()
+                    val scale by infiniteTransition.animateFloat(
+                        initialValue = 1f, targetValue = 1.15f,
+                        animationSpec = infiniteRepeatable(tween(400), RepeatMode.Reverse)
+                    )
+                    scale
+                } else 1f
 
                 val latestIsRecording by rememberUpdatedState(isRecording)
                 val latestOnStart by rememberUpdatedState(onStartRecording)

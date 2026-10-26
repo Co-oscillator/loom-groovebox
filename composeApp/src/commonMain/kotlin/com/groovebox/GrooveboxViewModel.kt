@@ -247,50 +247,111 @@ class GrooveboxViewModel(
         }
     }
 
+    // Parameter snapshots are a 1024-float JNI copy and only change on
+    // native-side actions (preset load, MIDI learn, macro fan-out), so they are
+    // polled a few times per second instead of on every UI tick.
+    private var paramPollCounter = 0
+    private var lastUiActivity = kotlin.time.TimeSource.Monotonic.markNow()
+
+    /**
+     * True while something on screen is actually moving (transport running or
+     * a recent level/step/parameter change). Screens use this to poll fast
+     * during playback and slowly when the app is sitting idle, which is what
+     * keeps the CPU low on phone-class hardware.
+     */
+    val isUiActive: Boolean
+        get() = state.isPlaying ||
+            lastUiActivity.elapsedNow() < kotlin.time.Duration.parse("1s")
+
     fun pollEngineState() {
         pullTransportState()
+        // MIDI clock output must keep ticking even when nothing visible changed.
+        syncMidiClock()
         val focusedTrackIdx = state.selectedTrackIndex
         nativeLib.setFocusedTrack(focusedTrackIdx)
         
         val cpu = nativeLib.getCpuLoad()
         val track = state.tracks[focusedTrackIdx]
         
-        // Pull modulated parameter values for visual consistency
-        val engineParams = nativeLib.getAllTrackParameters(focusedTrackIdx)
-        val updatedParams = track.parameters.toMutableMap()
-        
-        // Only update if they differ significantly to avoid UI churn
-        engineParams.forEachIndexed { pid, v ->
-            if (pid in track.parameters) {
-                if (Math.abs((track.parameters[pid] ?: 0f) - v) > 0.001f) {
-                    updatedParams[pid] = v
+        var paramsChanged = false
+        var updatedParams: Map<Int, Float>? = null
+        if (paramPollCounter == 0) {
+            // Pull modulated parameter values for visual consistency
+            val engineParams = nativeLib.getAllTrackParameters(focusedTrackIdx)
+            var anyDifferent = false
+            engineParams.forEachIndexed { pid, v ->
+                val old = track.parameters[pid]
+                if (old != null && Math.abs(old - v) > 0.001f) anyDifferent = true
+            }
+            if (anyDifferent) {
+                val merged = track.parameters.toMutableMap()
+                engineParams.forEachIndexed { pid, v ->
+                    val old = track.parameters[pid]
+                    if (old != null && Math.abs(old - v) > 0.001f) merged[pid] = v
                 }
+                updatedParams = merged
+                paramsChanged = true
             }
         }
+        paramPollCounter = (paramPollCounter + 1) % 10
         
         // Pull real-time track levels for activity indicators
         val levels = nativeLib.getTrackLevels()
+        var levelsChanged = false
+        var activeChanged = false
+        levels.forEachIndexed { idx, level ->
+            if (Math.abs(level - state.trackLevels.getOrElse(idx) { 0f }) > 0.01f) {
+                levelsChanged = true
+            }
+            val isNowActive = level > 0.01f
+            if (isNowActive != (state.tracks.getOrNull(idx)?.isAudiblyActive ?: false)) {
+                activeChanged = true
+            }
+        }
         
         // Pull active step bits from native for the focused track (Wait-free)
         val activeBits = nativeLib.getAllStepActiveStates(focusedTrackIdx)
+        var stepsChanged = false
+        activeBits.forEachIndexed { si, active ->
+            if (si < track.steps.size && track.steps[si].active != active) {
+                stepsChanged = true
+            }
+        }
         
         // Playhead sync (native is the source of truth while playing)
         val newStep = if (state.isPlaying) nativeLib.getCurrentStep(focusedTrackIdx, -1) else 0
+        val stepChanged = newStep != state.currentStep
+        // Quantise the CPU readout so a noisy meter cannot recompose the UI on
+        // every poll while nothing is happening.
+        val cpuChanged = Math.abs(cpu - state.cpuLoad) > 0.01f
+
+        if (!paramsChanged && !levelsChanged && !activeChanged &&
+            !stepsChanged && !stepChanged && !cpuChanged) {
+            // Nothing visible changed: keep the same state object so Compose
+            // can skip the whole tree. This is the idle-CPU fast path.
+            return
+        }
+        lastUiActivity = kotlin.time.TimeSource.Monotonic.markNow()
         
         state = state.copy(
             cpuLoad = cpu,
             currentStep = newStep,
-            trackLevels = levels.toList(),
+            trackLevels = if (levelsChanged) levels.toList() else state.trackLevels,
             tracks = state.tracks.mapIndexed { idx, t ->
                 val isNowActive = levels.getOrElse(idx) { 0f } > 0.01f
-                if (idx == focusedTrackIdx) {
-                   // Sync active states for the sequencer pads
-                   val syncedSteps = t.steps.mapIndexed { si, step ->
-                       if (si < activeBits.size) step.copy(active = activeBits[si]) else step
-                   }
-                   t.copy(parameters = updatedParams, isAudiblyActive = isNowActive, steps = syncedSteps)
-                } else {
-                   t.copy(isAudiblyActive = isNowActive)
+                when {
+                    idx == focusedTrackIdx && (paramsChanged || stepsChanged || activeChanged) ->
+                        t.copy(
+                            parameters = updatedParams ?: t.parameters,
+                            isAudiblyActive = isNowActive,
+                            steps = if (stepsChanged) {
+                                t.steps.mapIndexed { si, step ->
+                                    if (si < activeBits.size) step.copy(active = activeBits[si]) else step
+                                }
+                            } else t.steps
+                        )
+                    t.isAudiblyActive != isNowActive -> t.copy(isAudiblyActive = isNowActive)
+                    else -> t
                 }
             }
         )
@@ -300,9 +361,6 @@ class GrooveboxViewModel(
             pullWaveform(focusedTrackIdx)
         }
 
-        // Keep MIDI clock output aligned with transport/tempo even when the
-        // change came from the native side (e.g. recording auto-start).
-        syncMidiClock()
     }
 
     fun pullWaveform(trackIdx: Int) {
@@ -415,13 +473,18 @@ class GrooveboxViewModel(
         midiPumpStarted = true
         Thread({
             while (true) {
-                try {
-                    pumpMidiOut()
-                } catch (e: Exception) {
-                    // Never let output routing take down the app.
+                // With no MIDI output device attached there is nothing to send,
+                // so don't burn a JNI call 200 times a second on it.
+                val hasOutput = midiManagerRef?.devices?.value?.any { it.isOutput } == true
+                if (hasOutput) {
+                    try {
+                        pumpMidiOut()
+                    } catch (e: Exception) {
+                        // Never let output routing take down the app.
+                    }
                 }
                 try {
-                    Thread.sleep(5)
+                    Thread.sleep(if (hasOutput) 5 else 50)
                 } catch (e: InterruptedException) {
                     return@Thread
                 }

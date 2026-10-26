@@ -2,6 +2,7 @@
 #define WAVETABLE_ENGINE_H
 
 #include "../Utils.h"
+#include "../VoiceModState.h"
 #include "../WavFileUtils.h"
 #include "Adsr.h"
 #include <algorithm>
@@ -28,6 +29,25 @@ public:
     float srateCounter = 0.0f;
     uint32_t controlCounter = 0;
     float mCachedDelta = 0.0f;
+    VoiceModState mod;
+
+    // Per-voice modulation cache, refreshed every control block.
+    float modPos = 0.0f;
+    float modPosFrac = 0.0f;
+    int modFrame1 = 0;
+    int modFrame2 = 0;
+    bool modMorphing = false;
+    float modBitSteps = 0.0f;
+    float modWarpFactor = 0.0f;
+    bool modHasWarp = false;
+    float modCutoff = 1.0f;
+    float modResonance = 0.0f;
+    float modEnvAmount = 0.0f;
+    float modCrush = 0.0f;
+    float modDrive = 0.0f;
+    float modSrate = 0.0f;
+    float modDetune = 0.0f;
+    float modBendFactor = 1.0f;
 
     void reset() {
       active = false;
@@ -40,6 +60,7 @@ public:
       targetFrequency = 440.0f;
       lastSample = 0.0f;
       srateCounter = 0.0f;
+      mod.clear();
     }
   };
 
@@ -96,6 +117,35 @@ public:
   void setGlide(float g) { mGlide = g; }
   void setPitchBend(float v) { mPitchBend = v; }
 
+  void setModRouting(int xDest, float xRange, int yDest, float yIntensity) {
+    mModRouting.xDest = xDest;
+    mModRouting.xRange = voiceModClamp(xRange, 0.0f, 24.0f);
+    mModRouting.yDest = yDest;
+    mModRouting.yIntensity = voiceModClamp01(yIntensity);
+  }
+
+  void setVoiceMod(int note, float x, float y) {
+    for (auto &v : mVoices) {
+      if (v.active && v.note == note) {
+        v.mod.active = true;
+        v.mod.originNote = note;
+        v.mod.x = voiceModClamp(x, -1.0f, 1.0f);
+        v.mod.y = voiceModClamp(y, -1.0f, 1.0f);
+      }
+    }
+  }
+
+  void clearVoiceMod(int note) {
+    for (auto &v : mVoices)
+      if (v.note == note)
+        v.mod.clear();
+  }
+
+  void clearAllVoiceMod() {
+    for (auto &v : mVoices)
+      v.mod.clear();
+  }
+
   void loadWavetable(const std::vector<float> &data) {
     auto newData = std::make_shared<std::vector<float>>(data);
     std::atomic_store(&mTablePtr, newData);
@@ -146,6 +196,27 @@ public:
     v.filterEnv.setSampleRate(mSampleRate);
     v.filterEnv.setParameters(mF_Atk, mF_Dcy, mF_Sus, mF_Rel);
     v.filterEnv.trigger();
+
+    // Seed the per-voice modulation cache so the first samples after a
+    // trigger already use the current global values.
+    v.modCutoff = mCutoff;
+    v.modResonance = mResonance;
+    v.modEnvAmount = mF_Amt;
+    v.modDetune = mDetune;
+    v.modCrush = mCrush;
+    v.modDrive = mDrive;
+    v.modSrate = mSrate;
+    v.modBitSteps = (mBits < 0.99f) ? powf(2.0f, mBits * 16.0f) : 0.0f;
+    v.modWarpFactor = mWarp * 4.0f;
+    v.modHasWarp = std::abs(mWarp) > 0.01f;
+    {
+      float pos = mPosition * (float)(mNumFrames - 1);
+      v.modFrame1 = (int)pos;
+      v.modFrame2 = std::min(mNumFrames - 1, v.modFrame1 + 1);
+      v.modPosFrac = pos - (float)v.modFrame1;
+      v.modMorphing = (mNumFrames > 1 && v.modPosFrac > 0.001f);
+    }
+    v.modBendFactor = powf(2.0f, mPitchBend / 12.0f);
   }
 
   void releaseNote(int note) {
@@ -335,20 +406,8 @@ public:
     for (int i = 0; i < 16; ++i) {
         if (mVoices[i].active) mActiveIndices[mActiveCount++] = i;
     }
-    
+
     if (mActiveCount == 0) return;
-
-    float bendFactor = powf(2.0f, mPitchBend / 12.0f);
-    float bitSteps = (mBits < 0.99f) ? powf(2.0f, mBits * 16.0f) : 0.0f;
-    float warpFactor = mWarp * 4.0f;
-    bool hasWarp = std::abs(mWarp) > 0.01f;
-
-    // Pre-calculate morphology parameters once per block
-    float pos = mPosition * (float)(mNumFrames - 1);
-    int frame1 = (int)pos;
-    int frame2 = std::min(mNumFrames - 1, frame1 + 1);
-    float posFrac = pos - (float)frame1;
-    bool isMorphing = (mNumFrames > 1 && posFrac > 0.001f);
 
     for (int i = 0; i < numFrames; ++i) {
         float mixedOutput = 0.0f;
@@ -357,8 +416,9 @@ public:
 
         for (int v_idx = 0; v_idx < mActiveCount; ++v_idx) {
             Voice &v = mVoices[mActiveIndices[v_idx]];
-            
-            if (updateMod) {
+            bool voiceUpdateMod = updateMod || v.controlCounter < 2;
+
+            if (voiceUpdateMod) {
                 if (mGlide > 0.001f) {
                     float glideTimeSamples = mGlide * mSampleRate * 0.5f;
                     float glideAlpha = 32.0f / (glideTimeSamples + 32.0f);
@@ -366,13 +426,59 @@ public:
                 } else {
                     v.frequency = v.targetFrequency;
                 }
+
+                // Resolve the Y-axis per voice.  Only the touched voice moves;
+                // the global parameters stay untouched for the other fingers.
+                float vPos = mPosition, vWarp = mWarp, vBits = mBits;
+                float vCutoff = mCutoff, vRes = mResonance, vEnvAmt = mF_Amt;
+                float vCrush = mCrush, vDrive = mDrive, vSrate = mSrate;
+                float vDetune = mDetune;
+                if (v.mod.active) {
+                    const float y = v.mod.y * mModRouting.yIntensity;
+                    switch (mModRouting.yDest) {
+                    case 465: vWarp = voiceModClamp01(vWarp + y); break;
+                    case 1:
+                    case 458: vCutoff = voiceModClamp01(vCutoff + y * 0.8f); break;
+                    case 2:
+                    case 459: vRes = voiceModClamp01(vRes + y * 0.8f); break;
+                    case 464: vEnvAmt = voiceModClamp(vEnvAmt + y * 2.0f, -1.0f, 1.0f); break;
+                    case 475: vBits = voiceModClamp01(vBits - y); break;
+                    case 476: vSrate = voiceModClamp01(vSrate + y); break;
+                    case 466: vCrush = voiceModClamp01(vCrush + y); break;
+                    case 467: vDrive = voiceModClamp01(vDrive + y); break;
+                    case 451: vDetune = voiceModClamp(vDetune + y * 2.0f, -2.0f, 2.0f); break;
+                    case 450:
+                    default: vPos = voiceModClamp01(vPos + y); break;
+                    }
+                }
+
+                v.modDetune = vDetune;
+                v.modCutoff = vCutoff;
+                v.modResonance = vRes;
+                v.modEnvAmount = vEnvAmt;
+                v.modCrush = vCrush;
+                v.modDrive = vDrive;
+                v.modSrate = vSrate;
+                v.modBitSteps = (vBits < 0.99f) ? powf(2.0f, vBits * 16.0f) : 0.0f;
+                v.modWarpFactor = vWarp * 4.0f;
+                v.modHasWarp = std::abs(vWarp) > 0.01f;
+
+                float pos = vPos * (float)(mNumFrames - 1);
+                v.modFrame1 = (int)pos;
+                v.modFrame2 = std::min(mNumFrames - 1, v.modFrame1 + 1);
+                v.modPosFrac = pos - (float)v.modFrame1;
+                v.modMorphing = (mNumFrames > 1 && v.modPosFrac > 0.001f);
+
+                float voiceBend = mPitchBend +
+                    (v.mod.active ? v.mod.x * mModRouting.xRange : 0.0f);
+                v.modBendFactor = powf(2.0f, voiceBend / 12.0f);
             }
 
             if (updateEnv) {
-                float cutoff = 20.0f + mCutoff * mCutoff * 18000.0f;
-                cutoff += v.filterEnv.getValue() * mF_Amt * 12000.0f;
+                float cutoff = 20.0f + v.modCutoff * v.modCutoff * 18000.0f;
+                cutoff += v.filterEnv.getValue() * v.modEnvAmount * 12000.0f;
                 cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
-                v.svf.setParams(cutoff, 0.7f + mResonance * 5.0f, mSampleRate);
+                v.svf.setParams(cutoff, 0.7f + v.modResonance * 5.0f, mSampleRate);
                 v.filterEnv.nextValue();
             }
 
@@ -382,15 +488,15 @@ public:
                 continue;
             }
 
-            float voiceDetune = 1.0f + (mDetune * 0.02f);
-            float delta = (v.frequency * bendFactor * voiceDetune) / mSampleRate;
+            float voiceDetune = 1.0f + (v.modDetune * 0.02f);
+            float delta = (v.frequency * v.modBendFactor * voiceDetune) / mSampleRate;
             v.phase += delta;
             if (v.phase >= 1.0f) v.phase -= 1.0f;
 
             // Sample Rate Reduction
             bool skipSample = false;
-            if (mSrate > 0.05f) {
-                float period = 1.0f + mSrate * 64.0f;
+            if (v.modSrate > 0.05f) {
+                float period = 1.0f + v.modSrate * 64.0f;
                 v.srateCounter += 1.0f;
                 if (v.srateCounter < period) skipSample = true;
                 else v.srateCounter -= period;
@@ -398,8 +504,8 @@ public:
 
             if (!skipSample) {
                 float wPhase = v.phase;
-                if (hasWarp) {
-                    wPhase = wPhase + (wPhase * (1.0f - wPhase) * warpFactor);
+                if (v.modHasWarp) {
+                    wPhase = wPhase + (wPhase * (1.0f - wPhase) * v.modWarpFactor);
                 }
 
                 auto getTableSample = [&](int frame, float phase) -> float {
@@ -412,22 +518,23 @@ public:
                 };
 
                 float sample;
-                if (isMorphing) {
-                    sample = (1.0f - posFrac) * getTableSample(frame1, wPhase) + 
-                             posFrac * getTableSample(frame2, wPhase);
+                if (v.modMorphing) {
+                    sample = (1.0f - v.modPosFrac) * getTableSample(v.modFrame1, wPhase) +
+                             v.modPosFrac * getTableSample(v.modFrame2, wPhase);
                 } else {
-                    sample = getTableSample(frame1, wPhase);
+                    sample = getTableSample(v.modFrame1, wPhase);
                 }
 
-                if (bitSteps > 0.0f) {
-                    sample = (float)((int)(sample * bitSteps)) / bitSteps;
+                if (v.modBitSteps > 0.0f) {
+                    sample = (float)((int)(sample * v.modBitSteps)) / v.modBitSteps;
                 }
 
-                if (mCrush > 0.05f) {
-                    float st = 2.0f + (1.0f - mCrush) * 32.0f;
+                if (v.modCrush > 0.05f) {
+                    float st = 2.0f + (1.0f - v.modCrush) * 32.0f;
                     sample = (float)((int)(sample * st)) / st;
                 }
-                if (mDrive > 0.05f) sample = fast_tanh(sample * (1.0f + mDrive * 4.0f));
+                if (v.modDrive > 0.05f)
+                    sample = fast_tanh(sample * (1.0f + v.modDrive * 4.0f));
                 v.lastSample = sample;
             }
 
@@ -478,6 +585,7 @@ private:
   float mPitchBend = 0.0f;
   int mFilterMode = 0;
   uint32_t mControlCounter = 0;
+  VoiceModRouting mModRouting;
 };
 
 #endif

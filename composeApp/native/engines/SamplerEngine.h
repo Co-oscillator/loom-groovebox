@@ -3,6 +3,7 @@
 #define SAMPLER_ENGINE_H
 
 #include "../Utils.h"
+#include "../VoiceModState.h"
 #include "Adsr.h"
 #include <algorithm>
 #include "../Log.h"
@@ -70,6 +71,7 @@ public:
     static const int GRAIN_SIZE = 1024; // Samples
 
     uint32_t controlCounter = 0;
+    VoiceModState mod;
 
     void reset() {
       active = false;
@@ -86,6 +88,7 @@ public:
       sliceReverse = 0.0f;
       sliceCutoff = 1.0f;
       sliceResonance = 0.0f;
+      mod.clear();
       std::fill(std::begin(fxSends), std::end(fxSends), 0.0f);
     }
   };
@@ -112,7 +115,8 @@ public:
         mRelease(other.mRelease), mFilterCutoff(other.mFilterCutoff),
         mFilterResonance(other.mFilterResonance),
         mFilterEnvAmount(other.mFilterEnvAmount), mGlide(other.mGlide),
-        mLastPitchRatio(other.mLastPitchRatio), mPlayMode(other.mPlayMode),
+        mLastPitchRatio(other.mLastPitchRatio), mPitchBend(other.mPitchBend),
+        mModRouting(other.mModRouting), mPlayMode(other.mPlayMode),
         mScrubGate(other.mScrubGate), mUseEnvelope(other.mUseEnvelope),
         mSampleRate(other.mSampleRate), mSlices(std::move(other.mSlices)),
         mLastTargetPos(other.mLastTargetPos) {
@@ -143,6 +147,8 @@ public:
       mFilterEnvAmount = other.mFilterEnvAmount;
       mGlide = other.mGlide;
       mLastPitchRatio = other.mLastPitchRatio;
+      mPitchBend = other.mPitchBend;
+      mModRouting = other.mModRouting;
       mPlayMode = other.mPlayMode;
       mScrubGate = other.mScrubGate;
       mUseEnvelope = other.mUseEnvelope;
@@ -704,6 +710,35 @@ public:
   void setFilterEnvAmount(float v) { mFilterEnvAmount = v; }
   void setPitchBend(float v) { mPitchBend = v; }
 
+  void setModRouting(int xDest, float xRange, int yDest, float yIntensity) {
+    mModRouting.xDest = xDest;
+    mModRouting.xRange = voiceModClamp(xRange, 0.0f, 24.0f);
+    mModRouting.yDest = yDest;
+    mModRouting.yIntensity = voiceModClamp01(yIntensity);
+  }
+
+  void setVoiceMod(int note, float x, float y) {
+    for (auto &v : mVoices) {
+      if (v.active && v.note == note) {
+        v.mod.active = true;
+        v.mod.originNote = note;
+        v.mod.x = voiceModClamp(x, -1.0f, 1.0f);
+        v.mod.y = voiceModClamp(y, -1.0f, 1.0f);
+      }
+    }
+  }
+
+  void clearVoiceMod(int note) {
+    for (auto &v : mVoices)
+      if (v.note == note)
+        v.mod.clear();
+  }
+
+  void clearAllVoiceMod() {
+    for (auto &v : mVoices)
+      v.mod.clear();
+  }
+
   // BPM Sync (Public)
   bool mSyncEnabled = false;
   float mSourceBpm = 120.0f;
@@ -771,6 +806,42 @@ public:
       if (!v.active)
         continue;
 
+      // Per-voice X/Y performance modulation.  X bends only this voice; Y
+      // targets speed, pitch, cutoff, resonance or filter-env amount.
+      float voiceBend = mPitchBend +
+          (v.mod.active ? v.mod.x * mModRouting.xRange : 0.0f);
+      float voiceBendFactor = powf(2.0f, voiceBend / 12.0f);
+      float voiceSpeed = mSpeed;
+      float voicePitchFactor = 1.0f;
+      float voiceCutoff = mFilterCutoff;
+      float voiceResonance = mFilterResonance;
+      float voiceEnvAmount = mFilterEnvAmount;
+      if (v.mod.active) {
+        const float y = v.mod.y * mModRouting.yIntensity;
+        switch (mModRouting.yDest) {
+        case 300:
+          voicePitchFactor = powf(2.0f, y * 2.0f);
+          break;
+        case 1:
+        case 303:
+          voiceCutoff = voiceModClamp01(voiceCutoff + y * 0.8f);
+          break;
+        case 2:
+        case 304:
+          voiceResonance = voiceModClamp01(voiceResonance + y * 0.8f);
+          break;
+        case 314:
+          voiceEnvAmount = voiceModClamp01(voiceEnvAmount + y);
+          break;
+        case 302:
+        default:
+          voiceSpeed = mSpeed * (1.0f + y);
+          break;
+        }
+        if (voiceSpeed < 0.01f) voiceSpeed = 0.01f;
+        if (voiceSpeed > 12.0f) voiceSpeed = 12.0f;
+      }
+
       // If Envelope is disabled, behave like a Gate (1.0 while held, 0.0 on
       // release)
       float env = 1.0f;
@@ -807,7 +878,7 @@ public:
         v.pitchRatio = v.targetPitchRatio;
       }
 
-      float bendFactor = powf(2.0f, mPitchBend / 12.0f);
+      float bendFactor = voiceBendFactor * voicePitchFactor;
       float pitchFactor = v.pitchRatio * bendFactor;
       float direction = mReverse ? -1.0f : 1.0f;
       if (mSliceLockEnabled) {
@@ -816,14 +887,14 @@ public:
 
       // Scrub Handling: Voice 0 should not advance automatically
 
-      float baseResampleRate = mSpeed * pitchFactor * direction;
+      float baseResampleRate = voiceSpeed * pitchFactor * direction;
 
       // OVERRIDE for Scrub Voice 0
       // In Scrub Mode, we disable Granular synthesis to avoid "Grainy"
       // artifacts. We rely on 'baseResampleRate' being 0 (because we updated
       // position manually above). AND we force useGranular = false.
 
-      float traverseRate = mSpeed * direction;
+      float traverseRate = voiceSpeed * direction;
       float readRate = v.pitchRatio;
       bool useGranular = (std::abs(traverseRate - readRate) > 0.001f) ||
                          (std::abs(mStretch - 1.0f) > 0.02f);
@@ -1020,13 +1091,13 @@ public:
 
       // Filter Processing
       if (v.controlCounter++ % 16 == 0) {
-        float baseCutoff = mSliceLockEnabled ? v.sliceCutoff : mFilterCutoff;
+        float baseCutoff = mSliceLockEnabled ? v.sliceCutoff : voiceCutoff;
         float baseReson =
-            mSliceLockEnabled ? v.sliceResonance : mFilterResonance;
+            mSliceLockEnabled ? v.sliceResonance : voiceResonance;
 
         float cutoff = 20.0f + (baseCutoff * baseCutoff * 18000.0f);
         // Integrate envelope to filter cutoff
-        cutoff += env * mFilterEnvAmount * 12000.0f;
+        cutoff += env * voiceEnvAmount * 12000.0f;
         cutoff = std::max(20.0f, std::min(20000.0f, cutoff));
 
         v.filter.setParams(cutoff, 0.7f + baseReson * 5.0f, 48000.0f);
@@ -1325,6 +1396,7 @@ private:
   float mFilterCutoff = 1.0f, mFilterResonance = 0.0f, mFilterEnvAmount = 0.0f;
   float mGlide = 0.0f, mLastPitchRatio = 1.0f;
   float mPitchBend = 0.0f;
+  VoiceModRouting mModRouting;
   PlayMode mPlayMode = OneShot;
   float mSliceIndex = -1.0f; // Range 0.0 to 1.0, -1 means use note
   bool mUseEnvelope = true;

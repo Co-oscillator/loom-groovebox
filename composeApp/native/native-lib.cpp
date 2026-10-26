@@ -716,6 +716,34 @@ extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetPitchBend(
   }
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nBeginVoicePadMod(
+    JNIEnv *env, jobject thiz, jint trackIndex, jint note) {
+  if (engine) {
+    engine->getCore().beginVoicePadMod(trackIndex, note);
+  }
+}
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetVoicePadMod(
+    JNIEnv *env, jobject thiz, jint trackIndex, jint note, jfloat normX,
+    jfloat normY) {
+  if (engine) {
+    engine->getCore().setVoicePadMod(trackIndex, note, normX, normY);
+  }
+}
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nEndVoicePadMod(
+    JNIEnv *env, jobject thiz, jint trackIndex, jint note) {
+  if (engine) {
+    engine->getCore().endVoicePadMod(trackIndex, note);
+  }
+}
+extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nSetPadModRouting(
+    JNIEnv *env, jobject thiz, jint trackIndex, jint xDest, jfloat xInt,
+    jint yDest, jfloat yInt, jboolean polyMode) {
+  if (engine) {
+    engine->getCore().setPadModRouting(trackIndex, xDest, xInt, yDest, yInt,
+                                       polyMode == JNI_TRUE);
+  }
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_groovebox_NativeLib_nLoadFmPreset(
     JNIEnv *env, jobject thiz, jint track_index, jint preset_id) {
   if (engine)

@@ -1240,6 +1240,19 @@ void AudioEngineCore::updateEngineParameter(int trackIndex, int parameterId,
 // End of updateEngineParameter
 
 // Processing Commands
+int AudioEngineCore::resolveVoiceNote(int trackIndex, int note) const {
+  if (trackIndex < 0 || trackIndex >= (int)mTracks.size())
+    return note;
+  const Track &track = mTracks[trackIndex];
+  if (track.engineType != 5 && track.engineType != 6) {
+    const bool isSliceMode =
+        (track.engineType == 2 && track.parameters[320] > 1.5f);
+    if (!isSliceMode)
+      note += track.transpose;
+  }
+  return note;
+}
+
 void AudioEngineCore::processCommands() {
   std::vector<AudioCommand> todo;
   {
@@ -1354,6 +1367,71 @@ void AudioEngineCore::processCommands() {
         mTracks[cmd.trackIndex].padModValue = cmd.value;
       }
       break;
+    case AudioCommand::SET_PAD_MOD_ROUTING:
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
+        Track &track = mTracks[cmd.trackIndex];
+        track.padModPoly = cmd.bValue;
+        track.padModXDest = cmd.data1;
+        track.padModYDest = cmd.data2;
+        track.padModXInt = cmd.value;
+        track.padModYInt = cmd.gate;
+        if (track.padModPoly) {
+          track.subtractiveEngine.setModRouting(cmd.data1, cmd.value, cmd.data2, cmd.gate);
+          track.fmEngine.setModRouting(cmd.data1, cmd.value, cmd.data2, cmd.gate);
+          track.wavetableEngine.setModRouting(cmd.data1, cmd.value, cmd.data2, cmd.gate);
+          track.samplerEngine.setModRouting(cmd.data1, cmd.value, cmd.data2, cmd.gate);
+        } else {
+          // Leaving poly mode must not strand a voice mid-bend.
+          track.subtractiveEngine.clearAllVoiceMod();
+          track.fmEngine.clearAllVoiceMod();
+          track.wavetableEngine.clearAllVoiceMod();
+          track.samplerEngine.clearAllVoiceMod();
+        }
+      }
+      break;
+    case AudioCommand::SET_VOICE_MOD_BEGIN: {
+      const int voiceNote = resolveVoiceNote(cmd.trackIndex, cmd.data1);
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size() &&
+          voiceNote >= 0 && voiceNote < 128) {
+        Track &track = mTracks[cmd.trackIndex];
+        if (track.voiceModRef[voiceNote] < 64)
+          track.voiceModRef[voiceNote]++;
+      }
+      break;
+    }
+    case AudioCommand::SET_VOICE_MOD_UPDATE: {
+      const int voiceNote = resolveVoiceNote(cmd.trackIndex, cmd.data1);
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size() &&
+          voiceNote >= 0 && voiceNote < 128) {
+        Track &track = mTracks[cmd.trackIndex];
+        if (track.padModPoly) {
+          // A direct update without a begin is treated as a single finger.
+          if (track.voiceModRef[voiceNote] == 0)
+            track.voiceModRef[voiceNote] = 1;
+          track.subtractiveEngine.setVoiceMod(voiceNote, cmd.value, cmd.gate);
+          track.fmEngine.setVoiceMod(voiceNote, cmd.value, cmd.gate);
+          track.wavetableEngine.setVoiceMod(voiceNote, cmd.value, cmd.gate);
+          track.samplerEngine.setVoiceMod(voiceNote, cmd.value, cmd.gate);
+        }
+      }
+      break;
+    }
+    case AudioCommand::SET_VOICE_MOD_END: {
+      const int voiceNote = resolveVoiceNote(cmd.trackIndex, cmd.data1);
+      if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size() &&
+          voiceNote >= 0 && voiceNote < 128) {
+        Track &track = mTracks[cmd.trackIndex];
+        if (track.voiceModRef[voiceNote] > 0)
+          track.voiceModRef[voiceNote]--;
+        if (track.voiceModRef[voiceNote] == 0) {
+          track.subtractiveEngine.clearVoiceMod(voiceNote);
+          track.fmEngine.clearVoiceMod(voiceNote);
+          track.wavetableEngine.clearVoiceMod(voiceNote);
+          track.samplerEngine.clearVoiceMod(voiceNote);
+        }
+      }
+      break;
+    }
     case AudioCommand::SET_PATTERN_LENGTH:
       if (cmd.trackIndex >= 0 && cmd.trackIndex < (int)mTracks.size()) {
         int length = (cmd.data1 <= 0) ? 1 : (cmd.data1 > 64 ? 64 : cmd.data1);
@@ -3461,6 +3539,12 @@ void AudioEngineCore::panic() {
     track.granularEngine.allNotesOff();
     track.soundFontEngine.allNotesOff();
 
+    track.subtractiveEngine.clearAllVoiceMod();
+    track.fmEngine.clearAllVoiceMod();
+    track.wavetableEngine.clearAllVoiceMod();
+    track.samplerEngine.clearAllVoiceMod();
+    std::fill(std::begin(track.voiceModRef), std::end(track.voiceModRef), 0);
+
     for (int v = 0; v < Track::MAX_POLYPHONY; ++v) {
       track.mActiveNotes[v].active = false;
     }
@@ -4573,6 +4657,50 @@ void AudioEngineCore::setPadMod(int trackIndex, float value) {
   cmd.type = AudioCommand::SET_PAD_MOD;
   cmd.trackIndex = trackIndex;
   cmd.value = value;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngineCore::beginVoicePadMod(int trackIndex, int note) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_VOICE_MOD_BEGIN;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = note;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngineCore::setVoicePadMod(int trackIndex, int note, float normX,
+                                     float normY) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_VOICE_MOD_UPDATE;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = note;
+  cmd.value = normX;
+  cmd.gate = normY;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngineCore::endVoicePadMod(int trackIndex, int note) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_VOICE_MOD_END;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = note;
+  std::lock_guard<std::mutex> lock(mCommandLock);
+  mCommandQueue.push_back(cmd);
+}
+
+void AudioEngineCore::setPadModRouting(int trackIndex, int xDest, float xInt,
+                                       int yDest, float yInt, bool polyMode) {
+  AudioCommand cmd;
+  cmd.type = AudioCommand::SET_PAD_MOD_ROUTING;
+  cmd.trackIndex = trackIndex;
+  cmd.data1 = xDest;
+  cmd.data2 = yDest;
+  cmd.value = xInt;
+  cmd.gate = yInt;
+  cmd.bValue = polyMode;
   std::lock_guard<std::mutex> lock(mCommandLock);
   mCommandQueue.push_back(cmd);
 }

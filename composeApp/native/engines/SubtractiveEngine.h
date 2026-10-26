@@ -2,6 +2,7 @@
 #define SUBTRACTIVE_ENGINE_H
 
 #include "../Utils.h"
+#include "../VoiceModState.h"
 #include "Adsr.h"
 #include "Oscillator.h"
 #include "../Log.h"
@@ -27,6 +28,7 @@ public:
     float currentFilterEnvVal = 0.0f;
     float smoothedCutoff = 0.5f;
     uint32_t controlCounter = 0;
+    VoiceModState mod;
 
     Voice() { oscillators.resize(4); }
 
@@ -38,6 +40,7 @@ public:
       targetFrequency = 440.0f;
       ampEnv.reset();
       filterEnv.reset();
+      mod.clear();
       svf.setParams(1000.0f, 0.7f, 44100.0f);
     }
   };
@@ -113,6 +116,35 @@ public:
   void setGlide(float v) { mGlide = v; }
   void setPitchBend(float semitones) { mPitchBend = semitones; }
 
+  void setModRouting(int xDest, float xRange, int yDest, float yIntensity) {
+    mModRouting.xDest = xDest;
+    mModRouting.xRange = voiceModClamp(xRange, 0.0f, 24.0f);
+    mModRouting.yDest = yDest;
+    mModRouting.yIntensity = voiceModClamp01(yIntensity);
+  }
+
+  void setVoiceMod(int note, float x, float y) {
+    for (auto &v : mVoices) {
+      if (v.active && v.note == note) {
+        v.mod.active = true;
+        v.mod.originNote = note;
+        v.mod.x = voiceModClamp(x, -1.0f, 1.0f);
+        v.mod.y = voiceModClamp(y, -1.0f, 1.0f);
+      }
+    }
+  }
+
+  void clearVoiceMod(int note) {
+    for (auto &v : mVoices)
+      if (v.note == note)
+        v.mod.clear();
+  }
+
+  void clearAllVoiceMod() {
+    for (auto &v : mVoices)
+      v.mod.clear();
+  }
+
   void allNotesOff() {
     for (auto &v : mVoices) {
       v.active = false;
@@ -136,6 +168,7 @@ public:
     v.active = true;
     v.isNoteHeld = true;
     v.note = note;
+    v.mod.clear();
     v.amplitude = velocity / 127.0f;
     float baseFreq = mIgnoreNoteFrequency
                          ? mFrequency
@@ -279,12 +312,14 @@ public:
         lfo = FastSine::get(lfoPhase) * mLfoDepth;
     }
 
-    // Optimize: Pre-calculate bend factor once per render call
-    float bendFactor = powf(2.0f, mPitchBend / 12.0f);
+    // Optimize: bend factor is calculated per voice (per-voice modulation)
 
     for (auto &v : mVoices) {
       if (!v.active)
         continue;
+
+      float voiceBend = mPitchBend + (v.mod.active ? v.mod.x * mModRouting.xRange : 0.0f);
+      float voiceBendFactor = powf(2.0f, voiceBend / 12.0f);
 
       // v3.1.41: Moved all modulation and frequency updates to a 32-sample control block
       if (v.controlCounter % 32 == 0) {
@@ -296,14 +331,18 @@ public:
            v.frequency = v.targetFrequency;
         }
 
-        float baseFreqWithBend = v.frequency * bendFactor;
+        float baseFreqWithBend = v.frequency * voiceBendFactor;
         for (int i = 0; i < 4; ++i) {
           v.oscillators[i].setFrequency(baseFreqWithBend, mSampleRate);
         }
         
+        float voiceCutoff = mCutoff;
+        if (v.mod.active && (mModRouting.yDest == 1 || mModRouting.yDest == 112 ||
+                             mModRouting.yDest < 0))
+          voiceCutoff += v.mod.y * mModRouting.yIntensity * 0.8f;
         float modCutoff = std::max(
             0.0f,
-            std::min(0.999f, mCutoff + v.currentFilterEnvVal * mF_Amt + lfo));
+            std::min(0.999f, voiceCutoff + v.currentFilterEnvVal * mF_Amt + lfo));
         
         v.smoothedCutoff = v.smoothedCutoff * 0.8f + modCutoff * 0.2f;
         v.svf.setParams(20.0f + v.smoothedCutoff * v.smoothedCutoff * 14000.0f,
@@ -320,7 +359,7 @@ public:
 
       float oscOutput = 0.0f;
       float osc1Val = 0.0f; // Cache for RingMod
-      float baseFreqWithBend = v.frequency * bendFactor;
+      float baseFreqWithBend = v.frequency * voiceBendFactor;
       
       // Optimize: Only process active oscillators
       // Oscillator 1
@@ -378,8 +417,6 @@ public:
     }
     if (mActiveCount == 0) return;
 
-    float bendFactor = powf(2.0f, mPitchBend / 12.0f);
-    
     // Global LFO (Hoisted)
     float lfo = 0.0f;
     if (mLfoDepth > 0.0f) {
@@ -398,24 +435,32 @@ public:
         } else {
             v.frequency = v.targetFrequency;
         }
-        float baseFreqWithBend = v.frequency * bendFactor;
+        // Per-voice X-axis bend: each finger bends only its own voice.
+        float voiceBend = mPitchBend + (v.mod.active ? v.mod.x * mModRouting.xRange : 0.0f);
+        float voiceBendFactor = powf(2.0f, voiceBend / 12.0f);
+        float baseFreqWithBend = v.frequency * voiceBendFactor;
         for (int osc_i = 0; osc_i < 4; ++osc_i) {
             v.oscillators[osc_i].setFrequency(baseFreqWithBend, mSampleRate);
         }
 
+        // Per-voice Y-axis modulation is resolved once per block.
+        float vCutoff, vRes, vFAmt, vNoise;
+        float vVol[4], vFold[4], vDrive[4], vPitch[4];
+        voiceModValues(v, vCutoff, vRes, vFAmt, vNoise, vVol, vFold, vDrive, vPitch);
+
         // Osc constants are block-invariant — hoist above chunk loop
-        float v0 = mOscVolumes[0] * mOscDrive[0];
-        float p0 = mOscPitch[0];
-        float f0 = mOscFold[0];
-        float v1 = mOscVolumes[1] * mOscDrive[1];
-        float p1 = mOscPitch[1] * (1.0f + mDetune * 0.05f);
-        float f1 = mOscFold[1];
-        float v2 = mOscVolumes[2] * mOscDrive[2];
-        float p2 = mOscPitch[2];
-        float f2 = mOscFold[2];
-        float v3 = mOscVolumes[3] * mOscDrive[3];
-        float p3 = mOscPitch[3];
-        float f3 = mOscFold[3];
+        float v0 = vVol[0] * vDrive[0];
+        float p0 = vPitch[0];
+        float f0 = vFold[0];
+        float v1 = vVol[1] * vDrive[1];
+        float p1 = vPitch[1] * (1.0f + mDetune * 0.05f);
+        float f1 = vFold[1];
+        float v2 = vVol[2] * vDrive[2];
+        float p2 = vPitch[2];
+        float f2 = vFold[2];
+        float v3 = vVol[3] * vDrive[3];
+        float p3 = vPitch[3];
+        float f3 = vFold[3];
 
         // Process in chunks of 16 samples to allow filter envelope updates without massive CPU overhead
         int samplesRemaining = numFrames;
@@ -426,11 +471,11 @@ public:
             
             // Per-chunk filter envelope update
             v.currentFilterEnvVal = v.filterEnv.getValue(); // Sample current envelope
-            float modCutoff = std::max(0.001f, std::min(0.999f, mCutoff + v.currentFilterEnvVal * mF_Amt + lfo));
+            float modCutoff = std::max(0.001f, std::min(0.999f, vCutoff + v.currentFilterEnvVal * vFAmt + lfo));
             v.smoothedCutoff = v.smoothedCutoff * 0.7f + modCutoff * 0.3f;
             
             float f_freq = 20.0f + v.smoothedCutoff * v.smoothedCutoff * 14000.0f;
-            v.svf.setParams(f_freq, std::max(0.1f, mResonance * 5.0f), mSampleRate);
+            v.svf.setParams(f_freq, std::max(0.1f, vRes * 5.0f), mSampleRate);
             
             for (int f = 0; f < chunkSize; ++f) {
                 float envVal = mUseEnvelope ? v.ampEnv.nextValue() : 1.0f;
@@ -458,9 +503,9 @@ public:
                 if (v2 > 0.0f) oscOutput += v.oscillators[2].nextSample(0.0f, p2, f2) * v2;
                 if (v3 > 0.0f) oscOutput += v.oscillators[3].nextSample(0.0f, p3, f3) * v3;
 
-                if (mNoiseLevel > 0.0f) {
+                if (vNoise > 0.0f) {
                     mNoiseSeed = mNoiseSeed * 1103515245 + 12345;
-                    oscOutput += (((float)(mNoiseSeed & 0x7fffffff) / (float)0x7fffffff) * 2.0f - 1.0f) * mNoiseLevel;
+                    oscOutput += (((float)(mNoiseSeed & 0x7fffffff) / (float)0x7fffffff) * 2.0f - 1.0f) * vNoise;
                 }
                 
                 float voiceSample = v.svf.process(oscOutput * v.amplitude * envVal * 0.5f, (TSvf::Type)mFilterMode);
@@ -502,6 +547,72 @@ public:
   }
 
 private:
+  // Resolve the per-voice Y-axis modulation into the engine's local
+  // parameters.  Unrecognised destinations fall back to cutoff, the musical
+  // default for a subtractive voice.
+  void voiceModValues(const Voice &v, float &cutoff, float &resonance,
+                      float &filterEnvAmount, float &noiseLevel, float vol[4],
+                      float fold[4], float drive[4], float pitch[4]) const {
+    cutoff = mCutoff;
+    resonance = mResonance;
+    filterEnvAmount = mF_Amt;
+    noiseLevel = mNoiseLevel;
+    for (int i = 0; i < 4; ++i) {
+      vol[i] = mOscVolumes[i];
+      fold[i] = mOscFold[i];
+      drive[i] = mOscDrive[i];
+      pitch[i] = mOscPitch[i];
+    }
+    if (!v.mod.active)
+      return;
+
+    const float y = v.mod.y * mModRouting.yIntensity;
+    switch (mModRouting.yDest) {
+    case 2:
+    case 113:
+      resonance = voiceModClamp01(resonance + y * 0.8f);
+      break;
+    case 3:
+    case 118:
+      filterEnvAmount = voiceModClamp(filterEnvAmount + y * 2.0f, -1.0f, 1.0f);
+      break;
+    case 110:
+      noiseLevel = voiceModClamp01(noiseLevel + y);
+      break;
+    case 107:
+    case 108:
+    case 109:
+      vol[mModRouting.yDest - 107] =
+          voiceModClamp01(vol[mModRouting.yDest - 107] + y);
+      break;
+    case 180:
+    case 181:
+    case 182:
+    case 183:
+      fold[mModRouting.yDest - 180] =
+          voiceModClamp01(fold[mModRouting.yDest - 180] + y);
+      break;
+    case 170:
+    case 171:
+    case 172:
+    case 173:
+      drive[mModRouting.yDest - 170] =
+          1.0f + (drive[mModRouting.yDest - 170] - 1.0f) * (1.0f + y * 2.0f);
+      break;
+    case 160:
+    case 161:
+    case 162:
+    case 163:
+      pitch[mModRouting.yDest - 160] *= powf(2.0f, (y * 2.0f) / 12.0f);
+      break;
+    case 1:
+    case 112:
+    default:
+      cutoff = voiceModClamp01(cutoff + y * 0.8f);
+      break;
+    }
+  }
+
   void updateLiveEnvelopes() {
     for (auto &v : mVoices)
       if (v.active) {
@@ -528,6 +639,7 @@ private:
   float mFmAmt = 0.0f;
   float mPitchBend = 0.0f;
   int mFilterMode = 0;
+  VoiceModRouting mModRouting;
   float mOscPitch[4] = {1.0f, 1.0f, 0.5f, 1.0f},
         mOscDrive[4] = {1.0f, 1.0f, 1.0f, 1.0f},
         mOscFold[4] = {0.0f, 0.0f, 0.0f, 0.0f},

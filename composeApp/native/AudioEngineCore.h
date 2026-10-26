@@ -155,6 +155,13 @@ public:
   uint64_t getActiveNoteMask(int trackIndex);
   void setPitchBend(int trackIndex, float semitones);
   void setPadMod(int trackIndex, float value);
+  // Per-voice performance modulation (Phase 4).  begin/end bracket a finger
+  // gesture so two pointers on the same note cannot cancel each other.
+  void beginVoicePadMod(int trackIndex, int note);
+  void setVoicePadMod(int trackIndex, int note, float normX, float normY);
+  void endVoicePadMod(int trackIndex, int note);
+  void setPadModRouting(int trackIndex, int xDest, float xInt, int yDest,
+                        float yInt, bool polyMode);
   void panic();
   void loadFmPreset(int trackIndex, int presetId);
   void setClockMultiplier(int trackIndex, float multiplier);
@@ -262,6 +269,10 @@ private:
       SET_CHAIN_LENGTH,
       SET_CHAIN_SLOT,
       SET_PAD_MOD,
+      SET_VOICE_MOD_BEGIN,
+      SET_VOICE_MOD_UPDATE,
+      SET_VOICE_MOD_END,
+      SET_PAD_MOD_ROUTING,
       PARAM_PREVIEW,
       SET_TRACK_PROBABILITY,
       SET_TRACK_DISABLED
@@ -294,6 +305,10 @@ private:
   std::mutex mCommandLock;
 
   void processCommands();
+  // Maps a pad/UI note to the note the engine actually sounds (per-track
+  // transpose and slice-mode rules), so per-voice modulation addresses the
+  // right voice.
+  int resolveVoiceNote(int trackIndex, int note) const;
 
   struct EngineEvent {
     enum Type { PATTERN_SAVE = 1 };
@@ -321,6 +336,13 @@ public:
     int transpose = 0;
     std::atomic<float> mPitchBend{0.0f};  // -1.0 to 1.0 (semitones)
     std::atomic<float> padModValue{0.0f}; // 0.0 to 1.0 (Y-axis)
+    // Phase 4 per-voice modulation routing (audio thread only).
+    bool padModPoly = false;
+    int padModXDest = -1;
+    int padModYDest = -1;
+    float padModXInt = 2.0f;
+    float padModYInt = 1.0f;
+    int voiceModRef[128] = {0};
     std::atomic<float> sequenceProbability{1.0f}; // Track-level probability
 
     Track() = default;
@@ -331,6 +353,11 @@ public:
       transpose(other.transpose),
       mPitchBend(other.mPitchBend.load()),
       padModValue(other.padModValue.load()),
+      padModPoly(other.padModPoly),
+      padModXDest(other.padModXDest),
+      padModYDest(other.padModYDest),
+      padModXInt(other.padModXInt),
+      padModYInt(other.padModYInt),
       smoothedPan(other.smoothedPan),
       humanize(other.humanize),
       isMuted(other.isMuted),
@@ -393,6 +420,7 @@ public:
         std::memcpy(mActiveNotes, other.mActiveNotes, sizeof(mActiveNotes));
         std::memcpy(mDrumNoteDurationRemaining, other.mDrumNoteDurationRemaining, sizeof(mDrumNoteDurationRemaining));
         std::memcpy(mDrumLastTriggeredNote, other.mDrumLastTriggeredNote, sizeof(mDrumLastTriggeredNote));
+        std::memcpy(voiceModRef, other.voiceModRef, sizeof(voiceModRef));
     }
     Track& operator=(Track&&) = delete;
 

@@ -14,10 +14,18 @@ enum class PlayLayout { GRID, SPLIT_20_20 }
 /** One 20-pad bank in the split performance layout. */
 data class SplitZone(
     val trackIndex: Int = 0,
-    val octave: Int = 0
+    val octave: Int = 0,
+    /** Per-bank Y-axis destination; -1 = use the track's padModTargetId. */
+    val modTargetId: Int = -1,
+    /** Y-axis intensity, 0..1. */
+    val modIntensity: Float = 1f,
+    /** X-axis pitch-bend range in semitones at the edge of the pad. */
+    val bendRange: Float = 2f,
+    /** Per-voice (poly) modulation; false = the v1 global fallback. */
+    val polyMod: Boolean = true
 ) : java.io.Serializable {
     companion object {
-        private const val serialVersionUID = 1L
+        private const val serialVersionUID = 2L
     }
 }
 
@@ -336,6 +344,10 @@ data class GrooveboxState(
     
     // Pad Modulation Learn
     val isPadModLearnActive: Boolean = false,
+    /** Which split bank learns the next mod destination; -1 = selected track. */
+    val padModLearnBank: Int = -1,
+    /** Single-grid pads use per-voice modulation when true. */
+    val polyPadMod: Boolean = true,
 
     // MIDI UI Feedback
     val lastMidiNote: Int = -1,

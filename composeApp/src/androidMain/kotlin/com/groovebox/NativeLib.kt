@@ -68,6 +68,10 @@ actual class NativeLib {
     actual fun getActiveNoteMask(trackIndex: Int): Long = nGetActiveNoteMask(trackIndex)
     actual fun setPitchBend(trackIndex: Int, value: Float) = nSetPitchBend(trackIndex, value)
     actual fun setPadMod(trackIndex: Int, value: Float) = nSetPadMod(trackIndex, value)
+    actual fun beginVoicePadMod(trackIndex: Int, note: Int) = nBeginVoicePadMod(trackIndex, note)
+    actual fun setVoicePadMod(trackIndex: Int, note: Int, normX: Float, normY: Float) = nSetVoicePadMod(trackIndex, note, normX, normY)
+    actual fun endVoicePadMod(trackIndex: Int, note: Int) = nEndVoicePadMod(trackIndex, note)
+    actual fun setPadModRouting(trackIndex: Int, xDest: Int, xInt: Float, yDest: Int, yInt: Float, polyMode: Boolean) = nSetPadModRouting(trackIndex, xDest, xInt, yDest, yInt, polyMode)
     actual fun getCpuLoad(): Float = nGetCpuLoad()
     actual fun setGenericLfoParam(lfoIndex: Int, paramId: Int, value: Float) = nSetGenericLfoParam(lfoIndex, paramId, value)
     actual fun setMacroValue(macroIndex: Int, value: Float) = nSetMacroValue(macroIndex, value)
@@ -183,6 +187,10 @@ actual class NativeLib {
     private external fun nGetActiveNoteMask(trackIndex: Int): Long
     private external fun nSetPitchBend(trackIndex: Int, value: Float)
     private external fun nSetPadMod(trackIndex: Int, value: Float)
+    private external fun nBeginVoicePadMod(trackIndex: Int, note: Int)
+    private external fun nSetVoicePadMod(trackIndex: Int, note: Int, normX: Float, normY: Float)
+    private external fun nEndVoicePadMod(trackIndex: Int, note: Int)
+    private external fun nSetPadModRouting(trackIndex: Int, xDest: Int, xInt: Float, yDest: Int, yInt: Float, polyMode: Boolean)
     private external fun nGetCpuLoad(): Float
     private external fun nSetGenericLfoParam(lfoIndex: Int, paramId: Int, value: Float)
     private external fun nSetMacroValue(macroIndex: Int, value: Float)

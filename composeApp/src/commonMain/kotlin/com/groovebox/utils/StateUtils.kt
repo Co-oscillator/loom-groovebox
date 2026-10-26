@@ -258,6 +258,8 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
         macroSourceLearnActive = (state.macroSourceLearnActive as Any?) as? Boolean ?: false,
         macroSourceLearnIndex = (state.macroSourceLearnIndex as Any?) as? Int ?: -1,
         isPadModLearnActive = (state.isPadModLearnActive as Any?) as? Boolean ?: false,
+        padModLearnBank = (((state.padModLearnBank as Any?) as? Int) ?: -1).coerceIn(-1, 1),
+        polyPadMod = (state.polyPadMod as Any?) as? Boolean ?: true,
         lastMidiNote = (state.lastMidiNote as Any?) as? Int ?: -1,
         lastMidiVelocity = (state.lastMidiVelocity as Any?) as? Int ?: 0,
         copiedSteps = (state.copiedSteps as Any?) as? List<com.groovebox.StepState>,
@@ -265,9 +267,19 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
         gridMode = (state.gridMode as Any?) as? com.groovebox.GridMode ?: com.groovebox.GridMode.GRID_4X4,
         playLayout = (state.playLayout as Any?) as? com.groovebox.PlayLayout ?: com.groovebox.PlayLayout.GRID,
         splitLeft = ((state.splitLeft as Any?) as? com.groovebox.SplitZone ?: com.groovebox.SplitZone(0, 0))
-            .let { it.copy(trackIndex = it.trackIndex.coerceIn(0, 7), octave = it.octave.coerceIn(-3, 3)) },
+            .let { it.copy(
+                trackIndex = it.trackIndex.coerceIn(0, 7),
+                octave = it.octave.coerceIn(-3, 3),
+                modTargetId = it.modTargetId.coerceIn(-1, 2999),
+                modIntensity = it.modIntensity.coerceIn(0f, 1f),
+                bendRange = it.bendRange.coerceIn(0f, 24f)) },
         splitRight = ((state.splitRight as Any?) as? com.groovebox.SplitZone ?: com.groovebox.SplitZone(1, 1))
-            .let { it.copy(trackIndex = it.trackIndex.coerceIn(0, 7), octave = it.octave.coerceIn(-3, 3)) },
+            .let { it.copy(
+                trackIndex = it.trackIndex.coerceIn(0, 7),
+                octave = it.octave.coerceIn(-3, 3),
+                modTargetId = it.modTargetId.coerceIn(-1, 2999),
+                modIntensity = it.modIntensity.coerceIn(0f, 1f),
+                bendRange = it.bendRange.coerceIn(0f, 24f)) },
         uiLayoutMode = (state.uiLayoutMode as Any?) as? Int ?: 0,
         showCpuMonitor = (state.showCpuMonitor as Any?) as? Boolean ?: true,
         performanceProfile = (((state.performanceProfile as Any?) as? Int) ?: 0).coerceIn(0, 2),

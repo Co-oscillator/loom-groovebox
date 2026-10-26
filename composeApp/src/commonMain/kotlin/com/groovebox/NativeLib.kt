@@ -66,6 +66,10 @@ expect class NativeLib() {
     fun getActiveNoteMask(trackIndex: Int): Long
     fun setPitchBend(trackIndex: Int, value: Float)
     fun setPadMod(trackIndex: Int, value: Float)
+    fun beginVoicePadMod(trackIndex: Int, note: Int)
+    fun setVoicePadMod(trackIndex: Int, note: Int, normX: Float, normY: Float)
+    fun endVoicePadMod(trackIndex: Int, note: Int)
+    fun setPadModRouting(trackIndex: Int, xDest: Int, xInt: Float, yDest: Int, yInt: Float, polyMode: Boolean)
     fun getCpuLoad(): Float
     fun setGenericLfoParam(lfoIndex: Int, paramId: Int, value: Float)
     fun setMacroValue(macroIndex: Int, value: Float)

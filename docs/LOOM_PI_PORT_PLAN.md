@@ -442,7 +442,7 @@ Ranked by value-to-effort for Loom:
 | **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | **Done** (§11); per-voice mod shipped in Phase 4 |
 | **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | **Done** (§11.1): per-finger bends/mods, per-bank destinations/intensity, bend range, refcounted gestures |
 | **5. MIDI expression** | Clock in/out, SPP, pitch-bend input, **aftertouch → pad mod** | Medium | **Done** (§3.7): clock in/out, SPP, transport, per-track bend, channel/poly aftertouch |
-| **6. Pad modes + drum row wizard** | 16/24/40 layouts, six pad modes, general drum-row learn wizard | Medium | **Done** (§11.2): 4x4/6x6/4x6/5x8, AUTO + six pad modes, FX pads, drum-row learn |
+| **6. Pad modes + drum row wizard** | 16/36 layouts, six pad modes, general drum-row learn wizard | Medium | **Done** (§11.2): 4x4/6x6 + Keys/Tonnetz, split 20/20 in the GRID cycle, AUTO + six pad modes, FX pads, drum-row learn |
 | **7. Launchkey** | DAW-mode init, 3 knob banks, pad/transport interception, LED feedback, wizard integration | High | Hardware-dependent; build on Phase 2 device registry |
 | **8. Melody tracker** | Audio-to-MIDI (YIN, confidence, HP/LP, sample source) | High | Explicitly last |
 
@@ -763,11 +763,13 @@ shared identity on.
 
 ### 11.2 Pad modes + drum-row wizard (Phase 6)
 
-**Layouts.** `GridMode` gained `GRID_4X6` (24 pads) and `GRID_5X8` (40 pads)
-alongside 4x4 (16) and 6x6 (36). `utils/PadLayout.kt` centralises rows/cols/count
-so the scale-note buffer, pad sizing and note mapping cannot disagree. The GRID
-button cycles 4x4 → 6x6 → 4x6 → 5x8 → Keys/Tonnetz → 4x4; drum tracks can now
-use the larger layouts too (their notes repeat every 16 pads).
+**Layouts.** `GridMode` offers 4x4 (16 pads), 6x6 (36), Keys (macOS or
+keyboard mode) and Tonnetz. `utils/PadLayout.kt` centralises rows/cols/count so
+the scale-note buffer, pad sizing and note mapping cannot disagree. The GRID
+button cycles 4x4 → 6x6 → Keys/Tonnetz → **20/20 split** → 4x4, so the split
+performance layout has no separate control; the button reads `20/20` while the
+split is active. The 4x6/5x8 layouts were tried and removed: on phone-sized
+screens they crowded the pad area without adding a useful playing surface.
 
 **Pad modes.** `PadMode` is an explicit performance mapping independent of the
 engine: `AUTO` (v1 engine-driven), `SCALES`, `KEYBOARD` (chromatic from root),

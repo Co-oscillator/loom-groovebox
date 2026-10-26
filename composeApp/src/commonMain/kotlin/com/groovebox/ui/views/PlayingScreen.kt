@@ -61,6 +61,7 @@ import com.groovebox.utils.padCols
 import com.groovebox.utils.padCount
 import com.groovebox.utils.padNoteFor
 import com.groovebox.utils.shortLabel
+import com.groovebox.utils.nextGridStep
 import com.groovebox.utils.FX_BUS_NAMES
 import com.groovebox.*
 // IMPORTANT: We need to copy isBlackKey and getNoteLabel here or import them if they remain in MainActivity (which is bad practice if extracted).
@@ -2543,36 +2544,33 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                             Text("OCTAVE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         }
 
-                        // GRID
+                        // GRID (4x4 -> 6x6 -> [Keys] -> Tonnetz -> 20/20 split)
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val isSplit = state.playLayout == PlayLayout.SPLIT_20_20
                             Button(
-                                onClick = { 
-                                    val newMode = when(state.gridMode) {
-                                        GridMode.GRID_4X4 -> GridMode.GRID_6X6
-                                        GridMode.GRID_6X6 -> GridMode.GRID_4X6
-                                        GridMode.GRID_4X6 -> GridMode.GRID_5X8
-                                        GridMode.GRID_5X8 -> if (platformInfo.platform == "macos" || state.isKeyboardModeEnabled) GridMode.MAC_KEYS else GridMode.TONNETZ
-                                        GridMode.MAC_KEYS -> GridMode.TONNETZ
-                                        GridMode.TONNETZ -> GridMode.GRID_4X4
-                                    }
-                                    onStateChange(state.copy(gridMode = newMode)) 
+                                onClick = {
+                                    val includeMacKeys = platformInfo.platform == "macos" || state.isKeyboardModeEnabled
+                                    val (nextMode, nextSplit) = nextGridStep(state.gridMode, isSplit, includeMacKeys)
+                                    onStateChange(
+                                        state.copy(
+                                            gridMode = nextMode,
+                                            playLayout = if (nextSplit) PlayLayout.SPLIT_20_20 else PlayLayout.GRID
+                                        )
+                                    )
                                 },
                                 modifier = Modifier.height(controlHeight).width(controlWidth),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE) 
+                                    containerColor = if (isSplit || state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE)
                                                      else Color.DarkGray
                                 ),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(0.dp)
                             ) {
-                                Text(when(state.gridMode) {
-                                    GridMode.GRID_4X4 -> "4x4"
-                                    GridMode.GRID_6X6 -> "6x6"
-                                    GridMode.GRID_4X6 -> "4x6"
-                                    GridMode.GRID_5X8 -> "5x8"
-                                    GridMode.MAC_KEYS -> "Keys"
-                                    GridMode.TONNETZ -> "TON"
-                                }, style = MaterialTheme.typography.labelSmall, color = Color.White)
+                                Text(
+                                    if (isSplit) "20/20" else state.gridMode.shortLabel(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White
+                                )
                             }
                             Text("GRID", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         }
@@ -2619,34 +2617,6 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                 }
                                 Text("DRUM", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             }
-                        }
-
-                        // PLAY LAYOUT (single grid / split 20+20)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            val isSplit = state.playLayout == PlayLayout.SPLIT_20_20
-                            Button(
-                                onClick = {
-                                    onStateChange(
-                                        state.copy(
-                                            playLayout = if (isSplit) PlayLayout.GRID else PlayLayout.SPLIT_20_20
-                                        )
-                                    )
-                                },
-                                modifier = Modifier.height(controlHeight).width(controlWidth),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isSplit) Color(0xFFFF7043) else Color.DarkGray
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text(
-                                    if (isSplit) "GRID" else "20/20",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSplit) Color.Black else Color.White,
-                                    maxLines = 1
-                                )
-                            }
-                            Text("SPLIT", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         }
 
                         // ARP

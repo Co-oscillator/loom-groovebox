@@ -10,8 +10,6 @@ import com.groovebox.TrackState
 fun GridMode.padRows(): Int = when (this) {
     GridMode.GRID_4X4 -> 4
     GridMode.GRID_6X6 -> 6
-    GridMode.GRID_4X6 -> 4
-    GridMode.GRID_5X8 -> 5
     GridMode.MAC_KEYS -> 4
     GridMode.TONNETZ -> 4
 }
@@ -20,14 +18,51 @@ fun GridMode.padRows(): Int = when (this) {
 fun GridMode.padCols(): Int = when (this) {
     GridMode.GRID_4X4 -> 4
     GridMode.GRID_6X6 -> 6
-    GridMode.GRID_4X6 -> 6
-    GridMode.GRID_5X8 -> 8
     GridMode.MAC_KEYS -> 13
     GridMode.TONNETZ -> 4
 }
 
 /** Number of scale/chromatic notes a grid needs (MAC_KEYS is a special case). */
 fun GridMode.padCount(): Int = if (this == GridMode.MAC_KEYS) 46 else padRows() * padCols()
+
+/** Short label for the GRID button. */
+fun GridMode.shortLabel(): String = when (this) {
+    GridMode.GRID_4X4 -> "4x4"
+    GridMode.GRID_6X6 -> "6x6"
+    GridMode.MAC_KEYS -> "Keys"
+    GridMode.TONNETZ -> "TON"
+}
+
+/**
+ * Grid modes offered by the GRID button, in order. The split 20/20 layout is
+ * offered after the last entry, so it needs no separate control.
+ */
+fun gridModeCycle(includeMacKeys: Boolean): List<GridMode> = buildList {
+    add(GridMode.GRID_4X4)
+    add(GridMode.GRID_6X6)
+    if (includeMacKeys) add(GridMode.MAC_KEYS)
+    add(GridMode.TONNETZ)
+}
+
+/**
+ * Advances the GRID button one step: walks [gridModeCycle] and ends on the split
+ * 20/20 layout before wrapping back to 4x4. Returns the next grid mode and
+ * whether the split layout should be shown.
+ */
+fun nextGridStep(
+    gridMode: GridMode,
+    isSplit: Boolean,
+    includeMacKeys: Boolean
+): Pair<GridMode, Boolean> {
+    if (isSplit) return GridMode.GRID_4X4 to false
+    val cycle = gridModeCycle(includeMacKeys)
+    val index = cycle.indexOf(gridMode)
+    return when {
+        index == -1 -> GridMode.GRID_4X4 to false
+        index == cycle.lastIndex -> gridMode to true
+        else -> cycle[index + 1] to false
+    }
+}
 
 /** Analog drum kit: 6 sounds, laid out in groups of 8 (two blank pads). */
 fun analogDrumNote(padIndex: Int): Int {

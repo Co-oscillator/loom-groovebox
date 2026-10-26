@@ -6,7 +6,7 @@ enum class EngineType {
 
 enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM, BACH, BROWNIAN, CONVERGE, DIVERGE }
 
-enum class GridMode { GRID_4X4, GRID_6X6, TONNETZ, MAC_KEYS, GRID_4X6, GRID_5X8 }
+enum class GridMode { GRID_4X4, GRID_6X6, TONNETZ, MAC_KEYS }
 
 /**
  * What the on-screen pads play, independent of the track's engine.

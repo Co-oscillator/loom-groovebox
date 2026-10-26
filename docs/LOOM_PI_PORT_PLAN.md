@@ -148,8 +148,11 @@ void setPadModRouting(int trackIndex, int xDest, float xRange,
   pointers on the same note cannot cancel each other; the last `end` clears the
   voice mod.
 - The global `setPadMod` / `setParameter` path remains the fallback for engines
-  without per-voice support (Granular, SoundFont, Audio In, MIDI, drums) and
-  for tracks whose arp is on (the pad feeds the arp, not a sounding voice).
+  without per-voice support (Granular, SoundFont, Audio In, MIDI, drums), for
+  tracks whose arp is on (the pad feeds the arp, not a sounding voice), and for
+  destinations that are inherently global (macros, FX, global parameters). The
+  UI only takes the per-voice path when the destination is in the engine's
+  supported list, so a learned macro never silently moves a fallback parameter.
 
 Implemented in Phase 4; see §11.1 for the routing semantics and UI.
 

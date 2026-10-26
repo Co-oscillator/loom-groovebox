@@ -52,6 +52,11 @@ kotlin {
                 implementation(compose.desktop.currentOs)
             }
         }
+        val commonTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+            }
+        }
     }
 }
 

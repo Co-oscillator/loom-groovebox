@@ -6,6 +6,8 @@ import com.groovebox.ui.views.isBlackKey
 import com.groovebox.utils.*
 import com.groovebox.midi.MidiRouter
 import com.groovebox.midi.MidiCommand
+import com.groovebox.midi.MidiClockOut
+import com.groovebox.midi.MidiConfigStore
 
 class GrooveboxViewModel(
     private val nativeLib: NativeLib,
@@ -20,10 +22,12 @@ class GrooveboxViewModel(
 
     fun onStateChange(update: GrooveboxState) {
         state = update
+        syncMidiClock()
     }
 
     fun updateState(transform: (GrooveboxState) -> GrooveboxState) {
         state = transform(state)
+        syncMidiClock()
     }
 
     fun updateCurrentStep(newStep: Int) {
@@ -34,6 +38,7 @@ class GrooveboxViewModel(
 
     fun setPlaybackState(isPlaying: Boolean, isRecording: Boolean = state.isRecording) {
         state = state.copy(isPlaying = isPlaying, isRecording = isRecording)
+        syncMidiClock()
     }
 
     fun setSelectedTab(index: Int) {
@@ -294,6 +299,10 @@ class GrooveboxViewModel(
         if (track.engineType == EngineType.SAMPLER || track.engineType == EngineType.GRANULAR) {
             pullWaveform(focusedTrackIdx)
         }
+
+        // Keep MIDI clock output aligned with transport/tempo even when the
+        // change came from the native side (e.g. recording auto-start).
+        syncMidiClock()
     }
 
     fun pullWaveform(trackIdx: Int) {
@@ -379,8 +388,29 @@ class GrooveboxViewModel(
     @Volatile
     private var midiPumpStarted = false
 
+    /** 24 PPQN generator + transport messages (Phase 5). */
+    private val midiClockOut = MidiClockOut()
+
+    /**
+     * Reconcile MIDI clock output with transport, tempo and global settings.
+     * Cheap enough to call on every state change; also called from the UI poll
+     * so a tempo knob move or transport change is picked up immediately.
+     */
+    fun syncMidiClock() {
+        val settings = MidiConfigStore.current()
+        val hasOutput = midiManagerRef?.devices?.value?.any { it.isOutput } == true
+        midiClockOut.sync(
+            isRunning = state.isPlaying,
+            tempo = state.tempo,
+            clockEnabled = settings.clockOutEnabled && hasOutput,
+            sendTransport = settings.clockOutStartStop
+        )
+    }
+
     fun attachMidiManager(manager: com.groovebox.midi.MidiManager) {
         midiManagerRef = manager
+        midiClockOut.attachSender(manager::sendMidi)
+        syncMidiClock()
         if (midiPumpStarted) return
         midiPumpStarted = true
         Thread({
@@ -417,8 +447,20 @@ class GrooveboxViewModel(
             val trackIdx = events[i + 4]
             i += 5
 
-            val deviceId = tracks.getOrNull(trackIdx)?.midiOutDeviceId
-            val status = (type and 0xF0) or channel
+            val track = tracks.getOrNull(trackIdx)
+            val deviceId = track?.midiOutDeviceId
+
+            // Per-track output channel: 1..16 picks that channel, 17 ("All")
+            // passes through on channels 1..8 by track index, anything else
+            // keeps the channel the native sequencer produced.
+            val configured = track?.midiOutChannel ?: 17
+            val targetChannel = when {
+                configured == 17 -> trackIdx
+                configured in 1..16 -> configured - 1
+                else -> channel
+            }
+
+            val status = (type and 0xF0) or (targetChannel and 0x0F)
             manager.sendMidiTo(
                 deviceId,
                 byteArrayOf(status.toByte(), data1.toByte(), data2.toByte())
@@ -461,6 +503,55 @@ class GrooveboxViewModel(
                     "STOP" -> { state = state.copy(isPlaying = false, isRecording = false); nativeLib.setPlaying(false); nativeLib.setIsRecording(false) }
                     "RECORD" -> { val newRec = !state.isRecording; state = state.copy(isRecording = newRec, isPlaying = if (newRec) true else state.isPlaying); nativeLib.setIsRecording(newRec); if (newRec) nativeLib.setPlaying(true) }
                 }
+                syncMidiClock()
+            }
+            is MidiCommand.MidiClockTick -> {
+                // External clock drives the project tempo; the knob follows so
+                // the UI tells the truth while synced.
+                if (kotlin.math.abs(state.tempo - command.bpm) > 0.05f) {
+                    state = state.copy(tempo = command.bpm)
+                    nativeLib.setTempo(command.bpm)
+                }
+            }
+            is MidiCommand.DrumMapLearn -> {
+                val idx = command.trackIdx
+                if (idx in state.tracks.indices) {
+                    val track = state.tracks[idx]
+                    // One input note maps to one row: drop any previous binding
+                    // for this note before adding the new one.
+                    val cleaned = track.drumNoteMap.filterKeys { it != command.note }
+                    val updated = cleaned + (command.note to command.row)
+                    state = state.copy(
+                        tracks = state.tracks.mapIndexed { i, t ->
+                            if (i == idx) t.copy(drumNoteMap = updated) else t
+                        },
+                        drumMapLearnRow = -1,
+                        drumMapLearnTrack = -1
+                    )
+                }
+            }
+            is MidiCommand.MidiClockTransport -> {
+                when (command.action) {
+                    "START" -> {
+                        nativeLib.setPlaying(true)
+                        command.step?.let { nativeLib.jumpToStep(it) }
+                        state = state.copy(
+                            isPlaying = true,
+                            currentStep = command.step ?: 0
+                        )
+                    }
+                    "CONTINUE" -> {
+                        nativeLib.setPlaying(true)
+                        command.step?.let { nativeLib.jumpToStep(it) }
+                        state = state.copy(isPlaying = true)
+                    }
+                    "STOP" -> {
+                        nativeLib.setPlaying(false)
+                        nativeLib.setIsRecording(false)
+                        state = state.copy(isPlaying = false, isRecording = false)
+                    }
+                }
+                syncMidiClock()
             }
             is MidiCommand.NextTrack -> { state = state.copy(selectedTrackIndex = (state.selectedTrackIndex + 1) % state.tracks.size) }
             is MidiCommand.PreviousTrack -> { 

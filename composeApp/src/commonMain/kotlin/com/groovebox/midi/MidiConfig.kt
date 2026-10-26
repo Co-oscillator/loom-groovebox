@@ -52,13 +52,39 @@ data class MidiHardwarePreset(
     }
 }
 
-const val CURRENT_MIDI_SETTINGS_VERSION = 1
+const val CURRENT_MIDI_SETTINGS_VERSION = 2
 
+/**
+ * Global MIDI preferences: device routing plus clock/expression options.
+ *
+ * Schema history:
+ *  - 1: per-device configs + named hardware presets
+ *  - 2: MIDI clock in/out, transport messages, aftertouch routing,
+ *       pitch-bend range
+ *
+ * Keep [serialVersionUID] at 1: new primitive fields deserialize as 0/false
+ * from a v1 file, which is why [MidiConfigStore.sanitize] migrates by
+ * [schemaVersion] rather than trusting the field values.
+ */
 data class MidiSettings(
     val schemaVersion: Int = CURRENT_MIDI_SETTINGS_VERSION,
     val configs: List<MidiDeviceConfig> = emptyList(),
     val presets: List<MidiHardwarePreset> = emptyList(),
-    val activePreset: String? = null
+    val activePreset: String? = null,
+    /** Follow an incoming 24 PPQN clock and transport. */
+    val clockInEnabled: Boolean = false,
+    /** Emit 24 PPQN clock to every enabled output. */
+    val clockOutEnabled: Boolean = false,
+    /** Also send Start (0xFA) / Stop (0xFC) with the clock. */
+    val clockOutStartStop: Boolean = true,
+    /** Restrict clock input to one device; null = accept any source. */
+    val clockInDeviceId: String? = null,
+    /** Route channel pressure / poly pressure into pad modulation. */
+    val aftertouchEnabled: Boolean = true,
+    /** Allow polyphonic key pressure to drive per-voice modulation. */
+    val polyAftertouchEnabled: Boolean = true,
+    /** Pitch-wheel range in semitones for incoming 0xE0 messages. */
+    val pitchBendRange: Int = 2
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID = 1L
@@ -90,6 +116,8 @@ object MidiConfigStore {
 
     /** Coerce persisted data from older/corrupt files into a valid shape. */
     private fun sanitize(value: MidiSettings): MidiSettings {
+        val legacy = value.schemaVersion < CURRENT_MIDI_SETTINGS_VERSION
+
         fun channel(raw: Int): Int = when {
             raw == -1 || raw == 0 -> raw
             raw in 1..16 -> raw
@@ -117,7 +145,15 @@ object MidiConfigStore {
             schemaVersion = CURRENT_MIDI_SETTINGS_VERSION,
             configs = configs,
             presets = presets,
-            activePreset = value.activePreset?.takeIf { name -> presets.any { it.name == name } }
+            activePreset = value.activePreset?.takeIf { name -> presets.any { it.name == name } },
+            clockInEnabled = value.clockInEnabled,
+            clockOutEnabled = value.clockOutEnabled,
+            // New in schema 2: default transport + expression on for migrated files.
+            clockOutStartStop = if (legacy) true else value.clockOutStartStop,
+            clockInDeviceId = value.clockInDeviceId?.takeIf { it.isNotBlank() },
+            aftertouchEnabled = if (legacy) true else value.aftertouchEnabled,
+            polyAftertouchEnabled = if (legacy) true else value.polyAftertouchEnabled,
+            pitchBendRange = value.pitchBendRange.takeIf { it in 1..24 } ?: 2
         )
     }
 
@@ -137,7 +173,34 @@ object MidiConfigStore {
         snapshot.configs.firstOrNull { it.deviceId == deviceId }
             ?: MidiDeviceConfig(deviceId)
 
+    /**
+     * Volatile snapshot for MIDI receive/send threads. Reading Compose state
+     * from those threads is unsafe, so they use this instead.
+     */
+    fun current(): MidiSettings = snapshot
+
     fun configsSnapshot(): List<MidiDeviceConfig> = snapshot.configs
+
+    // --- Phase 5: clock + expression options -------------------------------
+
+    fun setClockInEnabled(enabled: Boolean) = update { it.copy(clockInEnabled = enabled) }
+
+    fun setClockOutEnabled(enabled: Boolean) = update { it.copy(clockOutEnabled = enabled) }
+
+    fun setClockOutStartStop(enabled: Boolean) =
+        update { it.copy(clockOutStartStop = enabled) }
+
+    fun setClockInDevice(deviceId: String?) =
+        update { it.copy(clockInDeviceId = deviceId?.takeIf { id -> id.isNotBlank() }) }
+
+    fun setAftertouchEnabled(enabled: Boolean) =
+        update { it.copy(aftertouchEnabled = enabled) }
+
+    fun setPolyAftertouchEnabled(enabled: Boolean) =
+        update { it.copy(polyAftertouchEnabled = enabled) }
+
+    fun setPitchBendRange(semitones: Int) =
+        update { it.copy(pitchBendRange = semitones.coerceIn(1, 24)) }
 
     fun savePreset(name: String) {
         val trimmed = name.trim()

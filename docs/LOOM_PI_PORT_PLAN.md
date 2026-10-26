@@ -344,6 +344,50 @@ Shipped:
 
 Left for later phases: MIDI clock in/out, SPP and transport alignment (§3.5 / Phase 5). Note that a device's `sendChannel` applies to all output, including LED/EMP16 feedback.
 
+### 3.7 Status: MIDI clock + expression implemented (Phase 5)
+
+Shipped in `midi/MidiClock.kt` + `midi/MidiRouter.kt`:
+
+- **Clock out.** `MidiClockOut` runs a dedicated daemon thread and emits 24
+  PPQN with an absolute-time anchor, so a late wake-up never accumulates drift.
+  Tempo changes re-anchor on the last pulse instead of bursting. `0xFA` Start
+  and `0xFC` Stop follow transport transitions; `0xFB` Continue is available to
+  receivers. System real-time bytes are channel-less, so per-device channel
+  remapping leaves them alone while mute/disable still applies.
+- **Clock in.** `MidiClockIn` averages a 48-tick window (reports after 16
+  samples) and rounds to 0.1 BPM, which tolerates typical USB jitter. Tempo is
+  applied with `setTempo` and mirrored into `state.tempo` so the knob shows the
+  master tempo. A gap longer than 1 s restarts the window; `0xFC` resets it.
+- **Transport + SPP.** `0xFA` starts, `0xFB` continues and `0xFC` stops. `0xF2`
+  Song Position Pointer is stored and applied to the next Start/Continue via
+  `jumpToStep` (Loom advances one step per 16th, so SPP maps 1:1). `0xFE`/`0xFF`
+  are consumed; MTC quarter-frame and Song Select are parsed and ignored.
+- **Pitch bend.** `0xE0` now routes to every track whose channel/device matches
+  (falling back to the selected track) and scales by the configured range
+  (2/12/24 semitones). Previously the normalised value was passed as semitones,
+  so full wheel travel was only ±1 st.
+- **Aftertouch.** `0xD0` channel pressure drives every matching track's
+  `padModTargetId` (global path). `0xA0` poly key pressure drives the Phase 4
+  per-voice path for that note when `polyPadMod` is on, the arp is off and the
+  destination is per-voice capable; otherwise it falls back to the global path.
+  Note-offs end the per-voice gesture.
+- **Persistence + UI.** `MidiSettings` schema 2 adds `clockInEnabled`,
+  `clockOutEnabled`, `clockOutStartStop`, `clockInDeviceId`,
+  `aftertouchEnabled`, `polyAftertouchEnabled` and `pitchBendRange`. Migration
+  from schema 1 turns transport/aftertouch on. Settings → MIDI Devices has a
+  new **MIDI Clock & Expression** card (source picker, four switches, bend
+  range chips). The dead `sendMidiClock` / `sendMidiStartStop` /
+  `midiSyncOutEnabled` project fields were removed: clock settings are global
+  hardware preferences, not project data.
+- **Bug fix.** Android had a second `fetchMidiEvents` pump in `MainActivity`
+  reading 4-int events after the format became 5 ints; it duplicated and
+  corrupted note output. The ViewModel pump is now the only consumer and it
+  honours `midiOutChannel` on both platforms.
+
+Verified with `:composeApp:desktopTest`: tempo estimation at 90/120/128/174 BPM,
+jitter tolerance, window warm-up, SPP start/continue semantics, gap handling,
+Start/Stop emission and clock-disable stop. Desktop + Android Kotlin compile.
+
 
 ---
 

@@ -6,7 +6,16 @@ enum class EngineType {
 
 enum class ArpMode { OFF, UP, DOWN, UP_DOWN, STAGGER_UP, STAGGER_DOWN, RANDOM, BACH, BROWNIAN, CONVERGE, DIVERGE }
 
-enum class GridMode { GRID_4X4, GRID_6X6, TONNETZ, MAC_KEYS }
+enum class GridMode { GRID_4X4, GRID_6X6, TONNETZ, MAC_KEYS, GRID_4X6, GRID_5X8 }
+
+/**
+ * What the on-screen pads play, independent of the track's engine.
+ *
+ * AUTO keeps the v1 behaviour (engine chooses), the rest force a mapping so a
+ * drum kit or slice bank can be played from any track, and FX turns the pads
+ * into per-bus FX bypass toggles.
+ */
+enum class PadMode { AUTO, SCALES, KEYBOARD, FM_DRUM, ANALOG_DRUM, SLICES, FX }
 
 /** Play-screen arrangement: one grid or two independent 5x4 performance banks. */
 enum class PlayLayout { GRID, SPLIT_20_20 }
@@ -94,6 +103,11 @@ data class TrackState(
     val soundFontPresetIndex: Int = 0,
     val soundFontPresetName: String = "None",
     val soundFontMapping: Map<Int, Int> = emptyMap(),
+    /**
+     * Drum-row wizard: incoming MIDI note -> drum row (instrument index).
+     * Empty means the default mapping (note 60 + row). Only used by drum tracks.
+     */
+    val drumNoteMap: Map<Int, Int> = emptyMap(),
     val parameters: Map<Int, Float> = mapOf(
         0 to 0.7f,    // Volume
         1 to 1.0f,    // Cutoff
@@ -297,9 +311,6 @@ data class GrooveboxState(
     val isJumpHold: Boolean = false,
     val jumpModeWaitingForTap: Boolean = false,
     val maxChainLength: Int = 16,
-    val midiSyncOutEnabled: Boolean = false,
-    val sendMidiClock: Boolean = false,
-    val sendMidiStartStop: Boolean = false,
     val padXAttenuation: Float? = null,
     val padYAttenuation: Float? = null,
     val invertPadY: Boolean = false,
@@ -360,6 +371,12 @@ data class GrooveboxState(
     // UI State
     val gridMode: GridMode = GridMode.GRID_4X4,
     val playLayout: PlayLayout = PlayLayout.GRID,
+    /** Phase 6: explicit pad mapping (AUTO = engine decides). */
+    val padMode: PadMode = PadMode.AUTO,
+    /** Drum-row wizard: row currently waiting for a MIDI note, -1 = off. */
+    val drumMapLearnRow: Int = -1,
+    /** Drum-row wizard: track the armed row belongs to, -1 = off. */
+    val drumMapLearnTrack: Int = -1,
     val splitLeft: SplitZone = SplitZone(trackIndex = 0, octave = 0),
     val splitRight: SplitZone = SplitZone(trackIndex = 1, octave = 1),
     val uiLayoutMode: Int = 0, // 0=Auto, 1=Phone, 2=Tablet

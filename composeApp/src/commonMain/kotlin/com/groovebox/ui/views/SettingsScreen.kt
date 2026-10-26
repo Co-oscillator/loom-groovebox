@@ -812,6 +812,143 @@ fun SettingsScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Uni
             }
         }
 
+        // ====== 2e. MIDI CLOCK & EXPRESSION ======
+        if (midiManager != null) {
+            val midiSettings = com.groovebox.midi.MidiConfigStore.settings
+            val clockInputs = midiManager.devices.value.filter { it.isInput }
+            var showClockInMenu by remember { mutableStateOf(false) }
+            val clockInName = midiSettings.clockInDeviceId
+                ?.let { id -> clockInputs.firstOrNull { it.id == id }?.name }
+                ?: "Any input"
+
+            Text("MIDI Clock & Expression", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.DarkGray.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    MidiOptionSwitch(
+                        title = "Clock In (external sync)",
+                        subtitle = "Follow an incoming 24 PPQN clock and its tempo",
+                        checked = midiSettings.clockInEnabled,
+                        onChange = { com.groovebox.midi.MidiConfigStore.setClockInEnabled(it) }
+                    )
+                    if (midiSettings.clockInEnabled) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Source",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box {
+                                OutlinedButton(
+                                    onClick = { showClockInMenu = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
+                                ) {
+                                    Text(clockInName, fontSize = 11.sp, maxLines = 1)
+                                }
+                                DropdownMenu(
+                                    expanded = showClockInMenu,
+                                    onDismissRequest = { showClockInMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Any input") },
+                                        onClick = {
+                                            com.groovebox.midi.MidiConfigStore.setClockInDevice(null)
+                                            showClockInMenu = false
+                                        }
+                                    )
+                                    clockInputs.forEach { device ->
+                                        DropdownMenuItem(
+                                            text = { Text(device.name) },
+                                            onClick = {
+                                                com.groovebox.midi.MidiConfigStore.setClockInDevice(device.id)
+                                                showClockInMenu = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Text(
+                            "Tip: enable Clock In on one device only. Tempo follows the master.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray
+                        )
+                    }
+
+                    Divider(color = Color.Gray.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 10.dp))
+
+                    MidiOptionSwitch(
+                        title = "Clock Out",
+                        subtitle = "Send 24 PPQN to every enabled output",
+                        checked = midiSettings.clockOutEnabled,
+                        onChange = { com.groovebox.midi.MidiConfigStore.setClockOutEnabled(it) }
+                    )
+                    if (midiSettings.clockOutEnabled) {
+                        MidiOptionSwitch(
+                            title = "Send Start / Stop",
+                            subtitle = "Transport messages (0xFA / 0xFC) with the clock",
+                            checked = midiSettings.clockOutStartStop,
+                            onChange = { com.groovebox.midi.MidiConfigStore.setClockOutStartStop(it) }
+                        )
+                    }
+
+                    Divider(color = Color.Gray.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 10.dp))
+
+                    MidiOptionSwitch(
+                        title = "Aftertouch → Pad Mod",
+                        subtitle = "Channel pressure drives the track's mod destination",
+                        checked = midiSettings.aftertouchEnabled,
+                        onChange = { com.groovebox.midi.MidiConfigStore.setAftertouchEnabled(it) }
+                    )
+                    if (midiSettings.aftertouchEnabled) {
+                        MidiOptionSwitch(
+                            title = "Poly aftertouch (per voice)",
+                            subtitle = "Per-note pressure modulates that note only",
+                            checked = midiSettings.polyAftertouchEnabled,
+                            onChange = { com.groovebox.midi.MidiConfigStore.setPolyAftertouchEnabled(it) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "Pitch-bend range",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White
+                    )
+                    Text(
+                        "Semitones at full wheel travel for incoming 0xE0",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(2, 12, 24).forEach { range ->
+                            FilterChip(
+                                selected = midiSettings.pitchBendRange == range,
+                                onClick = { com.groovebox.midi.MidiConfigStore.setPitchBendRange(range) },
+                                label = { Text("±$range", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF4CAF50).copy(alpha = 0.25f),
+                                    selectedLabelColor = Color(0xFF4CAF50),
+                                    labelColor = Color.Gray
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // ====== 3. MIDI INPUT ======
 
         // MIDI Input Channels
@@ -1194,6 +1331,28 @@ private fun MidiToggleChip(label: String, selected: Boolean, onToggle: (Boolean)
             labelColor = Color.Gray
         )
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MidiOptionSwitch(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.labelMedium, color = Color.White)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
 }
 
 @Composable

@@ -855,45 +855,9 @@ fun MainScreen(
         }
     }
 
-    // High-Frequency MIDI Event Polling
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            while (true) {
-                val events = nativeLib.fetchMidiEvents()
-                if (events.isNotEmpty()) {
-                    events.toList().chunked(4).forEach { event ->
-                        // event is a List<Byte> of size 4: [type, channel, data1, data2]
-                        val type = event[0].toInt()
-                        val trackIdx = event[1].toInt() // This comes from C++ as Track Index (0-7)
-                        val data1 = event[2]
-                        val data2 = event[3]
-                        
-                        // Look up the track's configured MIDI Output Channel
-                        // Access via property or state passed in?
-                        // If we are inside MainActivity's scope, it should be visible.
-                        // Try this@MainActivity.grooveboxState
-                        // Look up the track's configured MIDI Output Channel
-                        // Use latestState which is captured and updated
-                        val track = latestState.tracks.getOrNull(trackIdx)
-                        val configCh = track?.midiOutChannel ?: 1 // Default to Ch 1 if null
-                        
-                        // Logic:
-                        // 1-16: Use that channel (0-15)
-                        // 17 (All): Use trackIdx (0-7) mapped to Ch 1-8 (Pass-through)
-                        
-                        val targetChannel = if (configCh == 17) trackIdx else (configCh - 1).coerceIn(0, 15)
-                        
-                        // Construct MIDI Message (3 bytes: status, data1, data2)
-                        // Note: Status = Type (0xF0) | Channel (0x0F)
-                        // We must masking type to 0xF0 (e.g. 0x90) and OR with targetChannel
-                        val status = (type and 0xF0) or (targetChannel and 0x0F)
-                        midiManager.sendMidi(byteArrayOf(status.toByte(), data1.toByte(), data2.toByte()))
-                    }
-                }
-                delay(5) // Poll very fast (~200Hz)
-            }
-        }
-    }
+    // NOTE: MIDI output is pumped by GrooveboxViewModel (attachMidiManager).
+    // A second pump here used to read the same events with a stale 4-int
+    // stride, duplicating and corrupting note output on Android.
 
     // Poll sequencer steps during recording to ensure UI sync
     LaunchedEffect(state.isRecording, state.selectedTrackIndex, state.currentSequencerBank) {

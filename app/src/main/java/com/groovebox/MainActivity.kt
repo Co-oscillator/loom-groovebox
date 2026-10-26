@@ -385,7 +385,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        PersistenceManager.saveProject(viewModel.state, "last_session.gbx")
+        // A runtime permission dialog pauses the activity before the background
+        // initialisation has assigned viewModel, so this can run very early.
+        if (this::viewModel.isInitialized) {
+            PersistenceManager.saveProject(viewModel.state, "last_session.gbx")
+        }
     }
 
     private fun stopLoopbackCapture() {
@@ -414,10 +418,11 @@ class MainActivity : ComponentActivity() {
         stopLoopbackCapture()
         super.onDestroy()
         nativeLib.stop()
-        midiManager.close()
+        if (this::midiManager.isInitialized) midiManager.close()
     }
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (!this::viewModel.isInitialized) return super.onKeyDown(keyCode, event)
         // ALWAYS use the ViewModel state directly for input handling to avoid stale state issues
         val currentState = viewModel.state
         if (!currentState.isKeyboardModeEnabled) return super.onKeyDown(keyCode, event)
@@ -486,6 +491,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (!this::viewModel.isInitialized) return super.onKeyUp(keyCode, event)
         val currentState = viewModel.state
         if (!currentState.isKeyboardModeEnabled) return super.onKeyUp(keyCode, event)
         

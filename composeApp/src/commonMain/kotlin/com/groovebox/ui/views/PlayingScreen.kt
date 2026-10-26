@@ -195,7 +195,7 @@ fun PlayingPad(
                                             val arpOn = currentState.tracks[currentTIdx].arpConfig.mode != ArpMode.OFF
                                             val perVoiceDest = isPerVoiceModDest(
                                                 currentState.tracks[currentTIdx].engineType,
-                                                modParamId ?: -1
+                                                modParamId
                                             )
                                             val usePolyMod = (zone?.polyMod ?: currentState.polyPadMod) &&
                                                 !arpOn && perVoiceDest
@@ -216,7 +216,7 @@ fun PlayingPad(
                                                         if (usePolyMod) {
                                                             nativeLib.setPadModRouting(
                                                                 currentTIdx, 0, bendRange,
-                                                                modParamId ?: -1, modIntensity, true
+                                                                modParamId, modIntensity, true
                                                             )
                                                             nativeLib.beginVoicePadMod(currentTIdx, triggeredNote)
                                                         }

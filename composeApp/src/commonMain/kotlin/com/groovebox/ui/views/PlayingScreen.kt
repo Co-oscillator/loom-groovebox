@@ -2855,6 +2855,9 @@ private fun modTargetLabel(id: Int): String = when (id) {
     in 170..173 -> "OSC${id - 169} DRV"
     in 180..183 -> "OSC${id - 179} FOLD"
     in 160..195 -> "OP ${((id - 160) / 6) + 1} LVL"
+    290 -> "MORPHX3"
+    291 -> "FOLDX3"
+    292 -> "DRIVEX3"
     in 2000..2015 -> "MACRO ${id - 1999}"
     else -> "#$id"
 }

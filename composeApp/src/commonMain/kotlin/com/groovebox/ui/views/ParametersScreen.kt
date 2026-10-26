@@ -1367,6 +1367,43 @@ fun AutoPannerParameters(state: GrooveboxState, onStateChange: (GrooveboxState) 
     }
 }
 
+/**
+ * A Loom Pi oscillator macro: the knob's own parameter id (290-292) drives the
+ * native fan-out, while the three per-oscillator values are mirrored into the
+ * UI state so their knobs and saved projects stay in sync.
+ */
+@Composable
+private fun OscMacroKnob(
+    label: String,
+    parameterId: Int,
+    targets: List<Int>,
+    state: GrooveboxState,
+    trackIndex: Int,
+    onStateChange: (GrooveboxState) -> Unit,
+    nativeLib: NativeLib
+) {
+    Knob(
+        label = label,
+        initialValue = 0.0f,
+        parameterId = parameterId,
+        state = state,
+        onStateChange = { newState ->
+            val value = newState.tracks[trackIndex].parameters[parameterId] ?: 0.0f
+            onStateChange(
+                newState.copy(
+                    tracks = newState.tracks.mapIndexed { idx, track ->
+                        if (idx != trackIndex) track
+                        else track.copy(parameters = track.parameters + targets.associateWith { value })
+                    }
+                )
+            )
+        },
+        nativeLib = nativeLib,
+        knobSize = 32.dp,
+        labelFontSize = 8.sp
+    )
+}
+
 @Composable
 fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange: (GrooveboxState) -> Unit, nativeLib: NativeLib) {
     val themeColor = Color(0xFF00E5FF) // Cyan for Subtractive
@@ -1433,6 +1470,42 @@ fun SubtractiveParameters(state: GrooveboxState, trackIndex: Int, onStateChange:
                     Knob("NOISE", 0.0f, 110, state, onStateChange, nativeLib, knobSize = 32.dp)
                     Knob("DETUN", 0.1f, 106, state, onStateChange, nativeLib, knobSize = 32.dp)
                     Knob("GLIDE", 0.0f, 355, state, onStateChange, nativeLib, knobSize = 32.dp)
+                }
+            }
+        }
+
+        // MACROS: one knob drives the same stage on all three oscillators
+        // (ported from Loom Pi's subtractive MACROS card).
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CompactParameterBox(title = "MACROS", startColor = themeColor, modifier = Modifier.weight(1f)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    OscMacroKnob(
+                        label = "MORPHX3",
+                        parameterId = 290,
+                        targets = listOf(104, 105, 155),
+                        state = state,
+                        trackIndex = trackIndex,
+                        onStateChange = onStateChange,
+                        nativeLib = nativeLib
+                    )
+                    OscMacroKnob(
+                        label = "FOLDX3",
+                        parameterId = 291,
+                        targets = listOf(180, 181, 182),
+                        state = state,
+                        trackIndex = trackIndex,
+                        onStateChange = onStateChange,
+                        nativeLib = nativeLib
+                    )
+                    OscMacroKnob(
+                        label = "DRIVEX3",
+                        parameterId = 292,
+                        targets = listOf(170, 171, 172),
+                        state = state,
+                        trackIndex = trackIndex,
+                        onStateChange = onStateChange,
+                        nativeLib = nativeLib
+                    )
                 }
             }
         }

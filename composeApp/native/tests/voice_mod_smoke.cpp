@@ -248,6 +248,55 @@ static void testCoreTranspose() {
         "per-voice mod resolves the track transpose to the sounding voice");
 }
 
+static void testSubtractiveMacros() {
+  const float SR = 48000.0f;
+  const int FRAMES = 8192;
+  std::printf("\n== Subtractive oscillator macros ==\n");
+
+  AudioEngineCore core;
+  core.updateSampleRate(SR);
+  core.setEngineType(0, 0);
+  core.setTrackVolume(0, 0.8f);
+  for (int i = 0; i < 18; ++i) core.setFxEnabled(i, false);
+
+  std::vector<float> scratch(FRAMES * 2, 0.0f);
+  for (int i = 0; i < 4; ++i) core.render(scratch.data(), FRAMES);
+
+  core.setParameter(0, 290, 0.6f);  // MorphX3
+  core.setParameter(0, 291, 0.75f); // FoldX3
+  core.setParameter(0, 292, 0.5f);  // DriveX3
+  for (int i = 0; i < 4; ++i) core.render(scratch.data(), FRAMES);
+
+  auto params = core.getAllTrackParameters(0);
+  check(std::fabs(params[104] - 0.6f) < 1e-4f &&
+            std::fabs(params[105] - 0.6f) < 1e-4f &&
+            std::fabs(params[155] - 0.6f) < 1e-4f,
+        "MorphX3 writes all three oscillator shape parameters");
+  check(std::fabs(params[180] - 0.75f) < 1e-4f &&
+            std::fabs(params[181] - 0.75f) < 1e-4f &&
+            std::fabs(params[182] - 0.75f) < 1e-4f,
+        "FoldX3 writes all three fold parameters");
+  check(std::fabs(params[170] - 0.5f) < 1e-4f &&
+            std::fabs(params[171] - 0.5f) < 1e-4f &&
+            std::fabs(params[172] - 0.5f) < 1e-4f,
+        "DriveX3 writes all three drive parameters");
+
+  // A macro used as a modulation destination must not bake into the base
+  // parameters, or the value would stick after the modulation ends.
+  core.setRouting(0, -1, 10 /* Macro1 */, 5 /* Parameter */, 1.0f, 291);
+  core.setMacroValue(0, 1.0f);
+  core.render(scratch.data(), FRAMES);
+  core.setMacroValue(0, 0.0f);
+  core.setRouting(0, -1, 10, 5, 0.0f, 291);
+  for (int i = 0; i < 4; ++i) core.render(scratch.data(), FRAMES);
+
+  auto restored = core.getAllTrackParameters(0);
+  check(std::fabs(restored[180] - 0.75f) < 1e-4f &&
+            std::fabs(restored[181] - 0.75f) < 1e-4f &&
+            std::fabs(restored[182] - 0.75f) < 1e-4f,
+        "macro modulation leaves the base fold parameters intact");
+}
+
 int main() {
   testEngine("Subtractive", [] { return std::make_unique<SubtractiveEngine>(); }, 1);
   testEngine("FM", [] { return std::make_unique<FmEngine>(); }, 151);
@@ -265,6 +314,7 @@ int main() {
   testBendRange();
   testCoreRefCount();
   testCoreTranspose();
+  testSubtractiveMacros();
 
   std::printf("\n%s (%d failure%s)\n", failures == 0 ? "OK" : "FAILED",
               failures, failures == 1 ? "" : "s");

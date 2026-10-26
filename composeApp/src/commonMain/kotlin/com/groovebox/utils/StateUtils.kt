@@ -318,9 +318,19 @@ fun syncNativeState(state: GrooveboxState, nativeLib: NativeLib) {
         nativeLib.setTrackPan(trackIdx, t.pan)
         nativeLib.setSelectedFmDrumInstrument(trackIdx, t.selectedFmDrumInstrument)
         
-        t.parameters.forEach { (pid, v) -> 
+        val macroIds = if (t.engineType == EngineType.SUBTRACTIVE) setOf(290, 291, 292) else emptySet()
+        t.parameters.forEach { (pid, v) ->
+            if (pid in macroIds) return@forEach
             val safeVal = if (v.isNaN() || v.isInfinite()) 0.0f else v
             nativeLib.setParameter(trackIdx, pid, safeVal) 
+        }
+        // Apply the oscillator macros last: they fan out to 190-192 / 180-182 /
+        // 170-172, so they must win over the individual values regardless of
+        // the order the parameter map was built in.
+        t.parameters.forEach { (pid, v) ->
+            if (pid !in macroIds) return@forEach
+            val safeVal = if (v.isNaN() || v.isInfinite()) 0.0f else v
+            nativeLib.setParameter(trackIdx, pid, safeVal)
         }
         
         nativeLib.setPatternLength(trackIdx, state.patternLength)

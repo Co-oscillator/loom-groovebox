@@ -100,7 +100,7 @@ object PresetCodec {
 
 /** Parameter id ranges owned by each engine. Used to reset/export cleanly. */
 object PresetRanges {
-    val subtractive: List<IntRange> = listOf(1..1, 3..3, 100..199, 355..355)
+    val subtractive: List<IntRange> = listOf(1..1, 3..3, 100..199, 290..292, 355..355)
     val wavetable: List<IntRange> = listOf(1..3, 355..355, 450..489)
     val fmDrum: List<IntRange> = listOf(200..299)
     val analogDrum: List<IntRange> = listOf(600..699)

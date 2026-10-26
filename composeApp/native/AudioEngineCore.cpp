@@ -1115,6 +1115,21 @@ void AudioEngineCore::updateEngineParameter(int trackIndex, int parameterId,
       }
     }
   }
+  // Subtractive oscillator macros (290-292), ported from Loom Pi. One knob
+  // drives the same stage on all three oscillators, and the per-oscillator
+  // parameters are kept in sync so the UI and presets show the result.
+  // 290 = wave morph (the SHAPE knobs), 291 = fold, 292 = drive.
+  else if (parameterId >= 290 && parameterId <= 292 &&
+           track.engineType == 0) {
+    static const int kMacroTargets[3][3] = {
+        {104, 105, 155}, {180, 181, 182}, {170, 171, 172}};
+    const int *dst = kMacroTargets[parameterId - 290];
+    for (int i = 0; i < 3; ++i) {
+      track.parameters[dst[i]] = value;
+      track.appliedParameters[dst[i]] = value;
+      updateEngineParameter(trackIndex, dst[i], value);
+    }
+  }
   // FM Drum (200-299)
   else if (parameterId >= 200 && parameterId < 300) {
     track.fmDrumEngine.setParameter((parameterId - 200) / 10,
@@ -2959,7 +2974,21 @@ void AudioEngineCore::applyModulations() {
         if (!std::isfinite(effectiveVal))
           effectiveVal = baseVal;
         track.appliedParameters[destId] = effectiveVal;
-        updateEngineParameter(t, destId, effectiveVal);
+
+        if (destId >= 290 && destId <= 292 && track.engineType == 0) {
+          // Macro destinations fan out to the three oscillator parameters.
+          // Unlike a UI change, modulation must not be written into the base
+          // parameters, otherwise it would stick after the modulation ends.
+          static const int kMacroTargets[3][3] = {
+              {104, 105, 155}, {180, 181, 182}, {170, 171, 172}};
+          const int *dst = kMacroTargets[destId - 290];
+          for (int i = 0; i < 3; ++i) {
+            track.appliedParameters[dst[i]] = effectiveVal;
+            updateEngineParameter(t, dst[i], effectiveVal);
+          }
+        } else {
+          updateEngineParameter(t, destId, effectiveVal);
+        }
 
         // Track this modulated ID (avoid duplicates)
         if (currentModCount < 32) {

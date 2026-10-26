@@ -445,8 +445,13 @@ public:
 
         // Per-voice Y-axis modulation is resolved once per block.
         float vCutoff, vRes, vFAmt, vNoise;
-        float vVol[4], vFold[4], vDrive[4], vPitch[4];
-        voiceModValues(v, vCutoff, vRes, vFAmt, vNoise, vVol, vFold, vDrive, vPitch);
+        float vVol[4], vFold[4], vDrive[4], vPitch[4], vMorph[4], vWave[4];
+        voiceModValues(v, vCutoff, vRes, vFAmt, vNoise, vVol, vFold, vDrive,
+                       vPitch, vMorph, vWave);
+        for (int osc_i = 0; osc_i < 4; ++osc_i) {
+            v.oscillators[osc_i].setWaveShape(vMorph[osc_i]);
+            v.oscillators[osc_i].setMorphValue(vWave[osc_i]);
+        }
 
         // Osc constants are block-invariant — hoist above chunk loop
         float v0 = vVol[0] * vDrive[0];
@@ -552,7 +557,8 @@ private:
   // default for a subtractive voice.
   void voiceModValues(const Voice &v, float &cutoff, float &resonance,
                       float &filterEnvAmount, float &noiseLevel, float vol[4],
-                      float fold[4], float drive[4], float pitch[4]) const {
+                      float fold[4], float drive[4], float pitch[4],
+                      float morph[4], float waveMorph[4]) const {
     cutoff = mCutoff;
     resonance = mResonance;
     filterEnvAmount = mF_Amt;
@@ -562,6 +568,8 @@ private:
       fold[i] = mOscFold[i];
       drive[i] = mOscDrive[i];
       pitch[i] = mOscPitch[i];
+      morph[i] = mOscPW[i];
+      waveMorph[i] = mOscWaveValues[i];
     }
     if (!v.mod.active)
       return;
@@ -604,6 +612,28 @@ private:
     case 162:
     case 163:
       pitch[mModRouting.yDest - 160] *= powf(2.0f, (y * 2.0f) / 12.0f);
+      break;
+    case 104:
+    case 105:
+    case 155: {
+      const int idx = mModRouting.yDest == 104 ? 0
+                      : mModRouting.yDest == 105 ? 1
+                                                 : 2;
+      waveMorph[idx] = voiceModClamp01(waveMorph[idx] + y);
+      break;
+    }
+    // Loom Pi oscillator macros: one pad axis drives all three oscillators.
+    case 290:
+      for (int i = 0; i < 3; ++i)
+        waveMorph[i] = voiceModClamp01(waveMorph[i] + y);
+      break;
+    case 291:
+      for (int i = 0; i < 3; ++i)
+        fold[i] = voiceModClamp01(fold[i] + y);
+      break;
+    case 292:
+      for (int i = 0; i < 3; ++i)
+        drive[i] = 1.0f + (drive[i] - 1.0f) * (1.0f + y * 2.0f);
       break;
     case 1:
     case 112:

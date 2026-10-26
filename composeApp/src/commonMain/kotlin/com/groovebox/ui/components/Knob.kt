@@ -207,12 +207,22 @@ fun Knob(
                                 
                                 // PAD MOD LEARN LOGIC
                                 if (latestState.isPadModLearnActive && parameterId != -1) {
+                                    val learnBank = latestState.padModLearnBank
                                     latestOnStateChange(latestState.copy(
                                         isPadModLearnActive = false,
-                                        tracks = latestState.tracks.mapIndexed { idx, t ->
-                                            if (idx == latestState.selectedTrackIndex) t.copy(padModTargetId = parameterId)
-                                            else t
-                                        }
+                                        padModLearnBank = -1,
+                                        tracks = if (learnBank < 0) {
+                                            latestState.tracks.mapIndexed { idx, t ->
+                                                if (idx == latestState.selectedTrackIndex) t.copy(padModTargetId = parameterId)
+                                                else t
+                                            }
+                                        } else latestState.tracks,
+                                        splitLeft = if (learnBank == 0)
+                                            latestState.splitLeft.copy(modTargetId = parameterId)
+                                        else latestState.splitLeft,
+                                        splitRight = if (learnBank == 1)
+                                            latestState.splitRight.copy(modTargetId = parameterId)
+                                        else latestState.splitRight
                                     ))
                                     return@awaitPointerEventScope
                                 }

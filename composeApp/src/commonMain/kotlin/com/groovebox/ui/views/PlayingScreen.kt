@@ -84,6 +84,7 @@ fun PlayingPad(
     isChopMode: Boolean = false,
     isNoteActive: Boolean = false,
     targetTrackIndex: Int? = null,
+    zone: SplitZone? = null,
     playheadEnabled: Boolean = true,
     shape: Shape = RoundedCornerShape(8.dp),
     isSolidStyle: Boolean = false,
@@ -163,7 +164,8 @@ fun PlayingPad(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(padIndex, note, targetTrackIndex) {
+                            .pointerInput(padIndex, note, targetTrackIndex, zone?.polyMod,
+                                zone?.modTargetId, zone?.modIntensity, zone?.bendRange) {
                                 awaitPointerEventScope {
                                         while (true) {
                                             val down = awaitFirstDown()
@@ -175,7 +177,9 @@ fun PlayingPad(
                                             val currentBank = currentState.currentSequencerBank
                                             val triggeredNote = note
                                             
-                                            val modParamId = currentState.tracks[currentTIdx].padModTargetId
+                                            val bankTarget = zone?.modTargetId?.takeIf { it >= 0 }
+                                            val modParamId = bankTarget
+                                                ?: currentState.tracks[currentTIdx].padModTargetId
                                             val initialModValue = if (modParamId != null) {
                                                 if (modParamId >= 2000) {
                                                     currentState.macros.getOrNull(modParamId - 2000)?.value ?: 0.5f
@@ -183,6 +187,16 @@ fun PlayingPad(
                                                     currentState.tracks[currentTIdx].parameters[modParamId] ?: 0.5f
                                                 }
                                             } else 0.5f
+
+                                            // Per-voice modulation needs a sounding voice; with
+                                            // the arp on the pad only feeds the arp, so fall back
+                                            // to the v1 global path.
+                                            val arpOn = currentState.tracks[currentTIdx].arpConfig.mode != ArpMode.OFF
+                                            val usePolyMod = (zone?.polyMod ?: currentState.polyPadMod) && !arpOn
+                                            val bendRange = zone?.bendRange
+                                                ?: (if (isChopMode) 12f else 2f)
+                                            val modIntensity = zone?.modIntensity ?: 1f
+                                            var noteTriggered = false
 
                                             try {
                                                 if (currentState.jumpModeWaitingForTap && targetTrackIndex == null) {
@@ -192,65 +206,87 @@ fun PlayingPad(
                                                     if (triggeredNote in 0..127 &&
                                                         !currentState.tracks[currentTIdx].isDisabled) {
                                                         nativeLib.triggerNote(currentTIdx, triggeredNote, 100)
+                                                        noteTriggered = true
+                                                        if (usePolyMod) {
+                                                            nativeLib.setPadModRouting(
+                                                                currentTIdx, 0, bendRange,
+                                                                modParamId ?: -1, modIntensity, true
+                                                            )
+                                                            nativeLib.beginVoicePadMod(currentTIdx, triggeredNote)
+                                                        }
                                                     }
-                                                    
+
                                                     // GESTURE HANDLING (X: Pitch Bend, Y: Modulation)
                                                     var currentBend = 0.0f
-                                                    var currentModValue = initialModValue
+                                                    var currentModDelta = 0.0f
 
                                                     // Track movement
                                                     while (true) {
                                                         val event = awaitPointerEvent()
                                                         val change = event.changes.find { it.id == pointerId }
-                                                        
+
                                                         if (change != null && change.pressed) {
                                                             val currentPos = change.position
                                                             val dx = currentPos.x - startPos.x
-                                                            
-                                                            // X-Axis: Pitch Bend (range depends on mode)
 
-                                                            // Slice pads (Chop modes): ±12 semitones for dramatic pitch effects
-                                                            // Note pads (all others): ±2 semitones for subtle vibrato/bend
-                                                            val bendMultiplier = if (isChopMode) 24.0f else 4.0f
-                                                            val bendLimit = if (isChopMode) 12f else 2f
-                                                            val newBend = ((dx / size.width.toFloat() * bendMultiplier) * (currentState.padXAttenuation ?: 1.0f)).coerceIn(-bendLimit, bendLimit)
-                                                            if (newBend != currentBend) {
-                                                                currentBend = newBend
-                                                                nativeLib.setPitchBend(currentTIdx, currentBend)
-                                                                
-                                                                // Live record pitch bend as parameter lock
-                                                                if (currentState.isRecording && currentState.isPlaying) {
-                                                                    val liveStep = nativeLib.getCurrentStep(currentTIdx)
-                                                                    val bendNormalized = ((currentBend + bendLimit) / (2f * bendLimit)).coerceIn(0f, 1f)
-                                                                    nativeLib.setParameterLock(currentTIdx, liveStep, 355, bendNormalized)
-                                                                }
-                                                            }
-                                                            
-                                                            // Y-Axis: Modulation (Absolute mapping over pad height)
+                                                            // X: full pad width = the configured bend range.
+                                                            val normX = (dx / (size.width.toFloat() * 0.5f))
+                                                                .coerceIn(-1f, 1f)
+                                                            val newBend = normX * bendRange *
+                                                                (currentState.padXAttenuation ?: 1.0f)
+
+                                                            // Y: signed delta relative to the gesture
+                                                            // start (-1..1), so releasing snaps back.
                                                             val dyRaw = startPos.y - currentPos.y // Standard: Up is positive
                                                             val dy = if (currentState.invertPadY) -dyRaw else dyRaw
-                                                            
-                                                            val modDelta = (dy / size.height.toFloat()) * (currentState.padYAttenuation ?: 1.0f)
-                                                            val newMod = (initialModValue + modDelta).coerceIn(0f, 1f)
-                                                            if (newMod != currentModValue) {
-                                                                currentModValue = newMod
-                                                                if (modParamId != null) {
-                                                                    if (modParamId >= 2000) {
-                                                                        nativeLib.setMacroValue(modParamId - 2000, currentModValue)
-                                                                    } else {
-                                                                        nativeLib.setParameter(currentTIdx, modParamId, currentModValue)
+                                                            val newModDelta = ((dy / size.height.toFloat()) *
+                                                                (currentState.padYAttenuation ?: 1.0f))
+                                                                .coerceIn(-1f, 1f)
+
+                                                            if (newBend != currentBend || newModDelta != currentModDelta) {
+                                                                val bendChanged = newBend != currentBend
+                                                                val modChanged = newModDelta != currentModDelta
+                                                                currentBend = newBend
+                                                                currentModDelta = newModDelta
+
+                                                                if (usePolyMod) {
+                                                                    nativeLib.setVoicePadMod(
+                                                                        currentTIdx, triggeredNote,
+                                                                        if (bendRange > 0.001f) newBend / bendRange else 0f,
+                                                                        newModDelta
+                                                                    )
+                                                                } else {
+                                                                    if (bendChanged) {
+                                                                        nativeLib.setPitchBend(currentTIdx, currentBend)
+
+                                                                        // Live record pitch bend as parameter lock
+                                                                        if (currentState.isRecording && currentState.isPlaying && bendRange > 0.001f) {
+                                                                            val liveStep = nativeLib.getCurrentStep(currentTIdx)
+                                                                            val bendNormalized = ((currentBend + bendRange) / (2f * bendRange)).coerceIn(0f, 1f)
+                                                                            nativeLib.setParameterLock(currentTIdx, liveStep, 355, bendNormalized)
+                                                                        }
                                                                     }
-                                                                    
-                                                                    // Live record Y modulation as parameter lock
-                                                                    if (currentState.isRecording && currentState.isPlaying) {
-                                                                        val liveStep = nativeLib.getCurrentStep(currentTIdx)
-                                                                        nativeLib.setParameterLock(currentTIdx, liveStep, modParamId, currentModValue)
+
+                                                                    if (modChanged && modParamId != null) {
+                                                                        val newMod = (initialModValue + currentModDelta * modIntensity).coerceIn(0f, 1f)
+                                                                        if (modParamId >= 2000) {
+                                                                            nativeLib.setMacroValue(modParamId - 2000, newMod)
+                                                                        } else {
+                                                                            nativeLib.setParameter(currentTIdx, modParamId, newMod)
+                                                                        }
+
+                                                                        // Live record Y modulation as parameter lock
+                                                                        if (currentState.isRecording && currentState.isPlaying) {
+                                                                            val liveStep = nativeLib.getCurrentStep(currentTIdx)
+                                                                            nativeLib.setParameterLock(currentTIdx, liveStep, modParamId, newMod)
+                                                                        }
                                                                     }
+                                                                    // Always update for Routing Source (v2.2.5 MIDI PADS Source)
+                                                                    nativeLib.setPadMod(currentTIdx,
+                                                                        (initialModValue + currentModDelta * modIntensity).coerceIn(0f, 1f))
                                                                 }
-                                                                // Always update for Routing Source (v2.2.5 MIDI PADS Source)
-                                                                nativeLib.setPadMod(currentTIdx, currentModValue)
                                                             }
-                                                            
+
                                                             change.consume()
                                                         } else {
                                                             break
@@ -260,17 +296,24 @@ fun PlayingPad(
                                             } finally {
                                                 isLocallyPressed = false
                                                 val currentTIdx = targetTrackIndex ?: currentState.selectedTrackIndex
-                                                nativeLib.setPitchBend(currentTIdx, 0.0f) // Reset bend on release
-                                                
-                                                // Y-Axis: Reset modulation on release (Snapback)
-                                                if (modParamId != null) {
-                                                    if (modParamId >= 2000) {
-                                                        nativeLib.setMacroValue(modParamId - 2000, initialModValue)
-                                                    } else {
-                                                        nativeLib.setParameter(currentTIdx, modParamId, initialModValue)
+
+                                                if (usePolyMod) {
+                                                    if (noteTriggered) {
+                                                        nativeLib.endVoicePadMod(currentTIdx, triggeredNote)
                                                     }
+                                                } else {
+                                                    nativeLib.setPitchBend(currentTIdx, 0.0f) // Reset bend on release
+
+                                                    // Y-Axis: Reset modulation on release (Snapback)
+                                                    if (modParamId != null) {
+                                                        if (modParamId >= 2000) {
+                                                            nativeLib.setMacroValue(modParamId - 2000, initialModValue)
+                                                        } else {
+                                                            nativeLib.setParameter(currentTIdx, modParamId, initialModValue)
+                                                        }
+                                                    }
+                                                    nativeLib.setPadMod(currentTIdx, initialModValue)
                                                 }
-                                                nativeLib.setPadMod(currentTIdx, initialModValue)
 
                                                 if (!currentState.jumpModeWaitingForTap) {
                                                     if (triggeredNote in 0..127) {
@@ -635,6 +678,8 @@ fun SplitBank(
     val track = state.tracks.getOrNull(zone.trackIndex) ?: state.tracks[0]
     val color = getEngineColor(track.engineType)
     var showTrackMenu by remember { mutableStateOf(false) }
+    var showModMenu by remember { mutableStateOf(false) }
+    val effectiveModTarget = if (zone.modTargetId >= 0) zone.modTargetId else track.padModTargetId
 
     fun updateZone(transform: (SplitZone) -> SplitZone) {
         val updated = transform(zone)
@@ -713,7 +758,8 @@ fun SplitBank(
                     onStateChange(
                         state.copy(
                             selectedTrackIndex = zone.trackIndex,
-                            isPadModLearnActive = true
+                            isPadModLearnActive = true,
+                            padModLearnBank = if (isLeft) 0 else 1
                         )
                     )
                 },
@@ -728,6 +774,79 @@ fun SplitBank(
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold
                 )
+            }
+            Box {
+                Surface(
+                    onClick = { showModMenu = true },
+                    color = Color.DarkGray,
+                    shape = RoundedCornerShape(4.dp),
+                    border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
+                ) {
+                    Text(
+                        "\u22EE",
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                DropdownMenu(expanded = showModMenu, onDismissRequest = { showModMenu = false }) {
+                    Text(
+                        "BANK ${label} MOD  ·  ${modTargetLabel(effectiveModTarget)}",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        color = Color.Gray,
+                        fontSize = 10.sp
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (zone.polyMod) "Poly voices: ON" else "Poly voices: OFF",
+                                color = Color.White, fontSize = 12.sp
+                            )
+                        },
+                        onClick = {
+                            updateZone { it.copy(polyMod = !it.polyMod) }
+                            showModMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Bend range ±2 st", color = Color.White, fontSize = 12.sp) },
+                        onClick = { updateZone { it.copy(bendRange = 2f) }; showModMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Bend range ±12 st", color = Color.White, fontSize = 12.sp) },
+                        onClick = { updateZone { it.copy(bendRange = 12f) }; showModMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Bend range ±24 st", color = Color.White, fontSize = 12.sp) },
+                        onClick = { updateZone { it.copy(bendRange = 24f) }; showModMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Intensity 100%", color = Color.White, fontSize = 12.sp) },
+                        onClick = { updateZone { it.copy(modIntensity = 1f) }; showModMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Intensity 50%", color = Color.White, fontSize = 12.sp) },
+                        onClick = { updateZone { it.copy(modIntensity = 0.5f) }; showModMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Learn destination…", color = Color.Cyan, fontSize = 12.sp) },
+                        onClick = {
+                            onStateChange(
+                                state.copy(
+                                    selectedTrackIndex = zone.trackIndex,
+                                    isPadModLearnActive = true,
+                                    padModLearnBank = if (isLeft) 0 else 1
+                                )
+                            )
+                            showModMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Use track destination", color = Color.White, fontSize = 12.sp) },
+                        onClick = { updateZone { it.copy(modTargetId = -1) }; showModMenu = false }
+                    )
+                }
             }
         }
 
@@ -776,6 +895,7 @@ fun SplitBank(
                                         empledManager = empledManager,
                                         isChopMode = isChopMode,
                                         targetTrackIndex = zone.trackIndex,
+                                        zone = zone,
                                         playheadEnabled = false
                                     )
                                 }
@@ -2119,7 +2239,16 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                         // PAD MOD LEARN
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Button(
-                                onClick = { onStateChange(state.copy(isPadModLearnActive = !state.isPadModLearnActive)) },
+                                onClick = {
+                                    onStateChange(
+                                        state.copy(
+                                            isPadModLearnActive = !state.isPadModLearnActive,
+                                            // The single grid has no bank: learn into the
+                                            // selected track, not the last touched bank.
+                                            padModLearnBank = -1
+                                        )
+                                    )
+                                },
                                 modifier = Modifier.height(controlHeight).width(controlWidth),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (state.isPadModLearnActive) Color.Cyan else Color.DarkGray
@@ -2442,4 +2571,48 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
         onStateChange = latestOnStateChange,
         nativeLib = nativeLib
     )
+}
+
+/**
+ * Human-readable name for a pad-modulation destination id.
+ *
+ * The ids are engine parameter ids, so several names collide across engines
+ * (e.g. 1 is Subtractive cutoff and 151 is FM cutoff).  The mapping is
+ * intentionally lossy: it only needs to tell two banks apart at a glance.
+ */
+private fun modTargetLabel(id: Int): String = when (id) {
+    -1 -> "TRACK"
+    0 -> "POSITION"
+    1, 112, 151, 458 -> "CUTOFF"
+    2, 113, 152, 459 -> "RES"
+    3, 118, 464 -> "ENV AMT"
+    10 -> "DETUNE"
+    15, 465 -> "WARP"
+    16, 466 -> "CRUSH"
+    17, 467 -> "DRIVE"
+    100 -> "ATTACK"
+    101 -> "DECAY"
+    102 -> "SUSTAIN"
+    103 -> "RELEASE"
+    107 -> "OSC1"
+    108 -> "OSC2"
+    109 -> "OSC3"
+    110 -> "NOISE"
+    154 -> "FEEDBACK"
+    159 -> "FM DRIVE"
+    300 -> "PITCH"
+    302 -> "SPEED"
+    303 -> "CUTOFF"
+    304 -> "RES"
+    314 -> "ENV AMT"
+    406 -> "GRAIN"
+    450 -> "MORPH"
+    451 -> "DETUNE"
+    475 -> "BITS"
+    476 -> "SRATE"
+    in 170..173 -> "OSC${id - 169} DRV"
+    in 180..183 -> "OSC${id - 179} FOLD"
+    in 160..195 -> "OP ${((id - 160) / 6) + 1} LVL"
+    in 2000..2015 -> "MACRO ${id - 1999}"
+    else -> "#$id"
 }

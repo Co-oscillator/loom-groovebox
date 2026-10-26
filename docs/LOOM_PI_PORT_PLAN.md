@@ -706,9 +706,12 @@ produces different mixes; `clearAllVoiceMod` restores the exact unmodulated
 render; a +1 X at 12 st bends one octave; and the core refcount keeps the bend
 until the final `endVoicePadMod`.
 
-Per-finger voice-link is inherent in this design: each finger's modulation is
-bound to the note it triggered, so two fingers never share a bend. Chord-voice
-sharing (one pad triggering several notes) is not used by Groovebox today; if
-it is added later, `originNote` is the field to key the shared identity on.
+Loom Pi calls the poly flag `voiceLinkPoly`; Groovebox exposes the same switch
+as `SplitZone.polyMod` (per bank) and `polyPadMod` (single grid). With voice
+link on, each finger's modulation is bound to the note it triggered, so two
+fingers never share a bend. With it off, the gesture uses the global parameter
+path. Chord-voice sharing (one pad triggering several notes) is not used by
+Groovebox today; if it is added later, `originNote` is the field to key the
+shared identity on.
 
 ---

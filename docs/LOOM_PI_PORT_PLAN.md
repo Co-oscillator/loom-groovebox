@@ -1,6 +1,6 @@
 # Porting Loom Pi Performance Features into Loom Groovebox
 
-Status: proposal / scope confirmed 2026-10-24
+Status: proposal / scope confirmed 2026-10-24; Phases 0–4 shipped 2026-10-25
 Target: Loom Groovebox 3.2.x
 Source of inspiration: `~/Documents/Code Projects/Loom Pi`
 
@@ -84,7 +84,7 @@ In `PlayingScreen.kt`:
 - Add a layout cycle button next to the grid-mode control: `4x4 → 6x6 → Tonnetz → Keys → 20/20`.
 - For `SPLIT_20_20`, render a `Row` with two `PerformanceBank` composables and a 2dp divider.
 - Each bank is a `Column`:
-  - 36–44dp header: track dropdown, octave `[-] OCT [+]`, `X: dest` selector + intensity, `Y: dest` selector + intensity.
+  - 36–44dp header: track dropdown, octave `[-] OCT [+]`, `MOD` learn button and a `⋮` menu for poly/bend/intensity/destination.
   - `5 rows × 4 columns` of `PlayingPad`s.
 - Keep Root / Scale / Chord / Voice-Link controls in the shared top bar.
 - Bank header border and root-note pads use the assigned track's engine colour.
@@ -129,16 +129,29 @@ Loom currently exposes only:
 For the split layout to be musically useful, port the **per-voice modulation** contract from Loom Pi:
 
 ```cpp
-void setVoicePadMod(int trackIndex, int originNote, float normX, float normY);
-void setPadModRouting(int trackIndex, int xDest, float xInt,
-                      int yDest, float yInt, bool polyMode);
+void beginVoicePadMod(int trackIndex, int note);              // finger down
+void setVoicePadMod(int trackIndex, int note, float normX, float normY);
+void endVoicePadMod(int trackIndex, int note);                // finger up
+void setPadModRouting(int trackIndex, int xDest, float xRange,
+                      int yDest, float yIntensity, bool polyMode);
 ```
 
-- Add `modX`, `modY`, `hasVoiceMod`, `originNote` to each voice in Subtractive, FM, Wavetable and Sampler engines.
-- Apply modulation in the per-voice parameter evaluation (`evalMod`-style), not by overwriting the global parameter.
-- Keep a global `setParameter` fallback for cross-track destinations and for engines without per-voice support (Granular, SoundFont, Audio In, MIDI, drums).
+- Each voice in Subtractive, FM, Wavetable and Sampler carries `mod.active`,
+  `mod.x`, `mod.y` and `mod.originNote` (`composeApp/native/VoiceModState.h`).
+- Modulation is applied while evaluating the per-voice parameter, never by
+  overwriting the global parameter, so released fingers snap back and other
+  fingers are unaffected.
+- `x` is normalised (-1..1) and multiplied by the routing's semitone range; `y`
+  is a **signed delta** (-1..1) relative to the gesture start, which fixes the
+  Loom Pi bug where the edge of the pad wrote an absolute parameter maximum.
+- `begin`/`end` are refcounted per note (`Track::voiceModRef[128]`) so two
+  pointers on the same note cannot cancel each other; the last `end` clears the
+  voice mod.
+- The global `setPadMod` / `setParameter` path remains the fallback for engines
+  without per-voice support (Granular, SoundFont, Audio In, MIDI, drums) and
+  for tracks whose arp is on (the pad feeds the arp, not a sounding voice).
 
-Phasing: **v1 can ship split pads with global modulation** (each bank still targets its own track, so two tracks are playable); **per-voice modulation is confirmed in scope** and lands in Phase 4 for independent bends/mods per finger.
+Implemented in Phase 4; see §11.1 for the routing semantics and UI.
 
 #### 1.5 Bugs from Loom Pi to avoid
 
@@ -379,8 +392,8 @@ Ranked by value-to-effort for Loom:
 | **1. Arp clone** | `copyFrom`, `copyArpeggiator`, JNI, Kotlin state sync, "Copy To" UI with **Copy settings** and **Clone live** | Low | Independently shippable, immediate live-performance value |
 | **1b. CPU budget** | Finish track disable, FX enable mask + UI, performance profile, verify CPU drops | Medium | **Done** (§8.5): track disable, FX mask, High/Balanced/Low profile, idle gate, UI poll scaling |
 | **2. MIDI devices** | Device registry, per-device config UI, hardware presets, persistence, routing filters | Medium | **Done** (§3.6); clock/transport deferred to Phase 5 |
-| **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | **Done** (§11); per-voice mod arrives with Phase 4 |
-| **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | Unlocks true multitouch expression; needs audio-thread care |
+| **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | **Done** (§11); per-voice mod shipped in Phase 4 |
+| **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | **Done** (§11.1): per-finger bends/mods, per-bank destinations/intensity, bend range, refcounted gestures |
 | **5. MIDI expression** | Clock in/out, SPP, pitch-bend input, **aftertouch → pad mod** | Medium | Aftertouch depends on Phase 4 for full benefit |
 | **6. Pad modes + drum row wizard** | 16/24/40 layouts, six pad modes, general drum-row learn wizard | Medium | Reuses the split-bank pad abstraction |
 | **7. Launchkey** | DAW-mode init, 3 knob banks, pad/transport interception, LED feedback, wizard integration | High | Hardware-dependent; build on Phase 2 device registry |
@@ -635,7 +648,67 @@ Implemented in v3.2.19.
 - State is saved with the project and sanitized on load (track clamped 0..7,
   octave clamped -3..+3). Older projects default to the single grid.
 
-Still in Phase 4: per-voice polyphonic X/Y modulation, per-bank modulation
-destinations/intensity, and per-finger voice-link behaviour.
+### 11.1 Per-voice modulation (Phase 4)
+
+Implemented in v3.2.19 alongside the split layout.
+
+**Native API.** `AudioEngineCore` exposes four commands, all serialised through
+the existing audio command queue:
+
+| Method | Effect |
+|---|---|
+| `beginVoicePadMod(track, note)` | Increments the note's gesture refcount (max 64) |
+| `setVoicePadMod(track, note, x, y)` | Writes `x` (-1..1) and `y` (-1..1 delta) to every active voice with that note; no-op when poly mode is off |
+| `endVoicePadMod(track, note)` | Decrements the refcount; at zero it clears that note's voice mod |
+| `setPadModRouting(track, xDest, xRange, yDest, yIntensity, poly)` | Stores the routing and pushes it into the four per-voice engines; leaving poly mode clears all voice mods |
+
+`panic()` clears every voice mod and refcount. A `setVoicePadMod` without a
+matching `begin` is treated as a single finger.
+
+**Engines.** Per-voice X is pitch bend (`x * bendRange` semitones). Per-voice Y
+is resolved per control block against the routing destination:
+
+- **Subtractive:** cutoff (1/112), resonance (2/113), filter env (3/118),
+  noise (110), osc volumes (107–109), fold (180–183), drive (170–173),
+  osc pitch (160–163). Unknown destinations fall back to cutoff.
+- **FM:** cutoff (1/151), resonance (2/152), feedback (154), drive (159),
+  operator level (`160 + op*6`). Unknown destinations fall back to mod index
+  (brightness). The block renderer also gained the per-voice pitch bend that
+  the scalar renderer already had.
+- **Wavetable:** morph (450), warp (465), cutoff (1/458), resonance (2/459),
+  env amount (464), bits (475), srate (476), crush (466), drive (467),
+  detune (451). Unknown destinations fall back to morph.
+- **Sampler:** speed (302), pitch (300), cutoff (1/303), resonance (2/304),
+  env amount (314). Unknown destinations fall back to speed.
+
+**UI.** `SplitZone` gained `modTargetId` (-1 = track default), `modIntensity`,
+`bendRange` (2/12/24 st) and `polyMod`; `GrooveboxState` gained
+`padModLearnBank` and `polyPadMod`. Each bank header has a `⋮` menu for poly
+on/off, bend range, intensity, learn and "use track destination"; the MOD
+button learns into that bank. The single grid keeps the track-level
+destination (`BND LRN` resets `padModLearnBank = -1`).
+
+**Gesture rules.** A pad's X range is the full pad width at the configured
+bend range; Y is a signed delta from the touch-down point, so releasing returns
+to the original value. Poly mode is used when the bank (or `polyPadMod` for the
+single grid) enables it **and** the track's arp is off. Drum/chop tracks keep
+using their existing global path. Changing a bank's mod settings restarts that
+pad's gesture detector.
+
+Routing is stored per **track**, so when both banks are assigned to the same
+track they share one destination and the last touched bank wins. Give the banks
+different tracks to use independent destinations; the shared-octave setup is
+still fully playable, just with one Y destination.
+
+**Verified.** A native smoke test renders two simultaneous notes and checks:
+a mod aimed at a silent note does not leak; modding note 60 vs note 67
+produces different mixes; `clearAllVoiceMod` restores the exact unmodulated
+render; a +1 X at 12 st bends one octave; and the core refcount keeps the bend
+until the final `endVoicePadMod`.
+
+Per-finger voice-link is inherent in this design: each finger's modulation is
+bound to the note it triggered, so two fingers never share a bend. Chord-voice
+sharing (one pad triggering several notes) is not used by Groovebox today; if
+it is added later, `originNote` is the field to key the shared identity on.
 
 ---

@@ -38,21 +38,34 @@ actual class MidiManager(private val onMessageReceived: (ByteArray, String?) -> 
         _midiLog.value = lines.joinToString("\n")
     }
 
-    init {
-        MidiConfigStore.load()
-        scanDevices()
+    @Volatile
+    private var scanRequested = true
 
+    init {
+        // Enumerating devices opens every port, and that can block for seconds
+        // (CoreAudio probing, a device that is being reconfigured). This object
+        // is constructed from composition, so doing it here froze the window on
+        // startup. Scan from a worker instead and let the UI stay responsive.
         Thread {
+            var lastScan = 0L
             while (!isClosed) {
                 try {
-                    Thread.sleep(3000)
-                    if (!isClosed) scanDevices()
+                    val now = System.currentTimeMillis()
+                    if (scanRequested || now - lastScan >= 3000) {
+                        scanRequested = false
+                        lastScan = now
+                        scanDevices()
+                    }
+                    Thread.sleep(200)
+                } catch (e: InterruptedException) {
+                    break
                 } catch (e: Exception) {
                     // Ignore and retry
                 }
             }
         }.apply {
             isDaemon = true
+            name = "LoomMidiScan"
             start()
         }
     }
@@ -63,10 +76,26 @@ actual class MidiManager(private val onMessageReceived: (ByteArray, String?) -> 
         return if (parts.isEmpty()) "desktop-midi-${info.hashCode()}" else parts.joinToString("|")
     }
 
+    /**
+     * Java Sound lists software endpoints next to real hardware. Opening the
+     * Gervill soft-synth grabs an audio line (which can hang for seconds on
+     * macOS) and it is never a useful MIDI destination, so skip those.
+     */
+    private fun isSoftwareDevice(info: javax.sound.midi.MidiDevice.Info): Boolean {
+        val text = listOf(info.name, info.vendor, info.description)
+            .filterNotNull()
+            .joinToString(" ")
+            .lowercase()
+        return text.contains("gervill") ||
+            text.contains("software midi synthesizer") ||
+            text.contains("software sequencer") ||
+            text.contains("real time sequencer")
+    }
+
     @Synchronized
     private fun scanDevices() {
         try {
-            val infos = MidiSystem.getMidiDeviceInfo()
+            val infos = MidiSystem.getMidiDeviceInfo().filterNot { isSoftwareDevice(it) }
             val presentIds = infos.map { stableId(it) }.toSet()
 
             registry.keys.toList().filter { it !in presentIds }.forEach { id ->
@@ -227,9 +256,10 @@ actual class MidiManager(private val onMessageReceived: (ByteArray, String?) -> 
         }
     }
 
-    @Synchronized
     actual fun refreshDevices() {
-        scanDevices()
+        // Never scan inline: the refresh button runs on the UI thread and
+        // opening ports can block. The scan thread picks this up immediately.
+        scanRequested = true
     }
 
     @Synchronized

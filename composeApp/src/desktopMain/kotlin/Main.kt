@@ -7,6 +7,8 @@ import com.groovebox.ui.views.MainScreen
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 import androidx.compose.ui.res.painterResource
@@ -16,15 +18,16 @@ import androidx.compose.ui.unit.dp
 
 fun main() = application {
     val heldKeys = mutableSetOf<Key>()
-    val nativeLib = NativeLib()
-    val viewModel = GrooveboxViewModel(nativeLib)
-    com.groovebox.midi.MidiConfigStore.load()
-    val midiManager = com.groovebox.midi.MidiManager { data, deviceId ->
-        viewModel.processMidiMessage(data, deviceId)
+    val nativeLib = remember { NativeLib() }
+    val viewModel = remember { GrooveboxViewModel(nativeLib) }
+    val midiManager = remember {
+        com.groovebox.midi.MidiManager { data, deviceId ->
+            viewModel.processMidiMessage(data, deviceId)
+        }
     }
     viewModel.midiRouter.setMidiSender(midiManager::sendMidi)
     viewModel.attachMidiManager(midiManager)
-    val audioCapture = com.groovebox.DesktopAudioCapture()
+    val audioCapture = remember { com.groovebox.DesktopAudioCapture() }
 
     val windowState = rememberWindowState(
         width = 1200.dp,
@@ -158,18 +161,25 @@ fun main() = application {
     ) {
 
         LaunchedEffect(Unit) {
-            val appDataDir = File(System.getProperty("user.home"), ".loom_groovebox")
-            if (!appDataDir.exists()) appDataDir.mkdirs()
+            // Every call here touches CoreAudio, Java Sound or the filesystem
+            // and can block for seconds (first-run microphone permission,
+            // device probing, state deserialization). Running it on the UI
+            // thread froze the window before it could process any input.
+            withContext(Dispatchers.IO) {
+                val appDataDir = File(System.getProperty("user.home"), ".loom_groovebox")
+                if (!appDataDir.exists()) appDataDir.mkdirs()
 
-            nativeLib.init()
-            nativeLib.setAppDataDir(appDataDir.absolutePath)
-            nativeLib.loadAppState()
-            
-            for (i in 0 until 8) { nativeLib.clearSequencer(i) }
-            
+                com.groovebox.midi.MidiConfigStore.load()
+                nativeLib.init()
+                nativeLib.setAppDataDir(appDataDir.absolutePath)
+                nativeLib.loadAppState()
+
+                for (i in 0 until 8) { nativeLib.clearSequencer(i) }
+
+                nativeLib.start()
+                audioCapture.startCapture()
+            }
             viewModel.syncWithNative()
-            nativeLib.start()
-            audioCapture.startCapture()
         }
 
         DisposableEffect(Unit) {

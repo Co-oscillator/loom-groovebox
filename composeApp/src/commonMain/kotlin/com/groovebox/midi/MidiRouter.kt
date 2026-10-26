@@ -206,7 +206,14 @@ class MidiRouter(private val nativeLib: NativeLib, private val onCommand: (MidiC
                             triggeredNote = (data1 + octaveOffset).coerceIn(0, 127)
                         }
                     }
-                    
+
+                    // Drum-row wizard mapping: raw input note -> drum row.
+                    if (isDrum && track.drumNoteMap.isNotEmpty()) {
+                        track.drumNoteMap[data1]?.let { row ->
+                            triggeredNote = (60 + row).coerceIn(0, 127)
+                        }
+                    }
+
                     if (msgType == 0x90 && data2 > 0) {
                         nativeLib.triggerNote(trackIdx, triggeredNote, data2)
                         trackActiveNotes[trackIdx][data1] = triggeredNote

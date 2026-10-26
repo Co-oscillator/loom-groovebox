@@ -117,6 +117,7 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
             soundFontPresetIndex = (track.soundFontPresetIndex as Any?) as? Int ?: 0,
             soundFontPresetName = (track.soundFontPresetName as Any?) as? String ?: "None",
             soundFontMapping = (track.soundFontMapping as Any?) as? Map<Int, Int> ?: emptyMap(),
+            drumNoteMap = (track.drumNoteMap as Any?) as? Map<Int, Int> ?: emptyMap(),
             parameters = newParams,
             sequenceProbability = (track.sequenceProbability as Any?) as? Float ?: 1.0f,
             isChainEnabled = (track.isChainEnabled as Any?) as? Boolean ?: false,
@@ -263,6 +264,10 @@ fun sanitizeGrooveboxState(state: GrooveboxState): GrooveboxState {
         copiedDrumSteps = (state.copiedDrumSteps as Any?) as? List<List<com.groovebox.StepState>>,
         gridMode = (state.gridMode as Any?) as? com.groovebox.GridMode ?: com.groovebox.GridMode.GRID_4X4,
         playLayout = (state.playLayout as Any?) as? com.groovebox.PlayLayout ?: com.groovebox.PlayLayout.GRID,
+        padMode = (state.padMode as Any?) as? com.groovebox.PadMode ?: com.groovebox.PadMode.AUTO,
+        // Transient wizard state never survives a load.
+        drumMapLearnRow = -1,
+        drumMapLearnTrack = -1,
         splitLeft = ((state.splitLeft as Any?) as? com.groovebox.SplitZone ?: com.groovebox.SplitZone(0, 0))
             .let { it.copy(
                 trackIndex = it.trackIndex.coerceIn(0, 7),

@@ -441,8 +441,8 @@ Ranked by value-to-effort for Loom:
 | **2. MIDI devices** | Device registry, per-device config UI, hardware presets, persistence, routing filters | Medium | **Done** (§3.6); clock/transport deferred to Phase 5 |
 | **3. Split pads v1** | State, 20/20 layout, per-bank track/octave, global mod fallback, persistence | Medium | **Done** (§11); per-voice mod shipped in Phase 4 |
 | **4. Per-voice mod** | `setVoicePadMod`, per-voice state in 4 engines, routing API | High | **Done** (§11.1): per-finger bends/mods, per-bank destinations/intensity, bend range, refcounted gestures |
-| **5. MIDI expression** | Clock in/out, SPP, pitch-bend input, **aftertouch → pad mod** | Medium | Aftertouch depends on Phase 4 for full benefit |
-| **6. Pad modes + drum row wizard** | 16/24/40 layouts, six pad modes, general drum-row learn wizard | Medium | Reuses the split-bank pad abstraction |
+| **5. MIDI expression** | Clock in/out, SPP, pitch-bend input, **aftertouch → pad mod** | Medium | **Done** (§3.7): clock in/out, SPP, transport, per-track bend, channel/poly aftertouch |
+| **6. Pad modes + drum row wizard** | 16/24/40 layouts, six pad modes, general drum-row learn wizard | Medium | **Done** (§11.2): 4x4/6x6/4x6/5x8, AUTO + six pad modes, FX pads, drum-row learn |
 | **7. Launchkey** | DAW-mode init, 3 knob banks, pad/transport interception, LED feedback, wizard integration | High | Hardware-dependent; build on Phase 2 device registry |
 | **8. Melody tracker** | Audio-to-MIDI (YIN, confidence, HP/LP, sample source) | High | Explicitly last |
 
@@ -760,5 +760,39 @@ fingers never share a bend. With it off, the gesture uses the global parameter
 path. Chord-voice sharing (one pad triggering several notes) is not used by
 Groovebox today; if it is added later, `originNote` is the field to key the
 shared identity on.
+
+### 11.2 Pad modes + drum-row wizard (Phase 6)
+
+**Layouts.** `GridMode` gained `GRID_4X6` (24 pads) and `GRID_5X8` (40 pads)
+alongside 4x4 (16) and 6x6 (36). `utils/PadLayout.kt` centralises rows/cols/count
+so the scale-note buffer, pad sizing and note mapping cannot disagree. The GRID
+button cycles 4x4 → 6x6 → 4x6 → 5x8 → Keys/Tonnetz → 4x4; drum tracks can now
+use the larger layouts too (their notes repeat every 16 pads).
+
+**Pad modes.** `PadMode` is an explicit performance mapping independent of the
+engine: `AUTO` (v1 engine-driven), `SCALES`, `KEYBOARD` (chromatic from root),
+`FM_DRUM` (60..75), `ANALOG_DRUM` (60..65), `SLICES` (sampler slice count) and
+`FX`. The MODE button cycles them; the value is saved with the project and
+sanitized on load. `padNoteFor()` is shared by the single grid and the split
+banks, so a drum kit or slice bank can be played from any track and both banks
+follow the same mapping. In split mode FX falls back to the scale mapping,
+because the FX buses are global.
+
+**FX pads.** In FX mode the grid becomes 18 pads (6x3) that toggle the global FX
+enable mask, with the same labels and colours as Settings → Performance. This
+gives a live "pedalboard" page without leaving the play screen and reuses the
+Phase 1b CPU mask (`setFxEnabled` + `fxEnabled`).
+
+**Drum-row wizard.** Drum tracks get a DRUM button that opens a scrollable map.
+Each row shows its current note bindings and has LEARN/CLEAR; arming a row makes
+`MidiRouter` consume the next pad/key on that track (channel/device filters
+still apply) and store `drumNoteMap[inputNote] = row`. Unmapped notes keep the
+default `60 + row`. The map is applied before `triggerNote`, so note-offs
+release the same remapped note, and it persists with the project. `RESET ALL`
+returns to the default. Learning is transient: the armed row is cleared on
+load and after each capture.
+
+Both phases compile on desktop + Android and the MIDI clock tests run under
+`:composeApp:desktopTest`.
 
 ---

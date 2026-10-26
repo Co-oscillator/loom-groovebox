@@ -325,6 +325,8 @@ class GrooveboxViewModel(
         val maxPadIndex = when(state.gridMode) {
             GridMode.GRID_4X4 -> 15
             GridMode.GRID_6X6 -> 35
+            GridMode.GRID_4X6 -> 23
+            GridMode.GRID_5X8 -> 39
             GridMode.MAC_KEYS -> 45
             GridMode.TONNETZ -> 127 // Tonnetz handles itself elsewhere usually but for safety
         }

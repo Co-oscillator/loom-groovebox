@@ -537,6 +537,15 @@ fun PadGrid(
     latestOnStateChange: (GrooveboxState) -> Unit,
     empledManager: EmpledManager? = null
 ) {
+    if (state.padMode == PadMode.FX) {
+        FxPadGrid(
+            state = state,
+            latestState = latestState,
+            nativeLib = nativeLib,
+            onStateChange = onStateChange
+        )
+        return
+    }
     if (state.gridMode == GridMode.TONNETZ) {
          TonnetzGrid(
             state = latestState,
@@ -568,31 +577,15 @@ fun PadGrid(
                     Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
                         repeat(cols) { col ->
                             val padIndex = row * cols + col
-                            val samplerMode = track.parameters[320] ?: 0f
-                            val isChopMode = track.engineType == EngineType.SAMPLER && samplerMode >= 0.6f
-                            val numSlices = if (isChopMode) (((track.parameters[340] ?: 0f) * 14f).toInt() + 2) else 0
-
-                            val note = if (track.engineType == EngineType.FM_DRUM) {
-                                60 + (padIndex % 16)
-                            } else if (isChopMode) {
-                                if (padIndex < numSlices) 60 + padIndex else -1
-                            } else if (track.engineType == EngineType.ANALOG_DRUM) {
-                                val localIdx = if (padIndex >= 8) padIndex - 8 else padIndex
-                                if (localIdx < 6) {
-                                    when(localIdx) {
-                                        0 -> 60 // Kick
-                                        1 -> 61 // Snare
-                                        2 -> 62 // Rim (Clap engine voice, matches Param Screen)
-                                        3 -> 63 // Hat Closed
-                                        4 -> 64 // Hat Open
-                                        5 -> 65 // Cymbal
-                                        else -> -1
-                                    }
-                                } else -1
-                            } else {
-                                scaleNotes.getOrElse(padIndex) { state.rootNote + padIndex }
-                            }
-                            val isBlack = if (track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM || isChopMode) false else isBlackKey(note)
+                            val chopMode = track.engineType == EngineType.SAMPLER &&
+                                (track.parameters[320] ?: 0f) >= 0.6f
+                            val note = padNoteFor(state.padMode, track, state, padIndex, scaleNotes)
+                            val isDrumMapping = track.engineType == EngineType.FM_DRUM ||
+                                track.engineType == EngineType.ANALOG_DRUM ||
+                                state.padMode == PadMode.FM_DRUM ||
+                                state.padMode == PadMode.ANALOG_DRUM ||
+                                state.padMode == PadMode.SLICES
+                            val isBlack = if (isDrumMapping || chopMode) false else isBlackKey(note)
                             val padColor = if (isBlack) androidx.compose.ui.graphics.lerp(Color.DarkGray, engineColor, 0.4f) else engineColor
                             // Use 0x3FFFFFFFFFFFFFFFL to mask out bits 62-63 (Status flags)
                             val cleanMask = activeNoteMask and 0x3FFFFFFFFFFFFFFFL
@@ -600,24 +593,21 @@ fun PadGrid(
                             
                             Box(modifier = Modifier.size(padSize)) {
                                 if (note != -1) {
-                                    val isInactiveDrumPad = (track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM) && padIndex >= 16
-                                    if (!isInactiveDrumPad) {
-                                        key(state.selectedTrackIndex, padIndex) {
-                                            PlayingPad(
-                                                padIndex = padIndex,
-                                                note = note,
-                                                padSize = padSize,
-                                                padColor = padColor,
-                                                isPlaying = state.isPlaying,
-                                                currentStep = state.currentStep,
-                                                nativeLib = nativeLib,
-                                                latestState = latestState,
-                                                onStateChange = onStateChange,
-                                                empledManager = empledManager,
-                                                isChopMode = isChopMode,
-                                                isNoteActive = isNoteActive
-                                            )
-                                        }
+                                    key(state.selectedTrackIndex, padIndex) {
+                                        PlayingPad(
+                                            padIndex = padIndex,
+                                            note = note,
+                                            padSize = padSize,
+                                            padColor = padColor,
+                                            isPlaying = state.isPlaying,
+                                            currentStep = state.currentStep,
+                                            nativeLib = nativeLib,
+                                            latestState = latestState,
+                                            onStateChange = onStateChange,
+                                            empledManager = empledManager,
+                                            isChopMode = chopMode,
+                                            isNoteActive = isNoteActive
+                                        )
                                     }
                                 } else {
                                     Spacer(modifier = Modifier.size(padSize))
@@ -939,21 +929,243 @@ private fun SplitOctButton(text: String, onClick: () -> Unit) {
     }
 }
 
-/** Note map for one split bank, mirroring the single-grid drum/chop rules. */
+/** Note map for one split bank, honouring the pad mode and drum/chop rules. */
 fun splitNotesFor(track: TrackState, zone: SplitZone, state: GrooveboxState): List<Int> {
     val count = 20
-    return when {
-        track.engineType == EngineType.FM_DRUM -> List(count) { 60 + (it % 8) }
-        track.engineType == EngineType.ANALOG_DRUM -> List(count) {
-            if (it % 8 < 6) 60 + (it % 8) else -1
+    val base = (state.rootNote + zone.octave * 12).coerceIn(0, 115)
+    // FX pads are global, so a split bank falls back to the scale mapping.
+    val mode = if (state.padMode == PadMode.FX) PadMode.SCALES else state.padMode
+
+    return when (mode) {
+        PadMode.AUTO -> when {
+            track.engineType == EngineType.FM_DRUM -> List(count) { 60 + (it % 16) }
+            track.engineType == EngineType.ANALOG_DRUM -> List(count) {
+                if (it % 8 < 6) 60 + (it % 8) else -1
+            }
+            track.engineType == EngineType.SAMPLER && (track.parameters[320] ?: 0f) >= 0.6f -> {
+                val slices = (((track.parameters[340] ?: 0f) * 14f).toInt() + 2).coerceIn(2, 16)
+                List(count) { if (it < slices) 60 + it else -1 }
+            }
+            else -> ScaleLogic.generateScaleNotes(base, state.scaleType, count).map { it.coerceAtMost(127) }
         }
-        track.engineType == EngineType.SAMPLER && (track.parameters[320] ?: 0f) >= 0.6f -> {
+        PadMode.SCALES -> ScaleLogic.generateScaleNotes(base, state.scaleType, count)
+            .map { it.coerceAtMost(127) }
+        PadMode.KEYBOARD -> List(count) { (base + it).coerceAtMost(127) }
+        PadMode.FM_DRUM -> List(count) { 60 + (it % 16) }
+        PadMode.ANALOG_DRUM -> List(count) { if (it % 8 < 6) 60 + (it % 8) else -1 }
+        PadMode.SLICES -> {
             val slices = (((track.parameters[340] ?: 0f) * 14f).toInt() + 2).coerceIn(2, 16)
             List(count) { if (it < slices) 60 + it else -1 }
         }
-        else -> {
-            val base = (state.rootNote + zone.octave * 12).coerceIn(0, 115)
-            ScaleLogic.generateScaleNotes(base, state.scaleType, count).map { it.coerceAtMost(127) }
+        PadMode.FX -> ScaleLogic.generateScaleNotes(base, state.scaleType, count)
+            .map { it.coerceAtMost(127) }
+    }
+}
+
+/**
+ * Phase 6: pad grid in FX mode. Each pad toggles one of the 18 global FX
+ * buses, reusing the same enable mask as Settings → Performance.
+ */
+@Composable
+fun FxPadGrid(
+    state: GrooveboxState,
+    latestState: GrooveboxState,
+    nativeLib: NativeLib,
+    onStateChange: (GrooveboxState) -> Unit
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val spacing = 6.dp
+        val padW = ((maxWidth - spacing * 5) / 6).coerceAtMost(120.dp).coerceAtLeast(36.dp)
+        val padH = ((maxHeight - spacing * 2) / 3).coerceAtMost(110.dp).coerceAtLeast(36.dp)
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            repeat(3) { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                    repeat(6) { col ->
+                        val idx = row * 6 + col
+                        val enabled = latestState.fxEnabled.getOrElse(idx) { true }
+                        val name = FX_BUS_NAMES.getOrElse(idx) { "FX $idx" }
+                        Surface(
+                            onClick = {
+                                val mask = latestState.fxEnabled.toMutableList()
+                                while (mask.size < 18) mask.add(true)
+                                mask[idx] = !enabled
+                                nativeLib.setFxEnabled(idx, !enabled)
+                                onStateChange(latestState.copy(fxEnabled = mask))
+                            },
+                            modifier = Modifier.size(padW, padH),
+                            color = if (enabled) Color(0xFF00BCD4).copy(alpha = 0.25f)
+                                    else Color.DarkGray.copy(alpha = 0.5f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (enabled) Color(0xFF00BCD4) else Color.Gray.copy(alpha = 0.4f)
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(4.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    name,
+                                    fontSize = 9.sp,
+                                    color = if (enabled) Color.White else Color.Gray,
+                                    maxLines = 2,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    if (enabled) "ON" else "BYP",
+                                    fontSize = 8.sp,
+                                    color = if (enabled) Color(0xFF00BCD4) else Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Phase 6: guided drum-row mapping.
+ *
+ * Arm a row, tap a pad/key on the MIDI controller, and the incoming note is
+ * stored in [TrackState.drumNoteMap]. MidiRouter consumes the learning note
+ * instead of triggering it, then applies the map to future notes.
+ */
+@Composable
+private fun DrumRowWizard(
+    state: GrooveboxState,
+    onStateChange: (GrooveboxState) -> Unit,
+    onClose: () -> Unit
+) {
+    val track = state.tracks.getOrNull(state.selectedTrackIndex) ?: return
+    val isAnalog = track.engineType == EngineType.ANALOG_DRUM
+    val rowCount = if (isAnalog) 6 else 16
+    val names = if (isAnalog) {
+        listOf("Kick", "Snare", "Cymbal", "Hat C", "Hat O", "Perc")
+    } else {
+        listOf("Kick", "Snare", "Tom", "HH", "OHH", "Cymbal", "Perc", "Noise") +
+            List(8) { "Row ${it + 9}" }
+    }
+    val armedRow = state.drumMapLearnRow
+
+    fun updateTrack(transform: (TrackState) -> TrackState) {
+        onStateChange(
+            state.copy(
+                tracks = state.tracks.mapIndexed { i, t ->
+                    if (i == state.selectedTrackIndex) transform(t) else t
+                }
+            )
+        )
+    }
+
+    fun close() {
+        onStateChange(state.copy(drumMapLearnRow = -1, drumMapLearnTrack = -1))
+        onClose()
+    }
+
+    Dialog(onDismissRequest = { close() }) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF151515)),
+            border = BorderStroke(1.dp, Color.Cyan.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp).widthIn(max = 420.dp)) {
+                Text(
+                    "DRUM ROW MAP",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.Cyan
+                )
+                Text(
+                    "Arm a row, then tap a pad or key on your MIDI controller. " +
+                        "Notes outside the map keep the default (60 + row).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray
+                )
+                if (armedRow >= 0) {
+                    Text(
+                        "Waiting for note → row ${armedRow + 1} " +
+                            "(${names.getOrElse(armedRow) { "" }})",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.Yellow,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    for (row in 0 until rowCount) {
+                        val mapped = track.drumNoteMap
+                            .filterValues { it == row }
+                            .keys
+                            .sorted()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "${row + 1}. ${names.getOrElse(row) { "Row ${row + 1}" }}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White
+                                )
+                                Text(
+                                    if (mapped.isEmpty()) "default note ${60 + row}"
+                                    else mapped.joinToString(", ") { "note $it" },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (mapped.isEmpty()) Color.Gray else Color(0xFF4CAF50)
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    onStateChange(
+                                        state.copy(
+                                            drumMapLearnRow = if (armedRow == row) -1 else row,
+                                            drumMapLearnTrack = state.selectedTrackIndex
+                                        )
+                                    )
+                                }
+                            ) {
+                                Text(
+                                    if (armedRow == row) "CANCEL" else "LEARN",
+                                    fontSize = 10.sp,
+                                    color = if (armedRow == row) Color.Yellow else Color.Cyan
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    updateTrack {
+                                        it.copy(
+                                            drumNoteMap = it.drumNoteMap.filterValues { v -> v != row }
+                                        )
+                                    }
+                                }
+                            ) {
+                                Text("CLEAR", fontSize = 10.sp, color = Color.Gray)
+                            }
+                        }
+                        Divider(color = Color.Gray.copy(alpha = 0.15f))
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { updateTrack { it.copy(drumNoteMap = emptyMap()) } }) {
+                        Text("RESET ALL", fontSize = 11.sp, color = Color(0xFFFF7043))
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = { close() }) {
+                        Text("CLOSE", fontSize = 11.sp, color = Color.White)
+                    }
+                }
+            }
         }
     }
 }
@@ -2196,14 +2408,10 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
     var showTransposeMenu by remember { mutableStateOf(false) }
     var showScaleMenu by remember { mutableStateOf(false) }
     var showArpMenu by remember { mutableStateOf(false) }
+    var showDrumWizard by remember { mutableStateOf(false) }
     
     val scaleNotes = remember(state.rootNote, state.scaleType, state.gridMode) {
-        val count = when(state.gridMode) {
-            GridMode.GRID_6X6 -> 36
-            GridMode.MAC_KEYS -> 46
-            else -> 16
-        }
-        ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, count)
+        ScaleLogic.generateScaleNotes(state.rootNote, state.scaleType, state.gridMode.padCount())
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
@@ -2226,8 +2434,8 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                 val samplerMode = track.parameters[320] ?: 0f
                 val isChopMode = track.engineType == EngineType.SAMPLER && samplerMode >= 0.6f
                 
-                val rows = if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else if (state.gridMode == GridMode.MAC_KEYS) 4 else 4
-                val cols = if (isChopMode) 4 else if (state.gridMode == GridMode.GRID_6X6) 6 else if (state.gridMode == GridMode.MAC_KEYS) 13 else 4
+                val rows = if (isChopMode) 4 else state.gridMode.padRows()
+                val cols = if (isChopMode) 4 else state.gridMode.padCols()
                 val isWideScreen = screenRatio > 1.8f && platformInfo.screenHeightDp < 500
                 val spacing = 6.dp
                 
@@ -2337,25 +2545,22 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
 
                         // GRID
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            val isDrum = track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM
                             Button(
                                 onClick = { 
                                     val newMode = when(state.gridMode) {
                                         GridMode.GRID_4X4 -> GridMode.GRID_6X6
-                                        GridMode.GRID_6X6 -> if (platformInfo.platform == "macos" || state.isKeyboardModeEnabled) GridMode.MAC_KEYS else GridMode.TONNETZ
+                                        GridMode.GRID_6X6 -> GridMode.GRID_4X6
+                                        GridMode.GRID_4X6 -> GridMode.GRID_5X8
+                                        GridMode.GRID_5X8 -> if (platformInfo.platform == "macos" || state.isKeyboardModeEnabled) GridMode.MAC_KEYS else GridMode.TONNETZ
                                         GridMode.MAC_KEYS -> GridMode.TONNETZ
                                         GridMode.TONNETZ -> GridMode.GRID_4X4
                                     }
                                     onStateChange(state.copy(gridMode = newMode)) 
                                 },
-                                enabled = !isDrum,
                                 modifier = Modifier.height(controlHeight).width(controlWidth),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isDrum) Color.DarkGray.copy(alpha = 0.4f)
-                                                     else if (state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE) 
-                                                     else Color.DarkGray,
-                                    disabledContainerColor = Color.DarkGray.copy(alpha = 0.4f),
-                                    disabledContentColor = Color.Gray
+                                    containerColor = if (state.gridMode != GridMode.GRID_4X4) Color(0xFF6200EE) 
+                                                     else Color.DarkGray
                                 ),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(0.dp)
@@ -2363,11 +2568,57 @@ fun PlayingScreen(state: GrooveboxState, onStateChange: (GrooveboxState) -> Unit
                                 Text(when(state.gridMode) {
                                     GridMode.GRID_4X4 -> "4x4"
                                     GridMode.GRID_6X6 -> "6x6"
+                                    GridMode.GRID_4X6 -> "4x6"
+                                    GridMode.GRID_5X8 -> "5x8"
                                     GridMode.MAC_KEYS -> "Keys"
                                     GridMode.TONNETZ -> "TON"
-                                }, style = MaterialTheme.typography.labelSmall, color = if (isDrum) Color.Gray else Color.White)
+                                }, style = MaterialTheme.typography.labelSmall, color = Color.White)
                             }
                             Text("GRID", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+
+                        // PAD MODE (Phase 6: AUTO / scales / keyboard / drum kits / slices / FX)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val nextMode = PadMode.values()[(state.padMode.ordinal + 1) % PadMode.values().size]
+                            Button(
+                                onClick = { onStateChange(state.copy(padMode = nextMode)) },
+                                modifier = Modifier.height(controlHeight).width(controlWidth),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.padMode != PadMode.AUTO) Color(0xFF00BCD4) else Color.DarkGray
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(
+                                    state.padMode.shortLabel(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (state.padMode != PadMode.AUTO) Color.Black else Color.White,
+                                    maxLines = 1
+                                )
+                            }
+                            Text("MODE", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+
+                        // DRUM ROW WIZARD (drum tracks only)
+                        if (track.engineType == EngineType.FM_DRUM || track.engineType == EngineType.ANALOG_DRUM) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Button(
+                                    onClick = { showDrumWizard = true },
+                                    modifier = Modifier.height(controlHeight).width(controlWidth),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (state.drumMapLearnRow >= 0) Color.Yellow else Color.DarkGray
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text(
+                                        if (state.drumMapLearnRow >= 0) "WAIT" else "MAP",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (state.drumMapLearnRow >= 0) Color.Black else Color.White
+                                    )
+                                }
+                                Text("DRUM", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                            }
                         }
 
                         // PLAY LAYOUT (single grid / split 20+20)

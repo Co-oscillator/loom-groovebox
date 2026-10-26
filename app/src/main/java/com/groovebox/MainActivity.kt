@@ -298,14 +298,6 @@ class MainActivity : ComponentActivity() {
 
                 withContext(Dispatchers.Main) {
                     grooveboxState = finalState
-                    isNativeInitialized = true
-                    
-                    // KEEP STATE IN SYNC WITH VIEWMODEL
-                    lifecycleScope.launch {
-                        snapshotFlow { viewModel.state }.collect {
-                            grooveboxState = it
-                        }
-                    }
                 }
             } catch (e: Throwable) {
                 Log.e("Groovebox", "FATAL: Background init failed: ${e.message}", e)
@@ -315,10 +307,14 @@ class MainActivity : ComponentActivity() {
                     // Give user 3 seconds to read error then load with empty state
                     kotlinx.coroutines.delay(3000)
                     grooveboxState = createInitialState()
-                    isNativeInitialized = true
                 }
             }
             withContext(Dispatchers.Main) {
+                // A failure above may have happened before the ViewModel existed.
+                if (!this@MainActivity::viewModel.isInitialized) {
+                    viewModel = GrooveboxViewModel(nativeLib, lifecycleScope)
+                    grooveboxState = viewModel.state
+                }
                 splashScreenStatus = "Connecting MIDI..."
                 // Init MIDI on Main thread (required by Android MIDI API for callbacks)
                 // but only AFTER the audio engine is ready so it doesn't race with IO init.
@@ -330,6 +326,17 @@ class MainActivity : ComponentActivity() {
                 viewModel.attachMidiManager(midiManager)
                 empledManager = EmpledManager(midiManager)
                 empledManager.sendHandshake()
+
+                // KEEP STATE IN SYNC WITH VIEWMODEL
+                lifecycleScope.launch {
+                    snapshotFlow { viewModel.state }.collect {
+                        grooveboxState = it
+                    }
+                }
+
+                // Only now can the UI be composed: MainScreen reads every one of
+                // these lateinit fields as arguments.
+                isNativeInitialized = true
             }
         }
 

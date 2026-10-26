@@ -17,6 +17,9 @@ public:
     AudioEngineCore& getCore() { return *mCore; }
 
 private:
+    bool startOutput();
+    bool startInput();
+
     static OSStatus audioCallback(void *inRefCon,
                                 AudioUnitRenderActionFlags *ioActionFlags,
                                 const AudioTimeStamp *inTimeStamp,
@@ -25,9 +28,11 @@ private:
                                 AudioBufferList *ioData);
 
     std::unique_ptr<AudioEngineCore> mCore;
-    AudioComponentInstance mAudioUnit;
-    AudioComponentInstance mInputUnit;
+    AudioComponentInstance mAudioUnit = nullptr;
+    AudioComponentInstance mInputUnit = nullptr;
     bool mIsRunning = false;
+    bool mOutputRunning = false;
+    bool mInputRunning = false;
     double mSampleRate = 48000.0;
     
     // Input support

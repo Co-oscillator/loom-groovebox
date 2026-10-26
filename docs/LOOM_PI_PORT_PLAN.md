@@ -798,3 +798,64 @@ Both phases compile on desktop + Android and the MIDI clock tests run under
 `:composeApp:desktopTest`.
 
 ---
+## 11. Subtractive oscillator macros (ported from Loom Pi)
+
+Loom Pi's subtractive engine exposes three "×3" macros that move the same stage
+on all three oscillators at once. They are now part of Loom Groovebox with the
+same ids, so presets and modulation targets line up with Pi:
+
+| Macro | Id | Fan-out targets |
+|---|---|---|
+| MORPHX3 | 290 | 104 / 105 / 155 (osc 1, osc 2, sub wave morph — the SHAPE knobs) |
+| FOLDX3 | 291 | 180 / 181 / 182 (osc 1, osc 2, sub fold) |
+| DRIVEX3 | 292 | 170 / 171 / 172 (osc 1, osc 2, sub drive) |
+
+- `AudioEngineCore::updateEngineParameter` fans a UI change out to the three
+  per-oscillator ids, writing both `parameters` and `appliedParameters`, so the
+  individual knobs, the saved project and the preset export all show the real
+  values. `StateUtils` applies the macros *last* during a project sync, so the
+  fan-out wins over the individual values regardless of map order.
+- The mod matrix recognises 290-292 as destinations and fans the modulated
+  value out **without** writing it into `parameters`; otherwise the modulated
+  value would stick once the LFO/envelope/macro stopped.
+- Per-voice pad modulation handles the macros in `SubtractiveEngine`'s
+  `voiceModValues`, including the 104/105/155 morph destinations Pi supports.
+- UI: a MACROS card under the oscillator row on the subtractive parameters
+  page, with MORPHX3 / FOLDX3 / DRIVEX3 knobs. The knobs mirror the fan-out into
+  the Kotlin state so the per-oscillator knobs update live.
+- `PresetRanges.subtractive` includes 290..292 and `modTargetLabel` names them,
+  so macro-learn shows `MORPHX3` rather than a raw id.
+- Covered by `composeApp/native/tests/voice_mod_smoke.cpp` (fan-out for all
+  three macros plus "modulation leaves the base parameters intact").
+
+## 12. Idle CPU on phone-class hardware (v3.2.19 follow-up)
+
+Measured on a Lenovo TB351FU (Android 16, arm64, debug build), idle on the
+Playing screen with the default project (all 18 FX enabled, zero sends):
+
+| Build | Process CPU | UI frames while idle |
+|---|---|---|
+| Before | ~33-39% of a core | ~20 fps of pointless redraws |
+| After | ~13% of a core | ~1.5 fps |
+
+- **Per-FX silence gating.** `mFxTailBlocks[18]` keeps an enabled bus alive
+  while its input has signal and for a generous per-effect tail afterwards
+  (4 s for delay/reverb/echo, ~0.5 s for the rest), so decays are never cut.
+  Silent buses are skipped entirely. This is what makes "all 18 FX on, no
+  sends" cheap without changing the default project.
+- **CPU readout isolation.** The meter used to own a state in `MainScreen`'s
+  scope, so every tick re-composed the whole tab. It now lives in its own
+  composable with a fixed width and its own graphics layer, and ticks at 1 Hz
+  while idle / 4 Hz while playing.
+- **Record button animation.** The infinite transition ran permanently and
+  invalidated the Parameters screen every frame; it now only runs while
+  recording.
+- **`pollEngineState` fast path.** Returns early when nothing visible changed,
+  pulls the 1024-float snapshot a few times per second instead of 30×, and only
+  allocates the merged parameter map when a value actually differs. Desktop's
+  UI loop polls at 120 ms when idle and 32 ms while transport/levels move.
+- **MIDI pump.** No native poll 200×/second when no MIDI output device is
+  attached.
+
+The audio callback itself is the remaining floor (~2-6% of a core, mostly the
+187 callbacks/second Oboe cycle plus the per-block FX bus clears).
